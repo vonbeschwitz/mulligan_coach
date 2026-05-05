@@ -1,0 +1,14 @@
+# Force LF line endings on text files. The owner is on Windows, but CI runs
+# on Linux and most Python tooling expects LF — so we normalize on commit.
+* text=auto eol=lf
+
+# Common binary types — never normalize.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.parquet binary
+*.duckdb binary
+*.gz binary
+*.zip binary

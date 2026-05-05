@@ -1,0 +1,103 @@
+# Mulligan Coach — uv workspace root.
+#
+# This is the *root* of a uv workspace (https://docs.astral.sh/uv/concepts/projects/workspaces/).
+# It is not itself an installable package (`tool.uv.package = false`); it just
+# anchors the workspace, declares dev-only dependencies shared by every
+# sub-package, and centralizes tool configuration (ruff, mypy, pytest).
+#
+# Each sub-project under packages/ has its own pyproject.toml that names its
+# runtime dependencies. They are wired into the workspace via the
+# `[tool.uv.workspace] members` glob below.
+#
+# Common commands (run from this directory):
+#   python -m uv sync                          # install everything into .venv
+#   python -m uv run ruff check                # lint
+#   python -m uv run ruff format               # autoformat
+#   python -m uv run mypy                      # type-check
+#   python -m uv run pytest                    # all tests
+#   python -m uv run pytest packages/data-download   # tests for one package
+#
+# Once `uv` is on PATH you can drop the `python -m` prefix.
+
+[project]
+name = "mulligan-coach"
+version = "0.0.0"
+description = "Real-time mulligan decision helper for MTG Arena Limited (Premier Draft, Sealed)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "Bastian von Beschwitz", email = "bastian.vonbeschwitz@gmail.com" }]
+
+[tool.uv]
+# This pyproject is the workspace root, not a real package — uv won't try to
+# install it. The actual code lives in packages/*.
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+# PEP 735 dependency groups. `dev` is installed by `uv sync` by default.
+[dependency-groups]
+dev = [
+    "ruff>=0.6.0",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pytest-httpx>=0.30",
+    "pre-commit>=3.7",
+]
+
+# ---------------------------------------------------------------------------
+# Ruff — linter + formatter. We use ruff for both so there is a single tool to
+# learn. Rules are deliberately conservative: standard pycodestyle/pyflakes,
+# import sorting, common bug patterns, and modern-Python upgrades.
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["data", "models"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade (modern Python idioms)
+    "RUF",  # ruff-specific rules
+    "SIM",  # flake8-simplify
+    "PTH",  # use pathlib over os.path
+]
+ignore = [
+    "E501",   # line-too-long is handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["B011"]   # allow plain asserts and similar test-only patterns
+
+# ---------------------------------------------------------------------------
+# Mypy — strict type checking. Strict mode is the default for our own code;
+# third-party libraries without stubs are tolerated via ignore_missing_imports.
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+explicit_package_bases = true
+# Each sub-package uses a `src/` layout; tell mypy where to find them.
+mypy_path = ["packages/data-download/src"]
+files = ["packages"]
+
+[[tool.mypy.overrides]]
+module = ["duckdb.*", "pyarrow.*", "tqdm.*"]
+ignore_missing_imports = true
+
+# ---------------------------------------------------------------------------
+# Pytest configuration.
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["packages"]
+addopts = "-ra --strict-markers"
+markers = [
+    "integration: end-to-end tests that hit the live network (skipped by default)",
+]

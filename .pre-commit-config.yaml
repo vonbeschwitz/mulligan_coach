@@ -1,0 +1,42 @@
+# Pre-commit hooks. Install once with `uv run pre-commit install` and they
+# will run automatically on `git commit`.
+#
+# All hooks operate on staged files only — they do not run the full test
+# suite, since pre-commit is the wrong place for slow checks. CI runs
+# everything.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Pin to a specific ruff version so the hook output matches what
+    # `uv run ruff` produces locally.
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.20.2
+    hooks:
+      - id: mypy
+        # Run against the whole packages/ tree so cross-file inference works,
+        # not just staged files. Slower than other hooks but still fast for
+        # this small codebase.
+        pass_filenames: false
+        args: [packages]
+        additional_dependencies:
+          - pydantic>=2.7
+          - typer>=0.12
+          - httpx>=0.27
+          - pytest>=8.0
+          - pytest-httpx>=0.30

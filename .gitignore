@@ -1,0 +1,35 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+
+# uv / virtualenv
+.venv/
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Project-specific (per CLAUDE.md):
+#   data/   — large 17Lands CSVs and processed parquet files; never committed.
+#   models/ — trained XGBoost artifacts; shared via GitHub Releases later.
+data/
+models/
+
+# DuckDB transient/lock files (the .duckdb file itself lives under data/)
+*.duckdb-wal
+*.duckdb.wal
+*.duckdb.tmp

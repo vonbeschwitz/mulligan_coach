@@ -1,0 +1,40 @@
+[project]
+name = "mulligan-coach-data-download"
+version = "0.0.0"
+description = "Download and cache external data sources (17Lands, Scryfall, MTGJSON)."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Bastian von Beschwitz", email = "bastian.vonbeschwitz@gmail.com" }]
+
+dependencies = [
+    # HTTP client. Pinned conservatively; httpx 0.28+ has the modern Client API.
+    "httpx>=0.27,<1.0",
+    # CLI framework. Type-hint–driven, much friendlier than raw argparse.
+    "typer>=0.12,<1.0",
+    # Embedded analytical DB. Reads gz CSVs and writes parquet natively, so we
+    # don't have to load 17Lands rows row-by-row.
+    "duckdb>=1.1",
+    # Parquet writer/reader used alongside DuckDB.
+    "pyarrow>=17.0",
+    # Used as an in-memory step between CSV and parquet (typed columns,
+    # null-handling, defensive checks before write).
+    "pandas>=2.2",
+    # Progress bars on long downloads — multi-GB CSVs deserve visible feedback.
+    "tqdm>=4.66",
+    # Typed config + manifest schema. Catches typos in set codes / event types
+    # at load time instead of mid-download.
+    "pydantic>=2.7",
+]
+
+# CLI entry point. After `uv sync` the user can run:
+#     uv run mulligan-coach-data --help
+[project.scripts]
+mulligan-coach-data = "mulligan_coach_data_download.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mulligan_coach_data_download"]
