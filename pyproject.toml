@@ -28,6 +28,16 @@ requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 authors = [{ name = "Bastian von Beschwitz", email = "bastian.vonbeschwitz@gmail.com" }]
 
+# Every workspace package is listed here so a plain `uv sync` from the repo
+# root installs all of them into .venv. Without this, `uv sync` only installs
+# the workspace root's own deps (which is empty), and pytest/mypy/ruff fail
+# with ModuleNotFoundError because the packages aren't on sys.path.
+# Add new packages here as they're created.
+dependencies = [
+    "mulligan-coach-data-download",
+    "mulligan-coach-cards",
+]
+
 [tool.uv]
 # This pyproject is the workspace root, not a real package — uv won't try to
 # install it. The actual code lives in packages/*.
@@ -35,6 +45,17 @@ package = false
 
 [tool.uv.workspace]
 members = ["packages/*"]
+# packages/simulation/ currently has only a CLAUDE.md (planning notes) and no
+# pyproject.toml. uv rejects the whole workspace if a member dir is empty, so
+# it's excluded here until the package actually exists. Drop this line once
+# simulation/pyproject.toml lands.
+exclude = ["packages/simulation"]
+
+# Tell uv to resolve the names in [project.dependencies] to the local
+# workspace packages rather than going to PyPI (where they don't exist).
+[tool.uv.sources]
+mulligan-coach-data-download = { workspace = true }
+mulligan-coach-cards = { workspace = true }
 
 # PEP 735 dependency groups. `dev` is installed by `uv sync` by default.
 [dependency-groups]
@@ -85,7 +106,7 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 explicit_package_bases = true
 # Each sub-package uses a `src/` layout; tell mypy where to find them.
-mypy_path = ["packages/data-download/src"]
+mypy_path = ["packages/data-download/src", "packages/cards/src"]
 files = ["packages"]
 
 [[tool.mypy.overrides]]

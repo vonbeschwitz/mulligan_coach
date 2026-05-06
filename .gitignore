@@ -33,3 +33,12 @@ models/
 *.duckdb-wal
 *.duckdb.wal
 *.duckdb.tmp
+
+# Per-user Claude Code harness state (permissions allowlist, etc.).
+# Only the local variant is ignored; project-shared `.claude/settings.json`
+# (if it ever exists) IS committed.
+.claude/settings.local.json
+
+# Regenerable parse-demo dumps. Re-run `uv run mulligan-coach-cards
+# --set <SET>` to produce a fresh one for review.
+packages/cards/*-parse-demo.json
