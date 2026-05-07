@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="layout">
+
+  {#
+    Filter sidebar.
+
+    The form posts to /search with hx-trigger fired on:
+      * any change in the form (checkbox tick, dropdown pick)
+      * keyup in the search box, debounced 200ms
+      * page load (so the grid populates immediately on first render)
+
+    Response is the _results.html partial which HTMX swaps into #results.
+    No JS framework, no client-side state — the form IS the state.
+  #}
+  <aside class="sidebar">
+    <form id="filters"
+          hx-get="/search"
+          hx-trigger="change, keyup delay:200ms from:input[name=q], load"
+          hx-target="#results"
+          hx-push-url="false">
+
+      <p class="muted small">
+        {{ n_cards }} cards loaded from {{ loaded_sets|join(", ") }}.
+      </p>
+
+      <fieldset>
+        <legend>Name</legend>
+        <input type="search" name="q" placeholder="substring, e.g. dragon" autocomplete="off">
+      </fieldset>
+
+      <fieldset>
+        <legend>Parser status</legend>
+        <label><input type="radio" name="status" value="" checked> any</label>
+        <label><input type="radio" name="status" value="auto"> auto</label>
+        <label><input type="radio" name="status" value="needs_llm"> needs_llm</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Set</legend>
+        {% for s in loaded_sets %}
+          <label><input type="checkbox" name="sets" value="{{ s }}"> {{ s }}</label>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset>
+        <legend>Colors (must include all)</legend>
+        {% for c in ["W","U","B","R","G","C"] %}
+          <label class="color-{{ c }}"><input type="checkbox" name="colors" value="{{ c }}"> {{ c }}</label>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset>
+        <legend>Primary type</legend>
+        <select name="primary_type">
+          <option value="">any</option>
+          {% for t in primary_types %}
+            <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Role flags (AND)</legend>
+        {% for k in role_flag_keys %}
+          <label><input type="checkbox" name="role_flags" value="{{ k }}"> {{ k }}</label>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset>
+        <legend>Has mode of kind</legend>
+        {% for k in mode_kinds %}
+          <label><input type="checkbox" name="mode_kinds" value="{{ k }}"> {{ k }}</label>
+        {% endfor %}
+      </fieldset>
+
+      <fieldset>
+        <legend>Mana abilities</legend>
+        <label><input type="radio" name="has_mana_abilities" value="" checked> any</label>
+        <label><input type="radio" name="has_mana_abilities" value="yes"> yes</label>
+        <label><input type="radio" name="has_mana_abilities" value="no"> no</label>
+      </fieldset>
+
+      <button type="reset" onclick="setTimeout(() => htmx.trigger('#filters', 'change'), 0)">
+        Reset filters
+      </button>
+    </form>
+  </aside>
+
+  {# Results pane — populated by HTMX, never re-rendered server-side from here. #}
+  <section id="results" class="results">
+    <p class="muted">Loading…</p>
+  </section>
+
+</div>
+
+{% endblock %}

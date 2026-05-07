@@ -1,0 +1,52 @@
+{#
+  HTMX partial. Returned by /search and swapped into #results on the
+  index page. Do NOT extend base.html — this is a fragment, not a page.
+#}
+
+<p class="results-header">
+  Showing <strong>{{ shown }}</strong> of <strong>{{ total }}</strong> matching cards.
+</p>
+
+{% if entries %}
+  <div class="grid">
+    {% for e in entries %}
+      <a class="tile"
+         href="/card/{{ e.parsed.set_code }}/{{ e.parsed.collector_number }}">
+        {% set img = image_url(e, "small") %}
+        {% if img %}
+          <img loading="lazy" src="{{ img }}" alt="{{ e.parsed.name }}">
+        {% else %}
+          <div class="tile-noimg">no image</div>
+        {% endif %}
+        <div class="tile-name">{{ e.parsed.name }}</div>
+        <div class="chips">
+          <span class="chip chip-{{ e.parsed.status.value }}">{{ e.parsed.status.value }}</span>
+          <span class="chip chip-set">{{ e.parsed.set_code|upper }}</span>
+          {% for t in e.parsed.types %}
+            <span class="chip chip-type">{{ t }}</span>
+          {% endfor %}
+          {% for c in e.parsed.colors %}
+            <span class="chip color-{{ c }}">{{ c }}</span>
+          {% endfor %}
+          {% if not e.parsed.colors %}
+            <span class="chip color-C">C</span>
+          {% endif %}
+          {# Truthy role flags (is_creature, is_equipment, removal_*, etc.) — one chip each. #}
+          {% for flag in active_role_flags(e.parsed) %}
+            <span class="chip chip-role" title="{{ flag }}">{{ display_role_flag(flag) }}</span>
+          {% endfor %}
+          {# Mode kinds present (cast / cycle / land_cycle / channel / activated). #}
+          {% for kind in active_mode_kinds(e.parsed) %}
+            <span class="chip chip-mode">{{ kind }}</span>
+          {% endfor %}
+          {# Mana ability presence — single chip, regardless of how many. #}
+          {% if e.parsed.mana_abilities %}
+            <span class="chip chip-mana-ability">mana ability</span>
+          {% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="muted">No matches. Loosen the filters.</p>
+{% endif %}

@@ -1,0 +1,50 @@
+# card-viewer — local utility for visually verifying ParsedCard encodings.
+#
+# This package is part of the uv workspace (see root pyproject.toml's
+# `[tool.uv.workspace] members = ["packages/*", "utilities/*"]`) so that
+# `uv sync` builds it into the dev `.venv`. It is deliberately NOT a
+# runtime dependency of `mulligan-coach`: the viewer is a developer tool
+# for eyeballing the deterministic parser's output, not part of the
+# shipped recommendation pipeline.
+
+[project]
+name = "card-viewer"
+version = "0.0.0"
+description = "Local web utility for viewing ParsedCard encodings alongside Scryfall card images."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Bastian von Beschwitz", email = "bastian.vonbeschwitz@gmail.com" }]
+
+dependencies = [
+    # The thing we're inspecting. Resolved against the local workspace via
+    # the root pyproject's `[tool.uv.sources] mulligan-coach-cards = { workspace = true }`.
+    "mulligan-coach-cards",
+    # Tiny web stack — same one the planned `website` package will use, so
+    # there's no extra learning surface here. FastAPI brings Pydantic v2 with
+    # it for free; uvicorn[standard] adds the C-accelerated event loop.
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    # Server-side templates. Jinja2 is FastAPI's recommended template engine.
+    "jinja2>=3.1",
+    # Already pulled in transitively by FastAPI; pinned explicitly because
+    # we import BaseModel directly in filters.py.
+    "pydantic>=2.7",
+]
+
+[project.scripts]
+# `uv run card-viewer` boots the dev server on http://127.0.0.1:8000.
+card-viewer = "card_viewer.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/card_viewer"]
+
+# Templates and static assets ship with the wheel so importlib.resources
+# can locate them at runtime regardless of how the package is installed.
+[tool.hatch.build.targets.wheel.force-include]
+"src/card_viewer/templates" = "card_viewer/templates"
+"src/card_viewer/static" = "card_viewer/static"

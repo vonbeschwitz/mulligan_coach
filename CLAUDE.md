@@ -28,14 +28,24 @@ mulligan-coach/
 ├── LICENSE                      # MIT
 ├── .github/workflows/           # CI (lint, tests)
 ├── data/                        # Gitignored; downloaded data lives here
-└── packages/
-    ├── data-download/           # Pulls 17Lands, Scryfall, MTGJSON
-    ├── cards/                   # Shared card representation + role categorization
-    ├── simulation/              # Monte Carlo playability engine
-    ├── model/                   # XGBoost training + inference
-    ├── website/                 # FastAPI + HTMX testing interface
-    └── overlay/                 # PyQt6 Arena log-tailing overlay
+├── packages/
+│   ├── data-download/           # Pulls 17Lands, Scryfall, MTGJSON
+│   ├── cards/                   # Shared card representation + role categorization
+│   ├── simulation/              # Monte Carlo playability engine
+│   ├── model/                   # XGBoost training + inference
+│   ├── website/                 # FastAPI + HTMX testing interface
+│   └── overlay/                 # PyQt6 Arena log-tailing overlay
+└── utilities/                   # Dev-only helper tools (workspace members, not shipped)
+    └── card_viewer/             # Local web UI for verifying ParsedCard encodings
 ```
+
+`utilities/` holds developer tools that share the workspace's `.venv` and
+dependencies but are not part of the shipped recommendation pipeline.
+They're added to `[tool.uv.workspace] members` so `uv sync` installs
+them, and listed in the root's `[project.dependencies]` so a plain
+`uv sync` puts them on the path. Because the workspace root has
+`package = false`, dev-tool deps here can never leak into a downstream
+wheel.
 
 ### 1. data-download
 

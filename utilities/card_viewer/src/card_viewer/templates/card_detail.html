@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}{{ e.parsed.name }} — encoding{% endblock %}
+{% block content %}
+
+<p><a href="/">&larr; back to search</a></p>
+
+<div class="detail">
+
+  <div class="detail-image">
+    {% set big = image_url(e, "normal") %}
+    {% if big %}
+      <img src="{{ big }}" alt="{{ e.parsed.name }}">
+    {% else %}
+      <div class="tile-noimg">no image</div>
+    {% endif %}
+  </div>
+
+  <div class="detail-encoding">
+    <h1>{{ e.parsed.name }}</h1>
+
+    {# Chip summary — the same row as the index tile, in larger form. #}
+    <div class="chips">
+      <span class="chip chip-{{ e.parsed.status.value }}">status: {{ e.parsed.status.value }}</span>
+      <span class="chip chip-set">{{ e.parsed.set_code|upper }} #{{ e.parsed.collector_number }}</span>
+      <span class="chip chip-type">{{ e.parsed.type_line }}</span>
+      {% if e.parsed.mana_cost %}
+        <span class="chip chip-cost">cost: {{ e.parsed.mana_cost.raw or "—" }}</span>
+      {% endif %}
+      {% for c in e.parsed.colors %}
+        <span class="chip color-{{ c }}">{{ c }}</span>
+      {% endfor %}
+      {% if not e.parsed.colors %}
+        <span class="chip color-C">C</span>
+      {% endif %}
+      {% if e.parsed.power is not none and e.parsed.toughness is not none %}
+        <span class="chip">{{ e.parsed.power }}/{{ e.parsed.toughness }}</span>
+      {% endif %}
+      {% for k in e.parsed.evergreen_keywords %}
+        <span class="chip chip-keyword">{{ k }}</span>
+      {% endfor %}
+      {% for flag in active_role_flags(e.parsed) %}
+        <span class="chip chip-role" title="{{ flag }}">{{ display_role_flag(flag) }}</span>
+      {% endfor %}
+      {% for kind in active_mode_kinds(e.parsed) %}
+        <span class="chip chip-mode">{{ kind }}</span>
+      {% endfor %}
+      {% if e.parsed.mana_abilities %}
+        <span class="chip chip-mana-ability">mana ability</span>
+      {% endif %}
+    </div>
+
+    {% if e.parsed.reasons %}
+      <h2>Parser reasons</h2>
+      <ul class="reasons">
+        {% for r in e.parsed.reasons %}<li>{{ r }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    <h2>Oracle text (raw)</h2>
+    <pre class="oracle">{{ e.parsed.raw_oracle_text }}</pre>
+
+    <h2>ParsedCard JSON</h2>
+    {# Pydantic v2: model_dump_json returns a str; Jinja2 autoescapes inside <pre>. #}
+    <pre class="json">{{ e.parsed.model_dump_json(indent=2) }}</pre>
+  </div>
+
+</div>
+
+{% endblock %}

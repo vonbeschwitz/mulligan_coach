@@ -36,6 +36,11 @@ authors = [{ name = "Bastian von Beschwitz", email = "bastian.vonbeschwitz@gmail
 dependencies = [
     "mulligan-coach-data-download",
     "mulligan-coach-cards",
+    # Dev-only utility (workspace member under utilities/). Listed here so a
+    # plain `uv sync` installs it into .venv. Safe to include because this
+    # root has `package = false` — nothing is ever built/shipped from it,
+    # so dev utilities here can't leak into a downstream wheel.
+    "card-viewer",
 ]
 
 [tool.uv]
@@ -44,7 +49,12 @@ dependencies = [
 package = false
 
 [tool.uv.workspace]
-members = ["packages/*"]
+# `utilities/*` holds dev-only helper tools (e.g. the card-viewer encoding
+# inspector). They're workspace members so `uv sync` builds them into .venv,
+# but they are deliberately NOT listed in the root `[project.dependencies]`
+# above — that keeps them out of the shipped `mulligan-coach` install closure
+# while still being conveniently available locally.
+members = ["packages/*", "utilities/*"]
 # packages/simulation/ currently has only a CLAUDE.md (planning notes) and no
 # pyproject.toml. uv rejects the whole workspace if a member dir is empty, so
 # it's excluded here until the package actually exists. Drop this line once
@@ -56,6 +66,7 @@ exclude = ["packages/simulation"]
 [tool.uv.sources]
 mulligan-coach-data-download = { workspace = true }
 mulligan-coach-cards = { workspace = true }
+card-viewer = { workspace = true }
 
 # PEP 735 dependency groups. `dev` is installed by `uv sync` by default.
 [dependency-groups]
@@ -106,8 +117,8 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 explicit_package_bases = true
 # Each sub-package uses a `src/` layout; tell mypy where to find them.
-mypy_path = ["packages/data-download/src", "packages/cards/src"]
-files = ["packages"]
+mypy_path = ["packages/data-download/src", "packages/cards/src", "utilities/card_viewer/src"]
+files = ["packages", "utilities"]
 
 [[tool.mypy.overrides]]
 module = ["duckdb.*", "pyarrow.*", "tqdm.*"]
@@ -117,7 +128,7 @@ ignore_missing_imports = true
 # Pytest configuration.
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
-testpaths = ["packages"]
+testpaths = ["packages", "utilities"]
 addopts = "-ra --strict-markers"
 markers = [
     "integration: end-to-end tests that hit the live network (skipped by default)",
