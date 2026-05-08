@@ -122,6 +122,8 @@ main { padding: 1rem; }
 }
 .chip-auto         { background: #d1fae5; color: #065f46; }
 .chip-needs_llm    { background: #fee2e2; color: #991b1b; }
+.chip-llm_encoded  { background: #ddd6fe; color: #4c1d95; }
+.chip-needs_human  { background: #fed7aa; color: #9a3412; }
 .chip-set          { background: #1f2937; color: white; }
 .chip-type         { background: #dbeafe; color: #1e3a8a; }
 .chip-cost         { background: #f3e8ff; color: #6b21a8; }

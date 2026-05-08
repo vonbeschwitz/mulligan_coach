@@ -48,6 +48,16 @@ def test_search_status_filter(client: TestClient) -> None:
     assert r.status_code == 200
 
 
+def test_search_llm_encoded_status_filter(client: TestClient) -> None:
+    r = client.get("/search", params={"status": "llm_encoded"})
+    assert r.status_code == 200
+
+
+def test_search_needs_human_status_filter(client: TestClient) -> None:
+    r = client.get("/search", params={"status": "needs_human"})
+    assert r.status_code == 200
+
+
 def test_search_role_flag_filter(client: TestClient) -> None:
     r = client.get("/search", params={"role_flags": "is_creature"})
     assert r.status_code == 200

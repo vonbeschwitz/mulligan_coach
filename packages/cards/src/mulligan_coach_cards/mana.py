@@ -59,14 +59,14 @@ COLOR_SET: Final[frozenset[str]] = frozenset(COLORS)
 # Discriminator type used by Pip.kind. Kept as a Literal (not an Enum) for
 # easy JSON round-tripping and friendlier autocomplete in IDEs.
 PipKind = Literal[
-    "color",          # one mandatory pip of a single color (W / U / B / R / G)
-    "generic",        # numeric generic ({1}, {3}, ...)
-    "x",              # variable generic ({X} / {Y} / {Z}); contributes 0 to cmc
-    "hybrid",         # two-color hybrid like {W/U}; payable with either listed color
-    "two_or_color",   # generic-OR-color hybrid like {2/W}; cmc counts the higher side
-    "phyrexian",      # {W/P} etc.; payable with the color or 2 life
-    "colorless",      # the dedicated colorless symbol {C}
-    "snow",           # {S}
+    "color",  # one mandatory pip of a single color (W / U / B / R / G)
+    "generic",  # numeric generic ({1}, {3}, ...)
+    "x",  # variable generic ({X} / {Y} / {Z}); contributes 0 to cmc
+    "hybrid",  # two-color hybrid like {W/U}; payable with either listed color
+    "two_or_color",  # generic-OR-color hybrid like {2/W}; cmc counts the higher side
+    "phyrexian",  # {W/P} etc.; payable with the color or 2 life
+    "colorless",  # the dedicated colorless symbol {C}
+    "snow",  # {S}
 ]
 
 # Match a single ``{...}`` symbol. We pull out the inner text and inspect it

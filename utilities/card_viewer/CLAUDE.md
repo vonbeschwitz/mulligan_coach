@@ -30,11 +30,19 @@ tests/test_app.py           # TestClient smoke tests; auto-skip if data missing
 
 ## How it works
 
-1. On startup, the FastAPI `lifespan` builds a `CardStore` by calling
-   `load_all_cards()`, `filter_cards(set_code=...)`, and `parse_card()`
-   for each card in `CARD_VIEWER_SETS` (default `TMT,ECL,TLA`). Each
-   `CardEntry` pairs the `ParsedCard` with its source Scryfall dict so
-   templates can read `image_uris` for hotlinking the CDN URL.
+1. On startup, the FastAPI `lifespan` builds a `CardStore` by reading
+   the Scryfall snapshot (`load_all_cards()`, `filter_cards(set_code=...)`)
+   and pairing each card with the best available `ParsedCard`:
+   * If `data/processed/parsed_cards/<SET>.json` (written by
+     `mulligan-coach-cards run-detector`) has the card by `oracle_id`,
+     that entry is used verbatim. Critical for `llm_encoded` and
+     `needs_human` cards — re-parsing would lose the hand-encoded
+     fields.
+   * Otherwise the deterministic parser (`parse_card`) runs on the raw
+     dict. This keeps the viewer useful on a clean checkout where
+     `run-detector` hasn't been invoked yet.
+   Each `CardEntry` pairs the `ParsedCard` with its source Scryfall dict
+   so templates can read `image_uris` for hotlinking the CDN URL.
 2. `GET /` renders the index page; the form has
    `hx-trigger="... load"` so HTMX immediately fetches `/search` with
    no filters and populates the grid.

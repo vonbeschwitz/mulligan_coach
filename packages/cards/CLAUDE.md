@@ -24,12 +24,17 @@ make the model walk `effects`.
 src/mulligan_coach_cards/
 ├── __init__.py                  # Re-exports the public surface
 ├── mana.py                      # ManaCost + Pip + parse_mana_cost
-├── keywords.py                  # EVERGREEN_KEYWORDS, MODE_EMITTING_KEYWORDS, ALT_COST_KEYWORDS
+├── keywords.py                  # EVERGREEN_KEYWORDS, MODE_EMITTING_KEYWORDS, ALT_COST_KEYWORDS,
+│                                # IGNORABLE_KEYWORD_LINES, SET_SPECIFIC_KEYWORDS
 ├── models.py                    # ParsedCard, Mode, Effect (discriminated union), Cost,
 │                                # ManaAbility, Predicate, RoleFeatures, CreatureBody
 ├── parser.py                    # Deterministic Scryfall → ParsedCard
+├── store.py                     # Persistent per-set ParsedCard JSON + merge_detector_run
 ├── loader.py                    # Reads data/raw/scryfall/oracle_cards.<date>.json
-└── cli.py                       # `mulligan-coach-cards` typer app — currently the parse-demo command
+└── cli.py                       # `mulligan-coach-cards` typer app: parse-demo, run-detector,
+                                 # list-needs-llm, mark
+scripts/                         # Dev helpers: summarize_batch, apply_patches,
+                                 # mark_layout_blocks
 ```
 
 ## Datatype shape (high level)
@@ -160,15 +165,17 @@ It dispatches by primary type (Land > Creature > Instant/Sorcery >
 Enchantment > Artifact > Planeswalker), then the per-type branch
 emits Modes / ManaAbilities / RoleFeatures.
 
-Two ParseStatus outcomes:
+Four ParseStatus outcomes:
 
 * `AUTO` — the deterministic parser fully understood the card.
   Downstream code can trust the structured fields.
 * `NEEDS_LLM` — something blocked deterministic classification.
-  `reasons` lists what tripped the parser. The LLM classifier
-  (separate package, not yet built) is responsible for filling in
-  the structured fields. Partial fills are fine — the parser
-  populates whatever it could before bailing.
+  `reasons` lists what tripped the parser; awaiting LLM review.
+* `LLM_ENCODED` — Claude (the LLM) reviewed the card and hand-encoded
+  the structured fields. Treated as authoritative; preserved on
+  re-runs of `run-detector`.
+* `NEEDS_HUMAN` — Claude reviewed but was uncertain enough that human
+  judgement is required. Also preserved on re-runs.
 
 ### When the parser bails
 
@@ -275,16 +282,26 @@ Hand-crafted Scryfall-shaped dicts. No real data download required.
 
 ## Current auto-classification rate
 
-On a 33-card random sample from TLA (`uv run mulligan-coach-cards
---set TLA --n 30 --seed 0`):
+After the static/triggered-tolerance + bending + MV>=4 fast-path passes,
+across the three current Premier-Draft sets (TMT/ECL/TLA — 738 cards):
 
-* **13 / 33 (39%)** auto-classified.
-* The 20 `NEEDS_LLM` cards are mostly: TLA's set-specific keywords
-  (airbend / waterbend / earthbend / firebending), Sagas / DFCs
-  (transform layout — out of scope per plan), Shrine / lord enchantments
-  with conditional triggers, and a handful of complex multi-clause
-  effects (Path to Redemption's activated multi-sentence effect, Sokka's
-  lord static, True Ancestry's graveyard recursion).
+| Set | auto | llm_encoded | needs_human | needs_llm |
+|---|---|---|---|---|
+| TMT | 154 (81.1%) | 29 (15.3%) | 7 (3.7%) | 0 |
+| ECL | 211 (79.0%) | 49 (18.4%) | 7 (2.6%) | 0 |
+| TLA | 212 (75.4%) | 57 (20.3%) | 12 (4.3%) | 0 |
+| **All** | **577 (78.2%)** | **135 (18.3%)** | **26 (3.5%)** | **0** |
+
+Reproduce / refresh with:
+
+```
+uv run mulligan-coach-cards run-detector --sets TMT,ECL,TLA
+```
+
+`needs_human` cards are mostly Sagas / DFCs / Classes (transform-layout
+families that the v1 parser doesn't model). `llm_encoded` cards have
+their `role_features` hand-set; `modes` / `mana_abilities` may be
+partial (the simulator already tolerates that on non-AUTO cards).
 
 ## Known sharp edges
 

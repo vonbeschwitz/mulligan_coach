@@ -63,14 +63,47 @@ EVERGREEN_KEYWORDS: Final[frozenset[str]] = frozenset(EVERGREEN_KEYWORD_LIST)
 # means the parser is now expected to handle it.
 SET_SPECIFIC_KEYWORDS: Final[frozenset[str]] = frozenset(
     {
-        # TLA (Avatar: The Last Airbender)
-        "airbend",
-        "waterbend",
-        "earthbend",
-        "firebending",
-        # Vehicles / Equipment have their own dedicated parser branches now,
-        # but "crew N" and "equip N" lines on those cards are recognised as
-        # ignorable rather than bail-worthy. Handled in parser.py directly.
+        # TLA (Avatar: The Last Airbender) bending mechanics are now handled
+        # deterministically in parser.py:
+        #   * airbend     → treated as bounce (returns target to hand)
+        #   * earthbend N → treated as creating an N/N creature token
+        #   * waterbend   → treated as an activated ability whose colored
+        #                   mana cost is demoted to generic
+        #   * firebending → triggered ability, silently ignored
+        # Add a new entry here only when a future set ships a custom
+        # mechanic the parser hasn't been taught yet.
+    }
+)
+
+
+# Single-word ability lines we choose to silently ignore when they appear
+# alone on a line. These keywords either modify how the card interacts
+# with other rules in ways that don't affect mulligan classification
+# (Changeling, Convoke is treated as cost-reduction noise) or signal
+# alt-modes whose details we defer to higher-MV review.
+#
+# Adding a keyword here means: a chunk consisting solely of this word
+# (case-insensitive) is not a parse blocker. The card's other text still
+# decides AUTO vs NEEDS_LLM.
+IGNORABLE_KEYWORD_LINES: Final[frozenset[str]] = frozenset(
+    {
+        "changeling",
+        "convoke",
+        "conspire",
+        "soulshift",
+        "modular",
+        "amplify",
+        "battle cry",
+        "delirium",
+        "metalcraft",
+        "fading",
+        "scavenge",
+        "buyback",
+        # TMT (Mutant Ninja Turtles) — alt-cost keyword whose details we
+        # defer to LLM/human review. Listing it here lets cards with
+        # only "Sneak {N}" as their non-effect text auto-classify on the
+        # rest of their oracle text.
+        "sneak",
     }
 )
 
