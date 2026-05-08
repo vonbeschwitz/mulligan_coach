@@ -24,16 +24,23 @@ simulator-side effects (e.g. a ``DrawCardsEffect(n=2)`` implies
 ``cards_drawn=2``), but having them broken out as their own field keeps
 downstream code simple and explicit.
 
-Two ``ParseStatus`` values matter:
+Four ``ParseStatus`` values matter:
 
 * ``ParseStatus.AUTO`` — the deterministic parser fully understood the
   card. ``modes``, ``mana_abilities``, ``role_features`` etc. are
   populated and trustworthy.
 * ``ParseStatus.NEEDS_LLM`` — the parser couldn't fully classify the
-  card. ``reasons`` lists what blocked it; the LLM classifier (separate
-  package, not yet built) is responsible for filling the structured
-  fields. Partial fills are fine — the deterministic parser populates
-  whatever it could before giving up.
+  card. ``reasons`` lists what blocked it; an LLM should fill in the
+  structured fields. Partial fills are fine — the deterministic parser
+  populates whatever it could before giving up.
+* ``ParseStatus.LLM_ENCODED`` — an LLM (Claude) reviewed the card and
+  hand-encoded the structured fields. Treated as authoritative by
+  downstream consumers; the deterministic parser preserves these on
+  re-runs (won't overwrite).
+* ``ParseStatus.NEEDS_HUMAN`` — Claude reviewed the card but was
+  uncertain enough that human judgement is required. Downstream code
+  should treat the structured fields as best-effort. The deterministic
+  parser also preserves these on re-runs.
 """
 
 from __future__ import annotations
@@ -63,10 +70,20 @@ ManaOption = Literal["W", "U", "B", "R", "G", "C", "any"]
 
 
 class ParseStatus(StrEnum):
-    """Whether the deterministic parser fully classified the card."""
+    """Whether the deterministic parser fully classified the card.
+
+    Cards flow through these states in roughly this order:
+    1. ``NEEDS_LLM`` — the parser bailed; awaiting review.
+    2. ``LLM_ENCODED`` or ``NEEDS_HUMAN`` — Claude reviewed it and either
+       hand-encoded the fields or marked it for human attention.
+    3. ``AUTO`` — the parser was extended to handle the card and now
+       classifies it deterministically.
+    """
 
     AUTO = "auto"
     NEEDS_LLM = "needs_llm"
+    LLM_ENCODED = "llm_encoded"
+    NEEDS_HUMAN = "needs_human"
 
 
 # ---------------------------------------------------------------------------
@@ -84,12 +101,12 @@ class ParseStatus(StrEnum):
 # ---------------------------------------------------------------------------
 
 PredicateKind = Literal[
-    "always",                # always true; the default when no condition is set
-    "controls_lands_ge",     # number of lands you control >= n
-    "controls_lands_lt",     # number of lands you control <  n  (Deathcap pattern)
-    "controls_basic",        # you control at least one basic of the named type
-    "controls_basic_any",    # you control at least one basic land of any type
-    "controls_color",        # you control at least one source of the named color
+    "always",  # always true; the default when no condition is set
+    "controls_lands_ge",  # number of lands you control >= n
+    "controls_lands_lt",  # number of lands you control <  n  (Deathcap pattern)
+    "controls_basic",  # you control at least one basic of the named type
+    "controls_basic_any",  # you control at least one basic land of any type
+    "controls_color",  # you control at least one source of the named color
 ]
 
 
@@ -268,7 +285,12 @@ class NoopEffect(BaseModel):
 # Discriminated union over ``kind``. Pydantic 2 picks the right concrete
 # class on parse based on the discriminator string.
 Effect = Annotated[
-    ProduceManaEffect | FetchLandEffect | DrawCardsEffect | ScryEffect | EntersBattlefieldEffect | NoopEffect,
+    ProduceManaEffect
+    | FetchLandEffect
+    | DrawCardsEffect
+    | ScryEffect
+    | EntersBattlefieldEffect
+    | NoopEffect,
     Field(discriminator="kind"),
 ]
 
@@ -334,7 +356,9 @@ class CreatureBody(BaseModel):
     stapled body, Vehicle with a pilot token, sorceries that make tokens).
     """
 
-    power: str = Field(description="Raw power string ('2', '*', '1+*', etc.). Strings to preserve oddities.")
+    power: str = Field(
+        description="Raw power string ('2', '*', '1+*', etc.). Strings to preserve oddities."
+    )
     toughness: str
     colors: list[Color] = Field(default_factory=list)
     subtypes: list[str] = Field(
@@ -469,7 +493,9 @@ class ParsedCard(BaseModel):
     )
 
     # Type system ------------------------------------------------------------
-    type_line: str = Field(description="Full Scryfall type line, preserved as-is for display / debugging.")
+    type_line: str = Field(
+        description="Full Scryfall type line, preserved as-is for display / debugging."
+    )
     types: list[str] = Field(
         default_factory=list,
         description="Card types, e.g. ['Creature'], ['Artifact','Creature'], ['Land'], ['Sorcery'].",

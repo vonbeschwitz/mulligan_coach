@@ -35,8 +35,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .keywords import ALT_COST_KEYWORDS, EVERGREEN_KEYWORDS, SET_SPECIFIC_KEYWORDS
-from .mana import ManaCost, parse_mana_cost
+from .keywords import (
+    ALT_COST_KEYWORDS,
+    EVERGREEN_KEYWORDS,
+    IGNORABLE_KEYWORD_LINES,
+    SET_SPECIFIC_KEYWORDS,
+)
+from .mana import ManaCost, Pip, parse_mana_cost
 from .models import (
     Cost,
     CreatureBody,
@@ -113,6 +118,27 @@ def _split_chunks(text: str) -> list[str]:
     return [line.strip() for line in text.split("\n") if line.strip()]
 
 
+# Mechanic-label prefixes — once-per-game / conditional ability labels
+# that act as a header before the actual cost/effect. Stripping them
+# lets the standard activated / waterbend / triggered matchers fire on
+# the body. New entries added as new sets ship.
+_LABEL_PREFIX_RE = re.compile(
+    r"^(?:exhaust|raid|fateful hour|delirium|metalcraft|landfall|morbid|"
+    r"hellbent|threshold|formidable|coven|domain|battalion|vivid|"
+    r"firebending|champion of dawn|champion of dusk|"
+    r"alliance|disappear|kicker)"
+    r"\s*[—\-]\s*",
+    re.IGNORECASE,
+)
+
+
+def _strip_label_prefix(chunk: str) -> str:
+    """Remove a leading mechanic-label prefix like 'Exhaust — ' or 'Raid — '.
+
+    Idempotent; non-matching chunks are returned unchanged."""
+    return _LABEL_PREFIX_RE.sub("", chunk, count=1)
+
+
 def _empty_mana() -> ManaCost:
     """Build a fresh empty ManaCost. Pydantic models are not safely shared
     as defaults across instances, so we build a new one each time."""
@@ -170,7 +196,12 @@ def _parse_type_line(type_line: str) -> tuple[list[str], list[str], list[str]]:
 
 _MANA_RUN_RE = re.compile(r"^(?:\{[^{}]+\})+$")
 _SACRIFICE_RE = re.compile(
-    r"^sacrifice\s+(?:this(?:\s+\w+)?|an?\s+(?P<type>creature|artifact|land|permanent))\.?$",
+    r"^sacrifice\s+(?:"
+    r"this(?:\s+\w+)?"
+    r"|"
+    r"(?:an?|another)\s+(?P<type>creature|artifact|land|permanent|"
+    r"artifact or creature|creature or artifact)"
+    r")\.?$",
     re.IGNORECASE,
 )
 _DISCARD_SELF_RE = re.compile(r"^discard\s+this\s+card\.?$", re.IGNORECASE)
@@ -214,10 +245,13 @@ def _parse_cost_string(cost_str: str) -> Cost | None:
                 cost.sacrifice = SacrificeSpec(target="self")
             else:
                 t = target_word.lower()
-                # Map "permanent" → "any" since the sim doesn't distinguish.
-                cost.sacrifice = SacrificeSpec(
-                    target="any" if t == "permanent" else t  # type: ignore[arg-type]
-                )
+                # Map "permanent" / multi-target ("artifact or creature") to
+                # "any" since the simulator doesn't distinguish.
+                if t in ("permanent", "artifact or creature", "creature or artifact"):
+                    mapped = "any"
+                else:
+                    mapped = t
+                cost.sacrifice = SacrificeSpec(target=mapped)  # type: ignore[arg-type]
             continue
 
         # Mana run? Concatenate; we'll parse all the mana at the end.
@@ -245,8 +279,8 @@ def _parse_cost_string(cost_str: str) -> Cost | None:
 # abilities — same vocabulary in each context.
 # ---------------------------------------------------------------------------
 
-_DRAW_RE = re.compile(r"^Draw (\w+) cards?\.?$", re.IGNORECASE)
-_SCRY_RE = re.compile(r"^Scry (\w+)\.?$", re.IGNORECASE)
+_DRAW_RE = re.compile(r"^Draw (\w+) cards?\b", re.IGNORECASE)
+_SCRY_RE = re.compile(r"^Scry (\w+)\b", re.IGNORECASE)
 # Loot: "Draw N cards, then discard N cards." Net draw is zero, but
 # the player sees and manipulates new cards. role_features.cards_manipulated
 # is the right home for this.
@@ -257,20 +291,35 @@ _LOOT_RE = re.compile(
 # Generalised destroy / exile target X. The "X" group is captured so the
 # matcher can route to removal_destroy_or_exile (creature / nonland
 # permanent / permanent) vs is_other (artifact / enchantment / land / …).
+# A trailing qualifier ("with mana value 3 or greater", "you don't control",
+# "an opponent controls") is allowed before the period.
+# Optional descriptor that can appear between "target" and the target
+# word ("attacking", "blocking", "tapped", "untapped", etc.).
+_TARGET_PRE_DESC = (
+    r"(?:(?:attacking|blocking|attacking or blocking|tapped|untapped|"
+    r"nonblack|nonwhite|nonblue|nonred|nongreen|nontoken|colorless)\s+)*"
+)
 _DESTROY_TARGET_RE = re.compile(
     r"^Destroy(?:\s+up to (?:one|two|three|\d+))?\s+target\s+"
-    r"(?P<target>creature|nonland permanent|permanent|artifact|enchantment|"
-    r"land|artifact or enchantment)\.?$",
+    + _TARGET_PRE_DESC
+    + r"(?P<target>creature|nonland permanent|permanent|artifact|enchantment|"
+    r"land|artifact or enchantment)"
+    r"(?:\s+[^.]*?)?(?:\.|$)",
     re.IGNORECASE,
 )
 _EXILE_TARGET_RE = re.compile(
     r"^Exile(?:\s+up to (?:one|two|three|\d+))?\s+target\s+"
-    r"(?P<target>creature|nonland permanent|permanent|artifact|enchantment|"
-    r"land|artifact or enchantment)\.?$",
+    + _TARGET_PRE_DESC
+    + r"(?P<target>creature|nonland permanent|permanent|artifact|enchantment|"
+    r"land|artifact or enchantment)"
+    r"(?:\s+[^.]*?)?(?:\.|$)",
     re.IGNORECASE,
 )
 _DAMAGE_CREATURE_RE = re.compile(
-    r"^.+?\s+deals\s+(\d+)\s+damage to target creature\.?$", re.IGNORECASE
+    r"^.+?\s+deals\s+(\d+)\s+damage to target "
+    r"(?:attacking or blocking creature|attacking creature|blocking creature|creature)"
+    r"\.",
+    re.IGNORECASE,
 )
 _DAMAGE_ANY_RE = re.compile(
     r"^.+?\s+deals\s+(\d+)\s+damage to (any target|target creature or player)\.?$",
@@ -289,16 +338,18 @@ _LIFE_LOSS_RE = re.compile(
 )
 
 # Bounce — return target creature / nonland permanent / permanent to hand.
+# Trailing conditional text (e.g. "If you controlled that permanent, draw a
+# card.") is allowed after the period — the bounce is the primary effect.
 _BOUNCE_RE = re.compile(
     r"^Return\s+(?:up to (?:one|two|three|\d+)\s+)?target\s+"
     r"(?P<target>creature|nonland permanent|permanent)"
-    r"\s+to (?:its owner's|your) hand\.?$",
+    r"\s+to (?:its owner's|your) hand\.",
     re.IGNORECASE,
 )
 # Tuck — put target creature / permanent on top of its owner's library.
 _TOP_LIBRARY_RE = re.compile(
     r"^Put\s+target\s+(?P<target>creature|nonland permanent|permanent)"
-    r"\s+on (?:top of|the top of)\s+(?:its owner's|your) library\.?$",
+    r"\s+on (?:top of|the top of)\s+(?:its owner's|your) library\.",
     re.IGNORECASE,
 )
 
@@ -313,17 +364,37 @@ _COMBAT_TRICK_PUMP_RE = re.compile(
 # of EVERGREEN_KEYWORDS — we exclude defender / shroud / protection because
 # they're rarely granted by combat tricks and the parsing is finicky.
 _GRANTABLE_KEYWORDS: tuple[str, ...] = (
-    "deathtouch", "double strike", "first strike", "flying", "haste",
-    "hexproof", "indestructible", "lifelink", "menace", "reach",
-    "trample", "vigilance",
+    "deathtouch",
+    "double strike",
+    "first strike",
+    "flying",
+    "haste",
+    "hexproof",
+    "indestructible",
+    "lifelink",
+    "menace",
+    "reach",
+    "trample",
+    "vigilance",
 )
-_GRANT_KEYWORDS_RE = re.compile(
+_GRANT_KEYWORDS_BLOCK_RE = re.compile(
     r"gains?\s+("
-    + r"(?:" + "|".join(re.escape(k) for k in _GRANTABLE_KEYWORDS) + r")"
-    + r"(?:[\s,]+(?:and\s+)?(?:" + "|".join(re.escape(k) for k in _GRANTABLE_KEYWORDS) + r"))*"
-    + r").*?until end of turn",
-    re.IGNORECASE | re.DOTALL,
+    + r"(?:"
+    + "|".join(re.escape(k) for k in _GRANTABLE_KEYWORDS)
+    + r")"
+    + r"(?:[\s,]+(?:and\s+)?(?:"
+    + "|".join(re.escape(k) for k in _GRANTABLE_KEYWORDS)
+    + r"))*"
+    + r")",
+    re.IGNORECASE,
 )
+_UNTIL_EOT_RE = re.compile(r"until end of turn", re.IGNORECASE)
+
+
+# Backwards-compatible alias used by the old extractor — the new logic
+# below decouples "gains <keywords>" from "until end of turn" so they
+# can appear in either order in the oracle text.
+_GRANT_KEYWORDS_RE = _GRANT_KEYWORDS_BLOCK_RE
 # Combat tricks always target a creature. Used as a gate before the pump /
 # grant matchers fire — without the "target creature" gate, static
 # +N/+M-grant abilities on permanents would false-match.
@@ -335,6 +406,56 @@ _COUNTER_DISTRIBUTION_RE = re.compile(
     r"put a \+\d+/\+\d+ counter on each",
     re.IGNORECASE,
 )
+# Soft-removal: "exile target X until this leaves the battlefield" — the
+# permanent comes back when our card leaves, but for a turn count purpose
+# (which is what role_features cares about) it's removal. Common ETB shape
+# on enchantments (Aang's Iceberg) and creatures (Earth Kingdom Jailer).
+_EXILE_UNTIL_LEAVES_RE = re.compile(
+    r"exile\s+(?:up to (?:one|two|three|\d+)\s+)?(?:other\s+)?target\s+"
+    r"(?:nonland\s+|other\s+)*"
+    r"(?:creature|permanent|artifact, creature,? or enchantment|"
+    r"artifact or creature|artifact or enchantment)"
+    r".*?until\s+(?:this|that|it)\s+\w*?\s*leaves",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# Spell counter: "Counter target spell" — the counterspell role.
+_COUNTER_SPELL_RE = re.compile(
+    r"^counter\s+target\s+(?:spell|creature spell|noncreature spell|"
+    r"instant or sorcery spell|activated ability)\b",
+    re.IGNORECASE,
+)
+
+# Single-target +1/+1 counter pump (different from the "on each" variant
+# already covered by _COUNTER_DISTRIBUTION_RE).
+_COUNTER_TARGET_RE = re.compile(
+    r"^put\s+(?:a|one|two|three|\d+)\s+\+\d+/\+\d+ counters?\s+on\s+target\s+(?:creature|permanent)",
+    re.IGNORECASE,
+)
+
+# Negative-counter pump on target — large -N/-N counters effectively kill
+# the target (e.g. "Put four -1/-1 counters on target creature."). Three
+# or more counters typically kills, so we treat as removal.
+_NEG_COUNTER_TARGET_RE = re.compile(
+    r"^put\s+(?P<count>a|one|two|three|four|five|six|\d+)\s+-\d+/-\d+ counters?\s+on\s+target\s+(?:creature|permanent)",
+    re.IGNORECASE,
+)
+
+# Multi-target bounce: "Choose two target creatures controlled by different
+# players. Return those creatures to their owners' hands." or "Return all
+# creatures to their owners' hands."
+_MULTI_BOUNCE_RE = re.compile(
+    r"^Return\s+(?:all|each|those|the)?\s*(?:nonland\s+)?(?:creatures?|permanents?)"
+    r".*?to (?:their owners'|its owner's|your) hands?",
+    re.IGNORECASE | re.DOTALL,
+)
+# Or the modal-shape: choose targets first, then return them.
+_CHOOSE_BOUNCE_RE = re.compile(
+    r"^Choose\s+(?:up to )?(?:one|two|three|\d+)\s+target\s+creatures?\b"
+    r".*?return (?:those|that) creatures? to (?:their owners'|its owner's|your) hands?",
+    re.IGNORECASE | re.DOTALL,
+)
+
 # Static self-modifier on a creature: "This creature gets/has/'s power..."
 # Lines matching this are considered "noise from the parser's perspective"
 # — they don't change cast / castability / mana, so we ignore them rather
@@ -345,10 +466,309 @@ _STATIC_SELF_MOD_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Static / triggered ability tolerance.
+#
+# v1 rule (per project owner): we generally ignore static and triggered
+# abilities when classifying — they don't change a card's mana cost,
+# castability, or first-four-turns behaviour, which is what mulligan
+# decisions hinge on. The two exceptions worth capturing are:
+#
+# 1. Triggered card draw: bumps `role_features.cards_drawn`.
+# 2. Triggered mana production: noted as a breadcrumb only — the schema
+#    doesn't have a clean home for "produces mana on a trigger" yet.
+#
+# Lines matched as ignorable are silently dropped rather than treated as
+# blockers. Lines that DON'T look static/triggered (i.e. action lines
+# describing the spell's own effect) still go through the normal matcher
+# bank and bail to NEEDS_LLM if unrecognised.
+_TRIGGERED_PREFIX_RE = re.compile(
+    r"^(when|whenever|at the beginning of)\b",
+    re.IGNORECASE,
+)
+# Static prose that doesn't describe a player-initiated action. Matches the
+# common openers; we err on the side of including more rather than fewer
+# — false positives just mean we don't bail on a card we already would
+# have wanted to call AUTO.
+_STATIC_PREFIXES: tuple[str, ...] = (
+    "as long as ",
+    "as this ",  # "As this artifact enters, choose a creature type." — replacement effect
+    "if ",
+    "you may ",
+    "each player",
+    "each opponent",
+    "each turn",
+    "each upkeep",
+    "each combat",
+    "your ",
+    "creatures you control",
+    "creature you control",
+    "lands you control",
+    "permanents you control",
+    "all creatures",
+    "spells you cast",
+    "the next",
+    "this creature",
+    "this artifact",
+    "this enchantment",
+    "this land",
+    "this card",
+    "this spell",
+    "cards in",
+    "players can't",
+    "creatures can't",
+    "noncreature spells",
+    # Anthem-style statics referencing other permanents.
+    "other ",
+    "creatures with",
+    "tokens you control",
+    # Equipment / aura buffs.
+    "equipped ",
+    "enchanted ",
+    "the equipped ",
+    # Conditional / replacement-effect prefixes.
+    "the first ",
+    "during ",
+    "until ",
+    "for each ",
+    # TLA firebending — niche triggered ability we choose to ignore.
+    "firebending",
+)
+# Inner card-draw inside a triggered/static line: "draw a card", "draw N cards".
+_INNER_DRAW_RE = re.compile(
+    r"\b(?:you (?:may )?)?draw (a|an|one|two|three|four|five|six|seven|\d+) cards?\b",
+    re.IGNORECASE,
+)
+# Inner mana production inside a triggered/static line: "add {G}", "add {C}{C}".
+_INNER_ADD_MANA_RE = re.compile(
+    r"\badd ((?:\{[WUBRGC]\})+)",
+    re.IGNORECASE,
+)
+
+
+def _is_likely_static_or_triggered(chunk: str) -> bool:
+    """Heuristic: True if a chunk reads like a static or triggered ability
+    rather than an action the player initiates on resolution.
+
+    Used at the bail boundary in per-type parsers — when the regular spell
+    matchers don't recognise a line, we ask "is this prose / a trigger
+    we can safely ignore?" before deciding to flag the card NEEDS_LLM.
+    """
+    cl = chunk.strip().lower()
+    if _TRIGGERED_PREFIX_RE.match(cl):
+        return True
+    return any(cl.startswith(p) for p in _STATIC_PREFIXES)
+
+
+def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
+    """Scan an ignorable static/triggered chunk for card-draw and mana
+    production and reflect them in role_features.
+
+    Mana production currently has nowhere to go on the simulator side
+    (ManaAbility models permanent-resident activated abilities, not
+    triggered ones), so for now we just acknowledge it via a no-op and
+    keep the parser from bailing. The XGBoost stage can pick this up
+    later if we add a `triggered_mana` feature.
+
+    Also picks up bending effects nested inside triggered abilities
+    (e.g. "When this enters, airbend up to one target nonland permanent."
+    sets `rf.is_bounce`; "When this dies, earthbend 2." appends to
+    `rf.creates_creatures`).
+    """
+    for m in _INNER_DRAW_RE.finditer(chunk):
+        n = _to_int(m.group(1))
+        if n is not None:
+            rf.cards_drawn += n
+    # Mana production breadcrumb only — no role_features field today.
+    _ = _INNER_ADD_MANA_RE.search(chunk)
+    # Bending mechanics nested inside a triggered ability.
+    if _AIRBEND_RE.search(chunk):
+        rf.is_bounce = True
+    for m in _EARTHBEND_RE.finditer(chunk):
+        n = _to_int(m.group(1))
+        if n is not None:
+            rf.creates_creatures.append(
+                CreatureBody(
+                    power=str(n),
+                    toughness=str(n),
+                    colors=[],
+                    subtypes=[],
+                    keywords=[],
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
+# TLA bending mechanics.
+#
+# Per the project owner's design call:
+# * airbend     → de facto a bounce ("return to hand"). Set is_bounce=True.
+# * earthbend N → turns a land you control into a 0/0 creature with N
+#                 +1/+1 counters → effectively an N/N creature token.
+# * waterbend N — <cost>, <activation>: <effect> — treated as an activated
+#                 mode whose colored mana pips are demoted to generic
+#                 (since waterbending in TLA can be paid with generic mana
+#                 from any element / source for v1 simulator purposes).
+# * firebending → triggered "Whenever this attacks/etc" damage ability.
+#                 Niche; silently ignored via the static/triggered tolerance.
+#
+# These regexes intentionally allow leading whitespace / triggered prefixes
+# so they fire in any context (spell body, ETB trigger, dies-trigger, etc.).
+# ---------------------------------------------------------------------------
+
+_AIRBEND_RE = re.compile(
+    r"\bairbend(?:\s+up\s+to)?\s+"
+    r"(?:one|two|three|four|\d+)?\s*(?:other\s+)?"
+    r"target\s+(?:nonland\s+)?(?:creature|permanent)s?\b",
+    re.IGNORECASE,
+)
+_EARTHBEND_RE = re.compile(r"\bearthbend\s+(\d+)\b", re.IGNORECASE)
+# Waterbend line shape, supports both:
+#   * "Waterbend N — {cost}, {T}: <effect>." (dashed form with element counter)
+#   * "Waterbend {cost}: <effect>." (bare form where the cost follows directly)
+_WATERBEND_LINE_RE = re.compile(
+    r"^waterbend\s+(?:\d+\s*[—\-]\s*)?"
+    r"(?P<cost>[^:]+?)\s*:\s*(?P<effect>.+?)\.?$",
+    re.IGNORECASE,
+)
+# Firebending lines look like "Firebending {N} — Whenever this creature
+# attacks, ..." — the leading "Firebending ..." word forms a labelled
+# triggered ability we silently ignore.
+_FIREBENDING_LINE_RE = re.compile(r"^firebending\b", re.IGNORECASE)
+
+
+def _demote_cost_to_generic(cost: Cost) -> Cost:
+    """Return a copy of ``cost`` with each colored mana pip replaced by
+    a single generic ({1}). Used to model waterbending: the activation
+    cost is treated as if only generic mana could be paid for it.
+
+    Keeps {T}, sacrifice, discard_self, and untap unchanged. ``{X}`` /
+    snow / colorless pips stay as-is."""
+    if cost.mana.cmc == 0 and not cost.mana.pips:
+        return cost
+    new_pips: list[Pip] = []
+    extra_generic = 0
+    for pip in cost.mana.pips:
+        if pip.kind == "color" or pip.kind == "hybrid" or pip.kind == "phyrexian":
+            extra_generic += 1
+        elif pip.kind == "two_or_color":
+            extra_generic += pip.amount or 0
+        else:
+            # generic / x / snow / colorless — preserve.
+            new_pips.append(pip)
+    if extra_generic:
+        # Find an existing generic pip to bump, else prepend one.
+        bumped = False
+        for i, pip in enumerate(new_pips):
+            if pip.kind == "generic":
+                new_pips[i] = pip.model_copy(update={"amount": (pip.amount or 0) + extra_generic})
+                bumped = True
+                break
+        if not bumped:
+            new_pips.insert(0, Pip(kind="generic", amount=extra_generic))
+    new_cmc = sum(
+        (p.amount or 0) if p.kind == "generic" else (1 if p.kind != "x" else 0) for p in new_pips
+    )
+    raw_bits = []
+    for p in new_pips:
+        if p.kind == "generic":
+            raw_bits.append(f"{{{p.amount}}}")
+        elif p.kind == "x":
+            raw_bits.append("{X}")
+        elif p.kind == "colorless":
+            raw_bits.append("{C}")
+        elif p.kind == "snow":
+            raw_bits.append("{S}")
+    new_mana = ManaCost(
+        raw="".join(raw_bits),
+        pips=new_pips,
+        cmc=new_cmc,
+        color_pips={},
+        has_x=any(p.kind == "x" for p in new_pips),
+        has_hybrid=False,
+        has_phyrexian=False,
+        has_colorless=any(p.kind == "colorless" for p in new_pips),
+        has_snow=any(p.kind == "snow" for p in new_pips),
+    )
+    return Cost(
+        mana=new_mana,
+        tap=cost.tap,
+        untap=cost.untap,
+        sacrifice=cost.sacrifice,
+        discard_self=cost.discard_self,
+    )
+
+
+def _match_bending_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effect] | None:
+    """Recognise airbend / earthbend / firebending patterns and return the
+    equivalent ``Effect`` list, side-effecting ``rf`` when supplied.
+
+    Returns ``None`` if the chunk has no bending text. Returns ``[]`` if the
+    chunk is recognised but produces no sim-relevant effects (firebending).
+    Waterbending is handled separately because it produces an activated Mode,
+    not effects on the cast Mode.
+    """
+    if _FIREBENDING_LINE_RE.match(chunk):
+        return []
+    matched_air = bool(_AIRBEND_RE.search(chunk))
+    matched_earth = list(_EARTHBEND_RE.finditer(chunk))
+    if not (matched_air or matched_earth):
+        return None
+    effects: list[Effect] = []
+    if matched_air:
+        if rf is not None:
+            rf.is_bounce = True
+        effects.append(NoopEffect(role_tag="bounce_creature"))
+    for m in matched_earth:
+        n = _to_int(m.group(1))
+        if n is None:
+            continue
+        if rf is not None:
+            rf.creates_creatures.append(
+                CreatureBody(
+                    power=str(n),
+                    toughness=str(n),
+                    colors=[],
+                    subtypes=[],
+                    keywords=[],
+                )
+            )
+        effects.append(NoopEffect(role_tag="create_token"))
+    return effects
+
+
+def _try_build_waterbend_mode(chunk: str, rf: RoleFeatures | None) -> Mode | None:
+    """If ``chunk`` is a waterbending activated ability, build the Mode.
+
+    The colored mana pips in the activation cost are demoted to generic
+    (per the project owner's call: simulator can treat waterbending as
+    payable with any mana). Returns ``None`` only if the cost doesn't
+    parse — if the cost parses but the effect doesn't, we still build a
+    Mode with a placeholder NoopEffect rather than bailing the whole
+    card. The simulator only cares about the cost for mulligan purposes."""
+    m = _WATERBEND_LINE_RE.match(chunk)
+    if m is None:
+        return None
+    cost_str = m.group("cost").strip()
+    effect_str = m.group("effect").strip()
+    cost = _parse_cost_string(cost_str)
+    if cost is None:
+        return None
+    cost = _demote_cost_to_generic(cost)
+    effects = _match_spell_effect(effect_str, rf=rf)
+    if effects is None:
+        effects = [NoopEffect(role_tag="waterbend_unknown")]
+    return Mode(kind="activated", cost=cost, effects=effects)
+
 
 def _extract_granted_keywords(text: str) -> list[str]:
-    """Return any combat-trick-granted keywords found in ``text``."""
-    if m := _GRANT_KEYWORDS_RE.search(text):
+    """Return any combat-trick-granted keywords found in ``text``.
+
+    Requires both a "gains <keywords>" block and an "until end of turn"
+    qualifier somewhere in the chunk. The two can appear in either order
+    ("gains X until end of turn" vs "until end of turn, ... gains X")."""
+    if not _UNTIL_EOT_RE.search(text):
+        return []
+    if m := _GRANT_KEYWORDS_BLOCK_RE.search(text):
         block = m.group(1)
         words = re.findall(
             r"\b(?:" + "|".join(re.escape(k) for k in _GRANTABLE_KEYWORDS) + r")\b",
@@ -363,6 +783,7 @@ def _extract_granted_keywords(text: str) -> list[str]:
                 seen.append(wl)
         return seen
     return []
+
 
 # Token-creation pattern. We capture power, toughness, color, and subtype
 # words so we can build a CreatureBody. Plenty of variations exist; this
@@ -525,8 +946,10 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
 
     # Destroy / exile target X — generalised over creature / permanent /
     # artifact / enchantment / land.
-    for pattern, base_tag in ((_DESTROY_TARGET_RE, "removal_destroy"),
-                              (_EXILE_TARGET_RE, "removal_exile")):
+    for pattern, base_tag in (
+        (_DESTROY_TARGET_RE, "removal_destroy"),
+        (_EXILE_TARGET_RE, "removal_exile"),
+    ):
         if m := pattern.match(chunk):
             target = m.group("target").lower()
             if rf is not None:
@@ -543,6 +966,50 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
             rf.is_bounce = True
         target = m.group("target").lower().replace(" ", "_")
         return [NoopEffect(role_tag=f"bounce_{target}")]
+
+    # TLA bending mechanics: airbend (bounce) / earthbend (token creation) /
+    # firebending (ignored). Waterbending produces a separate activated Mode
+    # so it's handled at the chunk-loop level by per-type parsers, not here.
+    bending = _match_bending_effect(chunk, rf=rf)
+    if bending is not None:
+        return bending
+
+    # Counter target spell — counterspell role flag.
+    if _COUNTER_SPELL_RE.match(chunk):
+        if rf is not None:
+            rf.is_other = True
+        return [NoopEffect(role_tag="counter_spell")]
+
+    # Single-target +1/+1 counter pump — buff effect.
+    if _COUNTER_TARGET_RE.match(chunk):
+        if rf is not None:
+            rf.is_other = True
+        return [NoopEffect(role_tag="counter_target")]
+
+    # Multi-target bounce.
+    if _MULTI_BOUNCE_RE.match(chunk) or _CHOOSE_BOUNCE_RE.match(chunk):
+        if rf is not None:
+            rf.is_bounce = True
+        return [NoopEffect(role_tag="bounce_multi")]
+
+    # Negative-counter pump on target — treat as removal when 3+ counters,
+    # otherwise as is_other (small debuff).
+    if m := _NEG_COUNTER_TARGET_RE.match(chunk):
+        n = _to_int(m.group("count"))
+        if rf is not None:
+            if n is not None and n >= 3:
+                rf.removal_destroy_or_exile = True
+            else:
+                rf.is_other = True
+        return [NoopEffect(role_tag="neg_counter_target")]
+
+    # Soft removal: exile target permanent until <this> leaves the
+    # battlefield. Treated as removal_destroy_or_exile because for the
+    # next several turns the targeted creature is off the board.
+    if _EXILE_UNTIL_LEAVES_RE.search(chunk):
+        if rf is not None:
+            rf.removal_destroy_or_exile = True
+        return [NoopEffect(role_tag="exile_until_leaves")]
 
     # Tuck — put target on top of library.
     if m := _TOP_LIBRARY_RE.match(chunk):
@@ -717,6 +1184,17 @@ _VEHICLE_EQUIPMENT_LINE_RE = re.compile(
     r"^(?:crew\s+\d+|equip(?:\s+\{[^{}]+\}|\s+\d+))\.?$",
     re.IGNORECASE,
 )
+
+# Planeswalker loyalty ability: starts with "+N:", "-N:", U+2212 N:,
+# "0:", "+X:", or "-X:". Followed by the effect text. Per the v1 design
+# rule, planeswalker abilities don't affect mulligan classification
+# meaningfully — silently drop them so the planeswalker auto-classifies.
+# Both the ASCII hyphen-minus and the unicode minus sign (U+2212) appear
+# in real Scryfall oracle text; we include both in the character class.
+_LOYALTY_ABILITY_RE = re.compile(
+    "^[+\\-\u2212](\\d+|X)\\s*:",
+    re.IGNORECASE,
+)
 # Set-specific keyword lines. Match "Airbend N", "Waterbend {2}", etc. —
 # anything that starts with a set keyword from SET_SPECIFIC_KEYWORDS.
 _SET_KEYWORD_LEADING_RE = re.compile(
@@ -744,21 +1222,23 @@ def _has_set_keyword_in_text(oracle_text: str) -> str | None:
 
 
 def _is_pure_keyword_line(chunk: str) -> bool:
-    """True if a chunk consists only of evergreen keyword names.
+    """True if a chunk consists only of evergreen / ignorable keyword names.
 
     Tolerates trailing cost on "ward" — "ward {1}" / "ward {2}{U}" still
     counts as a single keyword. Comma-separated lists work too:
-    "flying, vigilance, ward {1}".
+    "flying, vigilance, ward {1}". Also accepts the ignorable-keyword
+    set ("changeling", "convoke", etc.).
     """
     parts = [p.strip() for p in chunk.split(",")]
     if not parts:
         return False
+    accept = EVERGREEN_KEYWORDS | IGNORABLE_KEYWORD_LINES
     for raw in parts:
         # Strip trailing punctuation and an optional "{cost}" tail (for ward).
         stripped = raw.rstrip(".").strip()
         # Drop a trailing mana-cost run.
         cleaned = re.sub(r"\s*(?:\{[^{}]+\})+\s*$", "", stripped).strip()
-        if cleaned.lower() not in EVERGREEN_KEYWORDS:
+        if cleaned.lower() not in accept:
             return False
     return True
 
@@ -882,9 +1362,15 @@ def _build_activated_mode(
     XGBoost stage benefits from counting them.
 
     Returns ``(mode, blocker_reason)``:
-    * ``(Mode, None)`` if both cost and effect parse cleanly.
-    * ``(None, str)`` if it looks like an activated ability but we can't
-      classify the effect — caller flags NEEDS_LLM with the reason.
+    * ``(Mode, None)`` if both cost and effect parse cleanly. If only the
+      effect fails to parse, we still return a Mode with a placeholder
+      noop effect — the simulator only needs the cost for mulligan
+      castability checks.
+    * ``(None, str)`` if the cost is unparseable AND the chunk is otherwise
+      ambiguous. Per the v1 rule we lean toward silently dropping these
+      since activated abilities with weird costs (set-mechanic costs like
+      Blight N, "Exile this from your graveyard", etc.) rarely affect
+      mulligan-relevant turns.
     * ``(None, None)`` if the line isn't activated-shaped at all.
     """
     m = _ACTIVATED_RE.match(line)
@@ -894,10 +1380,31 @@ def _build_activated_mode(
     effect_str = m.group("effect").strip()
     cost = _parse_cost_string(cost_str)
     if cost is None:
-        return None, f"activated cost not recognised: {cost_str!r}"
+        # Cost we can't model (Blight N, exile-from-graveyard, behold,
+        # etc.). Silently drop with no blocker — these activations are
+        # rarely mulligan-relevant. We still capture token creation /
+        # triggered-signal-style effects from the body for role_features.
+        if rf is not None:
+            for body in _match_token_creation(effect_str):
+                rf.creates_creatures.append(body)
+            _extract_triggered_signal(effect_str, rf)
+        return None, None
     effects = _match_spell_effect(effect_str, rf=rf)
     if effects is None:
-        return None, f"activated effect not recognised: {effect_str!r}"
+        # Cost parsed cleanly but we don't model the effect. Build a Mode
+        # with a placeholder noop — the simulator can still evaluate
+        # whether the player CAN activate the ability (cost-wise). For
+        # role_features we still scan the body for token creation and
+        # nested triggered signals.
+        if rf is not None:
+            for body in _match_token_creation(effect_str):
+                rf.creates_creatures.append(body)
+            _extract_triggered_signal(effect_str, rf)
+        return Mode(
+            kind="activated",
+            cost=cost,
+            effects=[NoopEffect(role_tag="activated_unknown")],
+        ), None
     return Mode(kind="activated", cost=cost, effects=effects), None
 
 
@@ -944,6 +1451,30 @@ def _parse_land(
                 )
         blockers.append("basic land but no recognised land type")
 
+    # Typed dual / triple lands (e.g. "Land — Swamp Mountain", aka shocklands
+    # / fastlands / typed duals) inherit mana abilities from their basic
+    # land subtypes. The actual mana ability isn't in oracle text — it's
+    # implicit from the type line. Detect this and synthesize the abilities.
+    typed_basic_subtypes = [s for s in base.get("subtypes", []) if s in _BASIC_TYPES]
+    if typed_basic_subtypes and not mana_abilities:
+        # Combine into a single tap-ability with multiple OR options
+        # (matches the dual-land convention: pick one color per activation).
+        produces: list[list[str]] = []
+        for subtype in typed_basic_subtypes:
+            color = _BASIC_TYPES[subtype]
+            if [color] not in produces:
+                produces.append([color])
+        if produces:
+            mana_abilities.append(
+                ManaAbility(
+                    cost=Cost(mana=_empty_mana(), tap=True),
+                    produces=produces,  # type: ignore[arg-type]
+                )
+            )
+            reasons.append(
+                f"typed dual land — produces {' / '.join('{' + c[0] + '}' for c in produces)}"
+            )
+
     # Non-basic lands: walk every chunk. Recognised shapes:
     #   * the "<land> enters tapped (unless …)" sentence (skipped — already
     #     factored into enter_condition),
@@ -951,7 +1482,8 @@ def _parse_land(
     #   * a non-mana activated ability ("{2}{U}, {T}: Draw a card, then
     #     discard a card.") parsed via _build_activated_mode and added to
     #     ``modes``. This lets utility lands like Agna Qel'a auto-classify.
-    for chunk in chunks:
+    for raw_chunk in chunks:
+        chunk = _strip_label_prefix(raw_chunk)
         if "enters tapped" in chunk.lower() or "enters the battlefield tapped" in chunk.lower():
             continue
         if colors := _extract_taps_for(chunk):
@@ -962,6 +1494,14 @@ def _parse_land(
                 )
             )
             continue
+        # Pure-keyword line (Vigilance on a land, etc.).
+        if _is_pure_keyword_line(chunk):
+            continue
+        # Triggered abilities on the land (ETB lifegain, scry, etc.) —
+        # silently dropped per the v1 design rule.
+        if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
+            _extract_triggered_signal(chunk, role_features)
+            continue
         # Non-mana activated ability.
         act, blocker = _build_activated_mode(chunk, rf=role_features)
         if act is not None:
@@ -969,6 +1509,12 @@ def _parse_land(
             continue
         if blocker is not None:
             blockers.append(blocker)
+            continue
+        if _ACTIVATED_RE.match(chunk):
+            continue
+        # Static / passive prose on a land — silently drop.
+        if _is_likely_static_or_triggered(chunk):
+            _extract_triggered_signal(chunk, role_features)
             continue
         blockers.append(f"unrecognised land text: {chunk!r}")
 
@@ -994,7 +1540,9 @@ def _parse_land(
             **base,
         )
 
-    color_summary = "/".join(opt for ab in mana_abilities for opt_list in ab.produces for opt in opt_list)
+    color_summary = "/".join(
+        opt for ab in mana_abilities for opt_list in ab.produces for opt in opt_list
+    )
     tag = (
         " (always tapped)"
         if enter_condition and enter_condition.kind == "always"
@@ -1063,7 +1611,10 @@ def _parse_creature(
     mana_abilities: list[ManaAbility] = []
     blockers: list[str] = []
 
-    for chunk in chunks:
+    for raw_chunk in chunks:
+        # Strip leading mechanic-label prefixes ("Exhaust — ", "Raid — ", etc.)
+        # so the body parses through the normal matchers.
+        chunk = _strip_label_prefix(raw_chunk)
         # 1. Pure keyword line — already in `keywords`. Skip.
         if _is_pure_keyword_line(chunk):
             continue
@@ -1083,11 +1634,16 @@ def _parse_creature(
         if ch := _build_channel_mode(chunk):
             extra_modes.append(ch)
             continue
+        # 3b. Waterbending activated mode (TLA).
+        if wb := _try_build_waterbend_mode(chunk, role_features):
+            extra_modes.append(wb)
+            continue
 
         # 4. ETB on the creature itself.
         if m := _ETB_RE.match(chunk):
             if _is_self_etb(m.group("subject"), name):
-                effects = _match_spell_effect(m.group("effect").strip(), rf=role_features)
+                inner = m.group("effect").strip()
+                effects = _match_spell_effect(inner, rf=role_features)
                 if effects is not None:
                     etb_effects.extend(effects)
                     continue
@@ -1098,7 +1654,11 @@ def _parse_creature(
                     role_features.creates_creatures.extend(bodies)
                     etb_effects.append(NoopEffect(role_tag="create_token"))
                     continue
-                blockers.append(f"ETB effect not recognised: {m.group('effect').strip()!r}")
+                # Per the v1 design rule: ETB triggers we can't parse are
+                # silently dropped (they're triggered abilities). We still
+                # extract embedded card-draw / bending signals via the
+                # static/triggered scanner.
+                _extract_triggered_signal(inner, role_features)
                 continue
             # ETB-shaped but for some other permanent — ignored triggered ability.
             continue
@@ -1106,10 +1666,11 @@ def _parse_creature(
         # 5. Other triggered abilities — ignored per design rules. We do
         # scan them for token creation, since cast-triggers / attack-
         # triggers that create tokens (e.g. Sokka) are worth recording
-        # for role_features.
+        # for role_features. Triggered card-draw is also captured.
         if _OTHER_TRIGGERED_RE.match(chunk):
             for body in _match_token_creation(chunk):
                 role_features.creates_creatures.append(body)
+            _extract_triggered_signal(chunk, role_features)
             continue
 
         # 6. Activated abilities. Try mana ability first (it's a special
@@ -1132,8 +1693,22 @@ def _parse_creature(
         if blocker is not None:
             blockers.append(blocker)
             continue
+        # If the chunk was activated-shaped but the helper silently dropped
+        # it (unparseable cost like "Blight 2" or "Remove a counter from
+        # this creature"), treat the chunk as handled per the v1 rule.
+        if _ACTIVATED_RE.match(chunk):
+            continue
 
-        # 7. Anything else — static ability, modal text, prose. Bail.
+        # 7. Static ability / triggered without "When/Whenever/At" prefix
+        # (rare phrasings) / passive prose — silently drop per the v1
+        # design rule. Capture any embedded draw / mana production.
+        if _is_likely_static_or_triggered(chunk):
+            _extract_triggered_signal(chunk, role_features)
+            for body in _match_token_creation(chunk):
+                role_features.creates_creatures.append(body)
+            continue
+
+        # 8. Anything else — modal text, action verb we don't model. Bail.
         blockers.append(f"unrecognised line: {chunk!r}")
 
     cast_mode = _build_cast_mode(base.get("mana_cost"), etb_effects, is_permanent=True)
@@ -1222,20 +1797,39 @@ def _parse_spell(
         spell_effects.append(NoopEffect(role_tag="create_token"))
 
     # Per-chunk effect matching.
-    for chunk in chunks:
+    extra_modes_spell: list[Mode] = []
+    for raw_chunk in chunks:
+        chunk = _strip_label_prefix(raw_chunk)
+        # Single-word keyword lines (Convoke, Changeling, etc.) on a spell
+        # — these are rules-text decorators, not blockers.
+        if _is_pure_keyword_line(chunk):
+            continue
+        # Cost-reduction lines on the spell itself ("This spell costs {N}
+        # less to cast for each X you control.") — silently drop. The
+        # card's effective MV may be lower than its mana_cost suggests,
+        # but for v1 we accept the headline cost.
+        if _COST_REDUCTION_RE.search(chunk):
+            continue
         # Skip "As an additional cost to cast this spell, …" — recognised
         # but unmodelled. Card stays NEEDS_LLM (caller adds blocker
         # below); the rest of the text still parses for role_features.
         if chunk.lower().startswith("as an additional cost to cast this spell"):
             blockers.append(f"additional cost not modelled: {chunk!r}")
             continue
+        # Waterbending activated mode (TLA) on a spell — rare but possible.
+        if wb := _try_build_waterbend_mode(chunk, role_features):
+            extra_modes_spell.append(wb)
+            continue
         # Skip chunks the fetch matcher already accounted for to avoid
         # double-flagging them as "unrecognised."
-        if any(p.search(chunk) for p in (
-            _FETCH_BATTLEFIELD_TAPPED_RE,
-            _FETCH_BATTLEFIELD_UNTAPPED_RE,
-            _FETCH_TO_HAND_RE,
-        )):
+        if any(
+            p.search(chunk)
+            for p in (
+                _FETCH_BATTLEFIELD_TAPPED_RE,
+                _FETCH_BATTLEFIELD_UNTAPPED_RE,
+                _FETCH_TO_HAND_RE,
+            )
+        ):
             continue
         # Skip chunks that are purely a token-creation phrase.
         if _CREATE_TOKEN_RE.search(chunk) and not re.search(
@@ -1245,12 +1839,20 @@ def _parse_spell(
 
         effects = _match_spell_effect(chunk, rf=role_features)
         if effects is None:
+            # Static / triggered tolerance: silently drop the line if it
+            # reads as passive prose or a trigger we don't model. Most
+            # spells don't have static/triggered text, but cards like
+            # "Until end of turn, ..." enchanting effects can fall here.
+            if _is_likely_static_or_triggered(chunk):
+                _extract_triggered_signal(chunk, role_features)
+                continue
             blockers.append(f"unrecognised line: {chunk!r}")
         else:
             spell_effects.extend(effects)
 
     cast_mode = _build_cast_mode(base.get("mana_cost"), spell_effects, is_permanent=False)
     modes: list[Mode] = [cast_mode] if cast_mode is not None else []
+    modes.extend(extra_modes_spell)
 
     _populate_role_features_from_effects(role_features, modes)
 
@@ -1371,12 +1973,20 @@ def _parse_aura(
 
     extra_modes: list[Mode] = []
     blockers: list[str] = []
-    for chunk in chunks:
+    for raw_chunk in chunks:
+        chunk = _strip_label_prefix(raw_chunk)
         cl = chunk.lower()
+        # Single-word keywords (Flash, Convoke, etc.).
+        if _is_pure_keyword_line(chunk):
+            continue
         if cl.startswith("enchant ") or cl == "enchant creature":
             continue
         if cl.startswith("enchanted creature"):
             # Static aura effect — already classified above. Ignore.
+            continue
+        # Waterbending activated mode (TLA).
+        if wb := _try_build_waterbend_mode(chunk, role_features):
+            extra_modes.append(wb)
             continue
         # Activated abilities on the aura (e.g. sac-self → exile target).
         act, blocker = _build_activated_mode(chunk, rf=role_features)
@@ -1385,6 +1995,18 @@ def _parse_aura(
             continue
         if blocker is not None:
             blockers.append(blocker)
+            continue
+        if _ACTIVATED_RE.match(chunk):
+            continue
+        # Triggered abilities on the aura.
+        if _OTHER_TRIGGERED_RE.match(chunk) or _ETB_RE.match(chunk):
+            _extract_triggered_signal(chunk, role_features)
+            for body in _match_token_creation(chunk):
+                role_features.creates_creatures.append(body)
+            continue
+        # Static / passive prose — silently drop.
+        if _is_likely_static_or_triggered(chunk):
+            _extract_triggered_signal(chunk, role_features)
             continue
         blockers.append(f"unrecognised aura line: {chunk!r}")
 
@@ -1440,7 +2062,8 @@ def _parse_artifact_typed(
 
     extra_modes: list[Mode] = []
     blockers: list[str] = []
-    for chunk in chunks:
+    for raw_chunk in chunks:
+        chunk = _strip_label_prefix(raw_chunk)
         # Pure-keyword line (Reach, Trample on a vehicle).
         if _is_pure_keyword_line(chunk):
             continue
@@ -1451,6 +2074,11 @@ def _parse_artifact_typed(
         if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
             for body in _match_token_creation(chunk):
                 role_features.creates_creatures.append(body)
+            _extract_triggered_signal(chunk, role_features)
+            continue
+        # Waterbending activated mode (TLA).
+        if wb := _try_build_waterbend_mode(chunk, role_features):
+            extra_modes.append(wb)
             continue
         # Activated abilities on artifact.
         act, blocker = _build_activated_mode(chunk, rf=role_features)
@@ -1459,6 +2087,14 @@ def _parse_artifact_typed(
             continue
         if blocker is not None:
             blockers.append(blocker)
+            continue
+        if _ACTIVATED_RE.match(chunk):
+            continue
+        # Static / passive prose — silently drop.
+        if _is_likely_static_or_triggered(chunk):
+            _extract_triggered_signal(chunk, role_features)
+            for body in _match_token_creation(chunk):
+                role_features.creates_creatures.append(body)
             continue
         blockers.append(f"unrecognised line: {chunk!r}")
 
@@ -1493,13 +2129,37 @@ def _parse_other_permanent(
     """Parser for Enchantments / Artifacts / Planeswalkers that aren't
     Creatures, Lands, Auras, Equipment, or Vehicles.
 
-    For v1 we always emit a cast Mode (with EntersBattlefieldEffect), set
-    the appropriate role_features flags from subtypes, and partially parse
-    oracle text for token-creation. The rest goes to NEEDS_LLM unless the
-    text is empty (vanilla permanent — e.g. a wall of stats with no
-    abilities, rare but legal)."""
+    Walks chunks the same way the artifact-typed parser does: pure-keyword
+    lines and triggered abilities are silently dropped (with token-creation
+    captured), activated abilities become Modes, static prose passes
+    through the static/triggered tolerance, and only truly unrecognised
+    action lines bail."""
     cleaned = _strip_reminder(oracle_text)
     chunks = _split_chunks(cleaned)
+
+    raw_keywords = [str(k).lower() for k in card.get("keywords") or []]
+    blocking_alt_costs = [k for k in raw_keywords if k in ALT_COST_KEYWORDS]
+    if blocking_alt_costs:
+        early_cast = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
+        return ParsedCard(
+            status=ParseStatus.NEEDS_LLM,
+            modes=[early_cast] if early_cast is not None else [],
+            role_features=role_features,
+            reasons=[f"alternative-cost keyword(s) present: {', '.join(blocking_alt_costs)}"],
+            **base,
+        )
+
+    if set_kw := _has_set_keyword_in_text(oracle_text):
+        early_cast = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
+        for body in _match_token_creation(cleaned):
+            role_features.creates_creatures.append(body)
+        return ParsedCard(
+            status=ParseStatus.NEEDS_LLM,
+            modes=[early_cast] if early_cast is not None else [],
+            role_features=role_features,
+            reasons=[f"set-specific keyword {set_kw!r} not modelled"],
+            **base,
+        )
 
     cast_mode = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
     modes: list[Mode] = [cast_mode] if cast_mode is not None else []
@@ -1510,7 +2170,6 @@ def _parse_other_permanent(
         role_features.creates_creatures.extend(bodies)
 
     if not chunks:
-        # Vanilla permanent — accept.
         return ParsedCard(
             status=ParseStatus.AUTO,
             modes=modes,
@@ -1519,12 +2178,85 @@ def _parse_other_permanent(
             **base,
         )
 
-    # Anything with text needs the LLM until we extend the parser.
+    extra_modes: list[Mode] = []
+    blockers: list[str] = []
+    for raw_chunk in chunks:
+        chunk = _strip_label_prefix(raw_chunk)
+        if _is_pure_keyword_line(chunk):
+            continue
+        # Planeswalker loyalty ability — silently dropped. Token creation
+        # inside the ability still counts toward creates_creatures.
+        if _LOYALTY_ABILITY_RE.match(chunk):
+            for body in _match_token_creation(chunk):
+                role_features.creates_creatures.append(body)
+            _extract_triggered_signal(chunk, role_features)
+            continue
+        if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
+            for body in _match_token_creation(chunk):
+                role_features.creates_creatures.append(body)
+            _extract_triggered_signal(chunk, role_features)
+            continue
+        # Waterbending activated mode (TLA).
+        if wb := _try_build_waterbend_mode(chunk, role_features):
+            extra_modes.append(wb)
+            continue
+        # Mana ability on a non-creature artifact / enchantment.
+        if mana_colors := _extract_taps_for(chunk):
+            # Permanent-resident mana ability — model on cast Mode only by
+            # appending; downstream code reads from `mana_abilities` for
+            # lands/dorks and from `modes` for activated abilities.
+            # _parse_other_permanent doesn't have a separate mana_abilities
+            # accumulator, so we route through extra_modes as an activated
+            # mode. That's good enough for v1.
+            extra_modes.append(
+                Mode(
+                    kind="activated",
+                    cost=Cost(mana=_empty_mana(), tap=True),
+                    effects=[
+                        # Synthesize ProduceManaEffect inline.
+                        # Outer list = OR; inner list = AND.
+                        # parse_card consumers know to read mana_abilities
+                        # for non-activated forms; this is a fallback.
+                    ],
+                )
+            )
+            # Capture as breadcrumb only — leaves the simulator without
+            # full mana modeling for now (artifact/enchantment mana sources
+            # are rare and we'll widen this when the simulator needs it).
+            _ = mana_colors
+            continue
+        act, blocker = _build_activated_mode(chunk, rf=role_features)
+        if act is not None:
+            extra_modes.append(act)
+            continue
+        if blocker is not None:
+            blockers.append(blocker)
+            continue
+        if _ACTIVATED_RE.match(chunk):
+            continue
+        if _is_likely_static_or_triggered(chunk):
+            _extract_triggered_signal(chunk, role_features)
+            for body in _match_token_creation(chunk):
+                role_features.creates_creatures.append(body)
+            continue
+        blockers.append(f"unrecognised line: {chunk!r}")
+
+    modes.extend(extra_modes)
+
+    if blockers:
+        return ParsedCard(
+            status=ParseStatus.NEEDS_LLM,
+            modes=modes,
+            role_features=role_features,
+            reasons=[f"{type_word.lower()}: " + r for r in blockers],
+            **base,
+        )
+
     return ParsedCard(
-        status=ParseStatus.NEEDS_LLM,
+        status=ParseStatus.AUTO,
         modes=modes,
         role_features=role_features,
-        reasons=[f"{type_word} oracle text not deterministically parsed yet"],
+        reasons=[type_word.lower()],
         **base,
     )
 
@@ -1578,6 +2310,105 @@ def _summarize_effect(e: Effect) -> str:
     elif isinstance(e, NoopEffect) and e.role_tag:
         bits.append(f"({e.role_tag})")
     return " ".join(bits)
+
+
+# ---------------------------------------------------------------------------
+# MV >= 4 fast-path.
+#
+# Per the project owner's design call: a card with mana value ≥ 4 that has
+# no alternative casting modes and no cost-reduction effects can't realistically
+# affect the first four turns of the game (turn-4 plays usually decide turn 5
+# at earliest). For mulligan purposes the card is "fine to keep or mull"
+# regardless of its exact effect, so we don't need LLM/human review to
+# call it AUTO.
+#
+# Conditions to qualify for the fast-path:
+# 1. The deterministic parser would otherwise have flagged the card NEEDS_LLM.
+# 2. CMC ≥ 4. (X-cost cards have cmc=0 so they DON'T qualify — those need
+#    closer attention because of the variable cost.)
+# 3. No alt-cost keyword (kicker, flashback, escape, etc.) — these add a
+#    cheaper cast mode that DOES affect turns 1-3.
+# 4. No oracle-text patterns that reduce the card's cost (affinity, convoke,
+#    delve, improvise, "costs N less to cast" / "costs less to cast for each ...").
+# 5. No modal "Choose one — …" / "Choose two — …" structure — the modal
+#    bullet structure indicates effects we can't fold into a single role
+#    classification.
+# ---------------------------------------------------------------------------
+
+_COST_REDUCTION_RE = re.compile(
+    r"costs?\s+\{?\d?\}?\s+less\s+to\s+cast"
+    r"|"
+    r"\b(?:affinity for|convoke|delve|improvise|undaunted|emerge)\b",
+    re.IGNORECASE,
+)
+# Modal text — true modal cards offer the player a choice between bullet
+# options. We exclude "Choose up to one target X" because that's a target
+# specification, not a modal selection.
+_MODAL_RE = re.compile(
+    r"^choose\s+(?:one|two|three|one or both|one or more|any number)\s*[—\-]"
+    r"|"
+    r"^modal\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _qualifies_for_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> bool:
+    """True if the NEEDS_LLM card's MV is ≥ 4 and it has no alt-cost or
+    cost-reduction or modal text."""
+    if parsed.mana_cost is None:
+        return False
+    if parsed.mana_cost.cmc < 4:
+        return False
+    if parsed.mana_cost.has_x:
+        return False  # variable cost — doesn't qualify
+    raw_keywords = [str(k).lower() for k in card.get("keywords") or []]
+    if any(k in ALT_COST_KEYWORDS for k in raw_keywords):
+        return False
+    oracle_text = str(card.get("oracle_text") or "")
+    if _COST_REDUCTION_RE.search(oracle_text):
+        return False
+    return not _MODAL_RE.search(oracle_text)
+
+
+def _maybe_apply_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> ParsedCard:
+    """If the card was flagged NEEDS_LLM but qualifies for the MV ≥ 4
+    fast-path, promote it to AUTO. Sets ``is_other`` if no other role
+    flag was populated, so the XGBoost stage doesn't see an entirely
+    blank classification."""
+    if parsed.status is not ParseStatus.NEEDS_LLM:
+        return parsed
+    if not _qualifies_for_mv4_fast_path(card, parsed):
+        return parsed
+    rf = parsed.role_features
+    has_any_role_flag = (
+        rf.is_creature
+        or rf.is_planeswalker
+        or rf.is_equipment
+        or rf.is_vehicle
+        or rf.is_punch_fight
+        or rf.removal_destroy_or_exile
+        or rf.removal_burn_damage is not None
+        or rf.is_bounce
+        or rf.is_top_library
+        or rf.combat_trick_power is not None
+        or rf.combat_trick_toughness is not None
+        or rf.combat_trick_granted_keywords
+        or rf.is_removal_aura
+        or rf.is_pump_aura
+        or rf.cards_drawn > 0
+        or rf.cards_manipulated > 0
+        or rf.creates_creatures
+    )
+    if not has_any_role_flag:
+        rf.is_other = True
+    parsed.status = ParseStatus.AUTO
+    # `_qualifies_for_mv4_fast_path` already returns False when mana_cost
+    # is None, so it's non-None here — the assertion narrows for mypy.
+    assert parsed.mana_cost is not None
+    parsed.reasons.append(
+        f"MV>={parsed.mana_cost.cmc} fast-path: card unlikely to affect mulligan-relevant turns"
+    )
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -1647,32 +2478,41 @@ def parse_card(card: dict[str, Any]) -> ParsedCard:
     # Artifact > Planeswalker. Multi-typed cards (Artifact Creature) take
     # the Creature branch; their Artifact-ness is preserved in `types`.
     if "Land" in types:
-        return _parse_land(base, card, oracle_text, role_features)
-    if "Creature" in types:
-        return _parse_creature(base, card, oracle_text, name, role_features)
-    if "Instant" in types or "Sorcery" in types:
-        return _parse_spell(base, card, oracle_text, role_features)
-    if "Enchantment" in types:
+        result = _parse_land(base, card, oracle_text, role_features)
+    elif "Creature" in types:
+        result = _parse_creature(base, card, oracle_text, name, role_features)
+    elif "Instant" in types or "Sorcery" in types:
+        result = _parse_spell(base, card, oracle_text, role_features)
+    elif "Enchantment" in types:
         if "Aura" in subtypes:
-            return _parse_aura(base, card, oracle_text, role_features)
-        return _parse_other_permanent(base, card, oracle_text, role_features, "Enchantment")
-    if "Artifact" in types:
+            result = _parse_aura(base, card, oracle_text, role_features)
+        else:
+            result = _parse_other_permanent(base, card, oracle_text, role_features, "Enchantment")
+    elif "Artifact" in types:
         if "Vehicle" in subtypes or "Equipment" in subtypes:
-            return _parse_artifact_typed(
-                base, card, oracle_text, role_features,
+            result = _parse_artifact_typed(
+                base,
+                card,
+                oracle_text,
+                role_features,
                 is_vehicle="Vehicle" in subtypes,
                 is_equipment="Equipment" in subtypes,
             )
-        return _parse_other_permanent(base, card, oracle_text, role_features, "Artifact")
-    if "Planeswalker" in types:
-        return _parse_other_permanent(base, card, oracle_text, role_features, "Planeswalker")
+        else:
+            result = _parse_other_permanent(base, card, oracle_text, role_features, "Artifact")
+    elif "Planeswalker" in types:
+        result = _parse_other_permanent(base, card, oracle_text, role_features, "Planeswalker")
+    else:
+        result = ParsedCard(
+            status=ParseStatus.NEEDS_LLM,
+            role_features=role_features,
+            reasons=[f"unsupported type line: {type_line!r}"],
+            **base,
+        )
 
-    return ParsedCard(
-        status=ParseStatus.NEEDS_LLM,
-        role_features=role_features,
-        reasons=[f"unsupported type line: {type_line!r}"],
-        **base,
-    )
+    # MV >= 4 fast-path: promote NEEDS_LLM cards that can't realistically
+    # affect mulligan-relevant turns 1-4 to AUTO.
+    return _maybe_apply_mv4_fast_path(card, result)
 
 
 def _initial_role_features(types: list[str], subtypes: list[str]) -> RoleFeatures:

@@ -399,7 +399,10 @@ def test_combat_trick_granted_keywords_auto() -> None:
     assert "lifelink" in p.role_features.combat_trick_granted_keywords
 
 
-def test_enchantment_needs_llm() -> None:
+def test_enchantment_with_triggered_ability_auto() -> None:
+    # Per the v1 design rule we silently drop static / triggered abilities
+    # we don't model. An enchantment with only a triggered ability now
+    # auto-classifies (the static/triggered tolerance absorbs the line).
     card = _scryfall(
         name="Some Enchantment",
         type_line="Enchantment",
@@ -407,7 +410,7 @@ def test_enchantment_needs_llm() -> None:
         mana_cost="{1}{W}",
     )
     p = parse_card(card)
-    assert p.status is ParseStatus.NEEDS_LLM
+    assert p.status is ParseStatus.AUTO
 
 
 def test_dfc_layout_needs_llm() -> None:
@@ -602,8 +605,7 @@ def test_static_self_modifier_creature_auto() -> None:
         name="First-Time Flyer",
         type_line="Creature — Human Pilot Ally",
         oracle_text=(
-            "Flying\n"
-            "This creature gets +1/+1 as long as there's a Lesson card in your graveyard."
+            "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard."
         ),
         mana_cost="{1}{U}",
         power="1",
@@ -656,24 +658,20 @@ def test_prowess_creature_auto() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_set_keyword_bails_with_clean_reason() -> None:
-    # TLA's airbend mechanic — parser bails with "set-specific keyword"
-    # rather than a confusing "unrecognised line" trace.
+def test_airbend_in_etb_trigger_treated_as_bounce_auto() -> None:
+    # TLA's airbend mechanic is now treated as bounce (per design call).
     card = _scryfall(
         name="Aang",
         type_line="Legendary Creature — Avatar",
-        oracle_text=(
-            "Flying\n"
-            "When Aang enters, airbend up to one other target nonland permanent."
-        ),
+        oracle_text=("Flying\nWhen Aang enters, airbend up to one other target nonland permanent."),
         mana_cost="{3}{W}",
         power="3",
         toughness="2",
         keywords=["Flying"],
     )
     p = parse_card(card)
-    assert p.status is ParseStatus.NEEDS_LLM
-    assert any("set-specific keyword" in r for r in p.reasons)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_bounce is True
 
 
 # ---------------------------------------------------------------------------
@@ -766,11 +764,7 @@ def test_vehicle_with_crew_auto() -> None:
     card = _scryfall(
         name="Fire Nation Warship",
         type_line="Artifact — Vehicle",
-        oracle_text=(
-            "Reach\n"
-            "When this Vehicle dies, create a Clue token.\n"
-            "Crew 2"
-        ),
+        oracle_text=("Reach\nWhen this Vehicle dies, create a Clue token.\nCrew 2"),
         mana_cost="{3}",
         power="4",
         toughness="4",
@@ -796,3 +790,362 @@ def test_equipment_with_equip_cost_auto() -> None:
     # itself is recognised and ignored.
     # The role_features.is_equipment flag is set regardless.
     assert p.role_features.is_equipment is True
+
+
+# ---------------------------------------------------------------------------
+# Static / triggered ability tolerance (v2 design rule).
+#
+# Per the project owner: we generally ignore static and triggered abilities.
+# Exceptions: triggered card-draw is captured in role_features.cards_drawn.
+# Triggered mana production is acknowledged but not yet modelled in the
+# simulator-side schema.
+# ---------------------------------------------------------------------------
+
+
+def test_creature_with_static_self_ref_auto() -> None:
+    # Static "this creature can't ..." prose is silently dropped.
+    card = _scryfall(
+        name="Quiet Soldier",
+        type_line="Creature — Soldier",
+        oracle_text="This creature can't be the target of red spells.",
+        mana_cost="{1}{W}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+def test_creature_with_triggered_draw_captures_role_feature() -> None:
+    card = _scryfall(
+        name="Curious Tactician",
+        type_line="Creature — Human",
+        oracle_text="Whenever this creature attacks, draw a card.",
+        mana_cost="{2}{U}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.cards_drawn == 1
+
+
+def test_creature_with_triggered_mana_auto() -> None:
+    card = _scryfall(
+        name="Upkeep Druid",
+        type_line="Creature — Druid",
+        oracle_text="At the beginning of your upkeep, add {G}.",
+        mana_cost="{1}{G}",
+        power="1",
+        toughness="2",
+    )
+    p = parse_card(card)
+    # Triggered mana production isn't blocked even though the schema doesn't
+    # currently capture it on the simulator side.
+    assert p.status is ParseStatus.AUTO
+
+
+def test_creature_with_static_passive_prose_auto() -> None:
+    card = _scryfall(
+        name="Aggro Lord",
+        type_line="Creature — Warrior",
+        oracle_text="As long as you control three or more attackers, opponents lose 1 life.",
+        mana_cost="{1}{R}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+def test_enchantment_with_passive_static_auto() -> None:
+    card = _scryfall(
+        name="Banner",
+        type_line="Enchantment",
+        oracle_text="Creatures you control get +1/+0.",
+        mana_cost="{1}{W}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+# ---------------------------------------------------------------------------
+# TLA bending mechanics.
+# ---------------------------------------------------------------------------
+
+
+def test_airbend_spell_treated_as_bounce_auto() -> None:
+    card = _scryfall(
+        name="Gust of Wind",
+        type_line="Instant",
+        oracle_text="Airbend up to one target nonland permanent.",
+        mana_cost="{1}{U}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_bounce is True
+
+
+def test_earthbend_creates_creature_role_feature_auto() -> None:
+    card = _scryfall(
+        name="Earth Village Ruffians",
+        type_line="Creature — Human Warrior",
+        oracle_text="When this creature dies, earthbend 2.",
+        mana_cost="{2}{G}",
+        power="3",
+        toughness="1",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    bodies = p.role_features.creates_creatures
+    assert len(bodies) == 1
+    assert bodies[0].power == "2"
+    assert bodies[0].toughness == "2"
+
+
+def test_waterbend_activated_mode_with_generic_cost_auto() -> None:
+    card = _scryfall(
+        name="Katara",
+        type_line="Legendary Creature — Avatar",
+        oracle_text="Waterbend 2 — {2}{U}, {T}: Draw a card.",
+        mana_cost="{2}{U}",
+        power="2",
+        toughness="3",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    # Waterbend mode should appear as activated; its mana cost is the
+    # demoted generic-only form (the {U} pip becomes generic, so the
+    # activation cost is {3} rather than {2}{U}).
+    activated = [m for m in p.modes if m.kind == "activated"]
+    assert len(activated) == 1
+    assert activated[0].cost.tap is True
+    assert activated[0].cost.mana.cmc == 3
+    assert activated[0].cost.mana.color_pips == {}
+
+
+def test_firebending_silently_ignored_auto() -> None:
+    card = _scryfall(
+        name="Zuko, Banished Prince",
+        type_line="Legendary Creature — Human Warrior",
+        oracle_text=(
+            "Haste\nFirebending — Whenever this creature attacks, it deals 1 damage to any target."
+        ),
+        mana_cost="{R}",
+        power="1",
+        toughness="2",
+        keywords=["Haste"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+# ---------------------------------------------------------------------------
+# MV >= 4 fast-path.
+# ---------------------------------------------------------------------------
+
+
+def test_high_mv_unrecognized_promoted_to_auto() -> None:
+    # A 5-mana sorcery whose effect we don't recognize. Without the fast-path
+    # it would NEEDS_LLM; with the fast-path it auto-classifies and gets
+    # is_other set as a catchall flag.
+    card = _scryfall(
+        name="Some Big Spell",
+        type_line="Sorcery",
+        oracle_text=(
+            "Until end of turn, target opponent's creatures attack each turn "
+            "if able and can't block."
+        ),
+        mana_cost="{4}{R}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert any("fast-path" in r for r in p.reasons)
+    assert p.role_features.is_other is True
+
+
+def test_low_mv_unrecognized_still_needs_llm() -> None:
+    card = _scryfall(
+        name="Cryptic Trick",
+        type_line="Instant",
+        oracle_text="Until end of turn, target creature gains some weird effect we don't model.",
+        mana_cost="{1}{U}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+
+
+def test_high_mv_modal_card_still_needs_llm() -> None:
+    card = _scryfall(
+        name="Modal Choice",
+        type_line="Sorcery",
+        oracle_text=("Choose one —\n• Some weird effect.\n• Some other weird effect."),
+        mana_cost="{3}{R}",
+    )
+    p = parse_card(card)
+    # Modal text excludes the fast-path even at MV>=4.
+    assert p.status is ParseStatus.NEEDS_LLM
+
+
+def test_high_mv_with_alt_cost_still_needs_llm() -> None:
+    card = _scryfall(
+        name="Flashback Spell",
+        type_line="Sorcery",
+        oracle_text=("Some weird effect.\nFlashback {3}{B}"),
+        mana_cost="{3}{B}{B}",
+        keywords=["Flashback"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+
+
+def test_high_mv_with_cost_reduction_still_needs_llm() -> None:
+    card = _scryfall(
+        name="Affinity Beast",
+        type_line="Creature — Beast",
+        oracle_text=("Some unrecognized effect.\nAffinity for artifacts"),
+        mana_cost="{4}{R}",
+        power="4",
+        toughness="4",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+
+
+def test_high_mv_creature_normal_path_still_auto() -> None:
+    # Vanilla 4-mana creature was already AUTO before the fast-path; the
+    # fast-path is a no-op for cards the normal path handles.
+    card = _scryfall(
+        name="Big Vanilla",
+        type_line="Creature — Beast",
+        oracle_text="",
+        mana_cost="{3}{G}",
+        power="4",
+        toughness="4",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    # Should NOT have the fast-path reason — it parsed cleanly.
+    assert not any("fast-path" in r for r in p.reasons)
+
+
+# ---------------------------------------------------------------------------
+# Wider effect coverage uncovered by the iterative LLM-encoding loop.
+# ---------------------------------------------------------------------------
+
+
+def test_combat_trick_until_eot_first_then_grants_keywords_auto() -> None:
+    # Order-agnostic: "Until end of turn, ... gains <keywords>" should now
+    # fire the combat-trick matcher (previously required "gains ... until
+    # end of turn" in that order).
+    card = _scryfall(
+        name="Enter the Avatar State",
+        type_line="Instant",
+        oracle_text=(
+            "Until end of turn, target creature you control becomes an Avatar "
+            "in addition to its other types and gains flying, first strike, "
+            "lifelink, and hexproof."
+        ),
+        mana_cost="{W}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert "flying" in p.role_features.combat_trick_granted_keywords
+    assert "first strike" in p.role_features.combat_trick_granted_keywords
+    assert "lifelink" in p.role_features.combat_trick_granted_keywords
+
+
+def test_damage_to_attacking_or_blocking_creature_auto() -> None:
+    card = _scryfall(
+        name="Razor Rings",
+        type_line="Instant",
+        oracle_text=(
+            "Razor Rings deals 4 damage to target attacking or blocking "
+            "creature. You gain life equal to the excess damage dealt this way."
+        ),
+        mana_cost="{1}{W}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.removal_burn_damage == 4
+
+
+def test_counter_target_spell_auto() -> None:
+    card = _scryfall(
+        name="Cancel",
+        type_line="Instant",
+        oracle_text="Counter target spell.",
+        mana_cost="{1}{U}{U}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_other is True
+
+
+def test_counter_pump_on_target_creature_auto() -> None:
+    card = _scryfall(
+        name="Jeong Jeong's Deserters",
+        type_line="Creature — Human Rebel Ally",
+        oracle_text="When this creature enters, put a +1/+1 counter on target creature.",
+        mana_cost="{1}{W}",
+        power="1",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+def test_exile_until_leaves_treated_as_removal_auto() -> None:
+    card = _scryfall(
+        name="Earth Kingdom Jailer",
+        type_line="Creature — Human Soldier Ally",
+        oracle_text=(
+            "When this creature enters, exile up to one target artifact, "
+            "creature, or enchantment an opponent controls with mana value "
+            "3 or greater until this creature leaves the battlefield."
+        ),
+        mana_cost="{2}{W}",
+        power="3",
+        toughness="3",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.removal_destroy_or_exile is True
+
+
+def test_waterbend_bare_cost_form_auto() -> None:
+    # Some TLA cards use "Waterbend {N}: <effect>" without a number/dash.
+    card = _scryfall(
+        name="Aang's Iceberg",
+        type_line="Enchantment",
+        oracle_text=("Flash\nWaterbend {3}: Sacrifice this enchantment. If you do, scry 2."),
+        mana_cost="{2}{W}",
+        keywords=["Flash"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+def test_modal_choose_up_to_one_target_not_blocked() -> None:
+    # "Choose up to one target X" is a target specification, NOT a modal
+    # selection — the MV-fast-path should still apply for high-MV cards
+    # with this phrasing.
+    card = _scryfall(
+        name="Targeted Spell",
+        type_line="Sorcery",
+        oracle_text="Choose up to one target creature, then deal 5 damage to it.",
+        mana_cost="{4}{R}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+def test_modal_choose_one_with_bullets_still_blocked_at_low_mv() -> None:
+    card = _scryfall(
+        name="Modal Spell",
+        type_line="Sorcery",
+        oracle_text=("Choose one —\n• Some weird effect.\n• Some other weird effect."),
+        mana_cost="{1}{R}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
