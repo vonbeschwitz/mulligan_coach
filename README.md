@@ -36,8 +36,8 @@ uv run pytest packages/data-download
 | Package | Status | Description |
 |---|---|---|
 | `data-download` | scaffolding | Fetches & caches 17Lands, Scryfall, MTGJSON data. |
-| `cards`         | not started | Shared card representation (parsed cost, types, roles, 17Lands stats). |
-| `simulation`    | not started | Monte Carlo playability simulator. |
+| `cards`         | implemented | Shared card representation (parsed cost, types, roles, 17Lands stats). |
+| `simulation`    | implemented | Monte Carlo playability simulator (turns 1-4 goldfish). |
 | `model`         | not started | XGBoost win-probability model. |
 | `website`       | not started | FastAPI + HTMX testing/validation UI. |
 | `overlay`       | not started | PyQt6 in-game overlay. |
