@@ -179,7 +179,22 @@ Four ParseStatus outcomes:
 
 ### When the parser bails
 
-* **Layout is non-normal** (DFC / split / adventure / saga / transform).
+* **Layout is non-normal AND not handled.** The parser handles three
+  non-normal layouts directly:
+    * `transform` — collapses to the front face when the back face has
+      no mana cost (or is a land). The recursive parse runs with the
+      front-face oracle text + cost + types; back-face content is
+      ignored. Front-face name and joint type line are preserved on
+      the resulting `ParsedCard` for display. Transform DFCs whose
+      back face is castable in its own right still bail.
+    * `saga` — encodes only chapter I. `role_features.is_saga = True`
+      regardless. Higher chapters happen on subsequent turns and don't
+      affect the mulligan-relevant turns 1–4 enough to model in v1.
+    * `class` — encodes only the always-on level-1 effect.
+      `role_features.is_class = True` regardless. Levels 2 and 3
+      require activation and aren't material at mulligan time.
+  All other non-normal layouts (split / adventure / modal_dfc / …)
+  still bail to NEEDS_LLM.
 * **Alt-cost keyword present** that's in `ALT_COST_KEYWORDS` (kicker,
   flashback, escape, mutate, …). Cycling / channel / landcycling are
   NOT in this list — they're in `MODE_EMITTING_KEYWORDS` and emit
@@ -282,26 +297,32 @@ Hand-crafted Scryfall-shaped dicts. No real data download required.
 
 ## Current auto-classification rate
 
-After the static/triggered-tolerance + bending + MV>=4 fast-path passes,
-across the three current Premier-Draft sets (TMT/ECL/TLA — 738 cards):
+After widening to handle Sagas (chapter I only), Classes (level-1 effect
+only), transform DFCs with uncastable back faces, and a few additional
+static-line tolerances (name-as-self-reference, "creature spells you cast
+have …"), across the three current Premier-Draft sets (TMT/ECL/TLA — 738
+cards):
 
 | Set | auto | llm_encoded | needs_human | needs_llm |
 |---|---|---|---|---|
-| TMT | 154 (81.1%) | 29 (15.3%) | 7 (3.7%) | 0 |
-| ECL | 211 (79.0%) | 49 (18.4%) | 7 (2.6%) | 0 |
-| TLA | 212 (75.4%) | 57 (20.3%) | 12 (4.3%) | 0 |
-| **All** | **577 (78.2%)** | **135 (18.3%)** | **26 (3.5%)** | **0** |
+| TMT | 161 (84.7%) | 29 (15.3%) | 0 | 0 |
+| ECL | 218 (81.6%) | 49 (18.4%) | 0 | 0 |
+| TLA | 223 (79.4%) | 58 (20.6%) | 0 | 0 |
+| **All** | **602 (81.6%)** | **136 (18.4%)** | **0** | **0** |
 
 Reproduce / refresh with:
 
 ```
 uv run mulligan-coach-cards run-detector --sets TMT,ECL,TLA
+# Use --reparse-needs-human to re-parse previously human-flagged cards
+# after widening the parser further; --force overrides llm_encoded too.
 ```
 
-`needs_human` cards are mostly Sagas / DFCs / Classes (transform-layout
-families that the v1 parser doesn't model). `llm_encoded` cards have
-their `role_features` hand-set; `modes` / `mana_abilities` may be
-partial (the simulator already tolerates that on non-AUTO cards).
+`llm_encoded` cards have their `role_features` hand-set; `modes` /
+`mana_abilities` may be partial (the simulator already tolerates that on
+non-AUTO cards). `is_saga` and `is_class` flags are set on every Saga /
+Class regardless of whether the deterministic parser was able to fully
+encode the chapter-I / level-1 effect.
 
 ## Known sharp edges
 

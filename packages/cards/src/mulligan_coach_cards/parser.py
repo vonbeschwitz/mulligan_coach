@@ -466,6 +466,39 @@ _STATIC_SELF_MOD_RE = re.compile(
     re.IGNORECASE,
 )
 
+
+_SELF_STATIC_VERB_RE = re.compile(
+    r"^(?:can't|cannot|has|have|is|isn't|gets|gains?|doesn't|don't|are|"
+    r"enters|becomes?|attacks?|blocks?|deals?|costs?)\b",
+    re.IGNORECASE,
+)
+
+
+def _looks_like_self_static_modifier(chunk: str, name: str) -> bool:
+    """True if a chunk reads like a static self-modifier referenced by name.
+
+    Cards routinely write their own name where Magic rules would say
+    "this creature" — e.g. "Sygg can't be blocked." or "Aang has flying."
+    We accept any chunk whose leading token equals the card's first name
+    word AND whose next token is a recognised static verb ("can't", "has",
+    "is", "gets", …). The verb list keeps this from colliding with
+    keyword-cost lines like "Cycling {2}" — important when the card name
+    happens to share a word with a keyword.
+    """
+    if not name:
+        return False
+    first_token = name.split(",")[0].split(" //")[0].strip().split()
+    if not first_token:
+        return False
+    head = first_token[0]
+    if not head:
+        return False
+    m = re.match(rf"^{re.escape(head)}\s+(.+)$", chunk, re.IGNORECASE)
+    if m is None:
+        return False
+    return bool(_SELF_STATIC_VERB_RE.match(m.group(1).strip()))
+
+
 # Static / triggered ability tolerance.
 #
 # v1 rule (per project owner): we generally ignore static and triggered
@@ -505,6 +538,9 @@ _STATIC_PREFIXES: tuple[str, ...] = (
     "lands you control",
     "permanents you control",
     "all creatures",
+    "creature spells",  # "Creature spells you cast have convoke."
+    "instant spells",
+    "sorcery spells",
     "spells you cast",
     "the next",
     "this creature",
@@ -1620,11 +1656,15 @@ def _parse_creature(
             continue
 
         # 2. Static "<this creature> ..." self-modifier (variable P/T,
-        # conditional pump). Doesn't affect cast / castability so we
-        # ignore it rather than bail. Triggered abilities ("When this
-        # creature dies/enters") match _ETB_RE / _OTHER_TRIGGERED_RE
-        # before we get here, so this is safe.
+        # conditional pump, "<this> can't be blocked", etc). Doesn't affect
+        # cast / castability so we ignore it rather than bail. Triggered
+        # abilities ("When this creature dies/enters") match _ETB_RE /
+        # _OTHER_TRIGGERED_RE before we get here, so this is safe.
         if _STATIC_SELF_MOD_RE.match(chunk):
+            continue
+        # Cards often spell their own name where rules text would otherwise
+        # say "this creature" — accept that as a self-static modifier too.
+        if _looks_like_self_static_modifier(chunk, name):
             continue
 
         # 3. Cycling / land-cycling on the creature.
@@ -2164,10 +2204,9 @@ def _parse_other_permanent(
     cast_mode = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
     modes: list[Mode] = [cast_mode] if cast_mode is not None else []
 
-    # Token creation can appear on any permanent.
-    bodies = _match_token_creation(cleaned)
-    if bodies:
-        role_features.creates_creatures.extend(bodies)
+    # Token creation is captured per-chunk below; the previous top-level
+    # ``_match_token_creation(cleaned)`` call was removed because it
+    # double-counted bodies that the per-chunk branches already capture.
 
     if not chunks:
         return ParsedCard(
@@ -2195,6 +2234,13 @@ def _parse_other_permanent(
             for body in _match_token_creation(chunk):
                 role_features.creates_creatures.append(body)
             _extract_triggered_signal(chunk, role_features)
+            continue
+        # Direct-action token creation: a chunk whose first verb is "Create
+        # … creature token" — typical for saga chapters and immediate
+        # cast-resolution effects on enchantments. Consume it so the loop
+        # doesn't fall to "unrecognised line".
+        if direct_bodies := _match_token_creation(chunk):
+            role_features.creates_creatures.extend(direct_bodies)
             continue
         # Waterbending activated mode (TLA).
         if wb := _try_build_waterbend_mode(chunk, role_features):
@@ -2385,6 +2431,8 @@ def _maybe_apply_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> Pars
         or rf.is_planeswalker
         or rf.is_equipment
         or rf.is_vehicle
+        or rf.is_saga
+        or rf.is_class
         or rf.is_punch_fight
         or rf.removal_destroy_or_exile
         or rf.removal_burn_damage is not None
@@ -2409,6 +2457,188 @@ def _maybe_apply_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> Pars
         f"MV>={parsed.mana_cost.cmc} fast-path: card unlikely to affect mulligan-relevant turns"
     )
     return parsed
+
+
+# ---------------------------------------------------------------------------
+# Saga, Class, and transform-DFC handling.
+#
+# Per the project owner's design call:
+# * Sagas: only encode chapter I deterministically. Set ``is_saga=True``
+#   regardless. Higher chapters happen on subsequent turns and are out of
+#   scope for v1 mulligan-relevant features.
+# * Classes: only encode the always-on level-1 effect. Set ``is_class=True``.
+#   Level 2 / 3 require activation and don't fire on cast.
+# * Transform DFCs: if the back face has no mana cost (or is a land), the
+#   back face never enters via cast — collapse to the front face for the
+#   purposes of parsing. This catches both transform creatures whose back
+#   side is a flipped form (Aang, Brigid, …) and transform sagas whose
+#   back side is a creature minted by chapter III.
+# ---------------------------------------------------------------------------
+
+# Saga chapter prefix: "I — body" / "II — body" / "I, II — body" / etc.
+# Roman numerals up to X cover any saga we'd reasonably see.
+_SAGA_CHAPTER_PREFIX_RE = re.compile(
+    r"^(?P<labels>(?:I+|IV|V|VI{0,3}|IX|X)(?:\s*,\s*(?:I+|IV|V|VI{0,3}|IX|X))*)"
+    r"\s*[—\-]\s*(?P<body>.*)$"
+)
+
+# Class level-up cost line: "{1}{R}: Level 2", "{4}{G}: Level 3".
+_CLASS_LEVEL_UP_RE = re.compile(
+    r"^\{[^}]+\}(?:\s*,\s*\{[^}]+\})*\s*:\s*Level\s+\d+\s*$",
+    re.IGNORECASE,
+)
+
+
+def _extract_saga_chapter_one(oracle_text: str) -> str:
+    """Return only the chapter I body of a Saga's oracle text.
+
+    Saga oracle text is shaped as a (parenthetical reminder) followed by
+    one chapter-labelled line per chapter; some sagas combine chapters
+    via "I, II — shared effect". This helper returns just the lines that
+    belong to chapter I (whose label list contains "I"), preserving any
+    unlabelled continuation lines. Returns an empty string if no chapter I
+    is detectable.
+    """
+    cleaned = _strip_reminder(oracle_text)
+    chapter_one_lines: list[str] = []
+    in_chapter_one = False
+    for line in cleaned.split("\n"):
+        if not line.strip():
+            continue
+        m = _SAGA_CHAPTER_PREFIX_RE.match(line.strip())
+        if m:
+            labels = [lab.strip() for lab in m.group("labels").split(",")]
+            if "I" in labels:
+                in_chapter_one = True
+                body = m.group("body").strip()
+                if body:
+                    chapter_one_lines.append(body)
+            else:
+                # Hit chapter II / III — chapter I is closed.
+                break
+        elif in_chapter_one:
+            chapter_one_lines.append(line.strip())
+    return "\n".join(chapter_one_lines)
+
+
+def _extract_class_level_one(oracle_text: str) -> str:
+    """Return only the level-1 (always-on) ability text of a Class.
+
+    Class oracle text starts with a parenthetical reminder, then the
+    always-on level-1 ability, then the first level-up cost line
+    ("{1}{R}: Level 2"), then level-2 effects, then the next level-up
+    cost, and so on. We return everything between the reminder and the
+    first level-up cost line.
+    """
+    cleaned = _strip_reminder(oracle_text)
+    level_one_lines: list[str] = []
+    for line in cleaned.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _CLASS_LEVEL_UP_RE.match(stripped):
+            break
+        level_one_lines.append(stripped)
+    return "\n".join(level_one_lines)
+
+
+def _back_face_is_castable(faces: list[dict[str, Any]]) -> bool:
+    """True if the back face of a transform DFC is castable in its own right.
+
+    "Castable" here means: it has a mana cost AND isn't a land. Lands and
+    cost-less back faces (the trigger-flips, like Brigid's Doun's Mind or
+    Avatar Yangchen) only enter via the front-face transform trigger and
+    never affect their own cast Mode — so they're safe to ignore for
+    parsing purposes.
+    """
+    if len(faces) < 2:
+        return False
+    back = faces[1]
+    cost = str(back.get("mana_cost") or "")
+    type_line = str(back.get("type_line") or "")
+    if not cost:
+        return False
+    return "Land" not in type_line
+
+
+def _synthesize_front_face_card(card: dict[str, Any]) -> dict[str, Any] | None:
+    """If the back face is uncastable, return a card dict that looks like
+    the front face alone.
+
+    The recursed ``parse_card`` sees ``layout="normal"`` and dispatches by
+    the front-face type line — so a transform Saga goes to the saga
+    branch, a transform creature goes to the creature branch, etc.
+    Returns ``None`` if the back face is castable in its own right (we
+    can't safely collapse those yet — they need separate handling once
+    Mode supports two cast modes).
+    """
+    faces = card.get("card_faces") or []
+    if len(faces) < 2:
+        return None
+    if _back_face_is_castable(faces):
+        return None
+    front = faces[0]
+    out = dict(card)
+    out["mana_cost"] = front.get("mana_cost") or ""
+    out["type_line"] = front.get("type_line") or out.get("type_line", "")
+    out["oracle_text"] = front.get("oracle_text") or ""
+    if "power" in front:
+        out["power"] = front["power"]
+    if "toughness" in front:
+        out["toughness"] = front["toughness"]
+    if "colors" in front:
+        out["colors"] = front["colors"]
+    if "keywords" in front:
+        out["keywords"] = front["keywords"]
+    # Bypass the layout check on recursion. The back face is intentionally
+    # ignored from here on.
+    out["layout"] = "normal"
+    return out
+
+
+def _parse_saga(
+    base: dict[str, Any],
+    card: dict[str, Any],
+    oracle_text: str,
+    role_features: RoleFeatures,
+) -> ParsedCard:
+    """Parser branch for Enchantment — Saga.
+
+    Sets ``is_saga=True`` and runs only chapter I's body through the
+    standard enchantment chunk loop. Chapters II+ are deferred — they
+    fire on subsequent turns and don't affect the mulligan-relevant
+    turns 1-4 enough to justify modelling for v1.
+    """
+    role_features.is_saga = True
+    chapter_one = _extract_saga_chapter_one(oracle_text)
+    result = _parse_other_permanent(base, card, chapter_one, role_features, "Saga")
+    # Replace the generic enchantment label with one that surfaces what we did.
+    result.reasons = ["saga: encoded chapter I only"] + [
+        r for r in result.reasons if r not in ("enchantment", "vanilla enchantment")
+    ]
+    return result
+
+
+def _parse_class(
+    base: dict[str, Any],
+    card: dict[str, Any],
+    oracle_text: str,
+    role_features: RoleFeatures,
+) -> ParsedCard:
+    """Parser branch for Enchantment — Class.
+
+    Sets ``is_class=True`` and runs only the always-on level-1 effect
+    through the standard enchantment chunk loop. Levels 2 and 3 require
+    activation on subsequent turns and aren't material for mulligan-time
+    decisions.
+    """
+    role_features.is_class = True
+    level_one = _extract_class_level_one(oracle_text)
+    result = _parse_other_permanent(base, card, level_one, role_features, "Class")
+    result.reasons = ["class: encoded level-1 effect only"] + [
+        r for r in result.reasons if r not in ("enchantment", "vanilla enchantment")
+    ]
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -2452,7 +2682,35 @@ def parse_card(card: dict[str, Any]) -> ParsedCard:
         "evergreen_keywords": evergreens,
     }
 
-    if layout != "normal":
+    # Transform DFCs collapse to their front face when the back face is
+    # uncastable (no mana cost, or a land). The recursive call sees
+    # layout="normal" and dispatches normally on the front-face type line.
+    if layout == "transform":
+        synthetic = _synthesize_front_face_card(card)
+        if synthetic is not None:
+            result = parse_card(synthetic)
+            # Preserve display fields from the original (full DFC) card so
+            # the user still sees the joint name / type line in listings.
+            result.name = name
+            result.type_line = type_line
+            if (
+                "transform DFC: parsed front face only (back face has no cast cost)"
+                not in result.reasons
+            ):
+                result.reasons.append(
+                    "transform DFC: parsed front face only (back face has no cast cost)"
+                )
+            return result
+        # Back face is castable — leave for human review.
+        return ParsedCard(
+            status=ParseStatus.NEEDS_LLM,
+            reasons=["transform DFC with castable back face — both faces need encoding"],
+            **base,
+        )
+
+    # Saga and Class share the enchantment branch but only encode their
+    # always-on / first-chapter effect; let them through the layout gate.
+    if layout not in {"normal", "saga", "class"}:
         return ParsedCard(
             status=ParseStatus.NEEDS_LLM,
             reasons=[f"non-normal layout {layout!r} — DFC/split/adventure not handled yet"],
@@ -2484,7 +2742,11 @@ def parse_card(card: dict[str, Any]) -> ParsedCard:
     elif "Instant" in types or "Sorcery" in types:
         result = _parse_spell(base, card, oracle_text, role_features)
     elif "Enchantment" in types:
-        if "Aura" in subtypes:
+        if "Saga" in subtypes:
+            result = _parse_saga(base, card, oracle_text, role_features)
+        elif "Class" in subtypes:
+            result = _parse_class(base, card, oracle_text, role_features)
+        elif "Aura" in subtypes:
             result = _parse_aura(base, card, oracle_text, role_features)
         else:
             result = _parse_other_permanent(base, card, oracle_text, role_features, "Enchantment")
