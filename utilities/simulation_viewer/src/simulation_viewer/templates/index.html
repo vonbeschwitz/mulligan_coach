@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page">
+
+  {#
+    The single big form. Each interactive element posts to a specific
+    HTMX endpoint with `hx-include="#decksim"` so the server gets the
+    whole state — decklist text, hand_ids hidden inputs, on_play
+    checkbox, optional seed — on every request.
+  #}
+  <form id="decksim">
+
+    {# --- Decklist input ----------------------------------------------- #}
+    <section class="card">
+      <h2>Decklist</h2>
+      <p class="muted small">
+        Paste an MTGA "Export to Clipboard" decklist
+        (e.g. <code>4 Lightning Bolt (M21) 162</code>). Validation runs
+        as you type.
+      </p>
+      <textarea name="decklist"
+                rows="14"
+                placeholder="Deck&#10;17 Mountain (TLA) 270&#10;4 Goblin (TLA) 100&#10;..."
+                spellcheck="false"
+                hx-post="/validate"
+                hx-trigger="input changed delay:300ms"
+                hx-target="#validation"
+                hx-include="#decksim"></textarea>
+      <p class="muted small">
+        Loaded {{ n_cards }} encoded cards from {{ loaded_sets|join(", ") or "no sets" }}
+        (override with <code>SIMULATION_VIEWER_SETS=...</code>).
+      </p>
+
+      {# Validation panel — populated by POST /validate. The <datalist>
+         lives inside this region so the autocomplete sees fresh deck
+         names whenever the textarea contents change. #}
+      <div id="validation"></div>
+    </section>
+
+    {# --- Hand controls ------------------------------------------------ #}
+    <section class="card">
+      <h2>Opening hand ({{ hand_size }} cards)</h2>
+      <div id="hand">
+        {# Empty until the user paste a deck and asks for a hand. #}
+        <p class="muted">No hand yet. Paste a decklist, then click <em>Random hand</em> or add cards manually.</p>
+
+        <div class="hand-controls">
+          <button type="button"
+                  hx-post="/hand"
+                  hx-target="#hand"
+                  hx-include="#decksim"
+                  hx-vals='{"action":"random"}'>
+            Random hand
+          </button>
+
+          <input type="text"
+                 name="add_name"
+                 list="deck-cards"
+                 placeholder="Card name (autocomplete from deck)"
+                 autocomplete="off">
+          <button type="button"
+                  hx-post="/hand"
+                  hx-target="#hand"
+                  hx-include="#decksim"
+                  hx-vals='{"action":"add"}'>
+            Add
+          </button>
+        </div>
+      </div>
+    </section>
+
+    {# --- Run simulation ----------------------------------------------- #}
+    <section class="card">
+      <h2>Run simulation</h2>
+      <fieldset class="sim-options">
+        <label><input type="checkbox" name="on_play" value="true" checked> On the play</label>
+        <label>Seed (optional)
+          <input type="number" name="seed" placeholder="random" min="0" max="2147483647">
+        </label>
+      </fieldset>
+      <button type="button"
+              class="primary"
+              hx-post="/simulate"
+              hx-target="#trace"
+              hx-include="#decksim">
+        Run one simulation
+      </button>
+    </section>
+
+  </form>
+
+  {# Trace pane — outside the form so HTMX swap doesn't blow away the form state. #}
+  <section id="trace" class="trace-pane">
+    <p class="muted">No trace yet. Run a simulation to see the per-turn detail.</p>
+  </section>
+
+</div>
+
+{% endblock %}

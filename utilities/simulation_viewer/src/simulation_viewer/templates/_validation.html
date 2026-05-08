@@ -1,0 +1,43 @@
+{# Decklist validation panel (HTMX partial swapped into #validation). #}
+
+{% if not result.cards and not result.unknown_lines %}
+  <p class="muted">Empty decklist.</p>
+{% elif result.is_valid %}
+  <p class="status ok">
+    ✅ {{ result.total_cards }} card{{ '' if result.total_cards == 1 else 's' }}
+    ({{ result.unique_cards }} unique). All resolved.
+  </p>
+{% else %}
+  {% if result.cards %}
+    <p class="status partial">
+      {{ result.total_cards }} card{{ '' if result.total_cards == 1 else 's' }}
+      resolved, {{ result.unknown_lines|length }}
+      issue{{ '' if result.unknown_lines|length == 1 else 's' }}:
+    </p>
+  {% else %}
+    <p class="status bad">
+      No cards resolved. {{ result.unknown_lines|length }}
+      issue{{ '' if result.unknown_lines|length == 1 else 's' }}:
+    </p>
+  {% endif %}
+
+  <ul class="issues">
+    {% for issue in result.unknown_lines %}
+      <li>
+        <span class="issue-tag tag-{{ issue.reason }}">{{ issue.reason }}</span>
+        <span class="issue-line">line {{ issue.line_no }}:</span>
+        <code>{{ issue.raw_line }}</code>
+        <span class="issue-msg">— {{ issue.message }}</span>
+      </li>
+    {% endfor %}
+  </ul>
+{% endif %}
+
+{# Datalist for the manual-hand autocomplete. Browsers reference this by
+   id from <input list="deck-cards">; living inside the swapped region
+   means re-pasting a different decklist refreshes the suggestions. #}
+<datalist id="deck-cards">
+  {% for name in datalist_names %}
+    <option value="{{ name }}"></option>
+  {% endfor %}
+</datalist>

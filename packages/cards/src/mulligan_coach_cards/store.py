@@ -23,7 +23,7 @@ import json
 import os
 from pathlib import Path
 
-from .models import ParsedCard, ParseStatus
+from .models import Cost, Mode, NoopEffect, ParsedCard, ParseStatus
 
 
 def _data_root() -> Path:
@@ -82,13 +82,58 @@ def save_parsed_cards(
 
     Cards are sorted by collector number for stable output. Returns the
     path written.
+
+    Before serialising, every castable card is checked for the
+    invariant ``mana_cost is None or modes != []`` via
+    :func:`_ensure_default_cast_mode_for_castable`. Without this guard,
+    the simulator's :func:`mulligan_coach_simulation.validate.check_deck_encodings`
+    rejects cards that have a mana cost but no encoded play modes —
+    a state we'd otherwise drift into whenever the LLM hand-encodes a
+    card whose alt-cost mechanics (kicker / flashback / foretell …)
+    are too complex to fit the Mode vocabulary, and skips the cast
+    mode entirely. Adding a stub cast mode lets the simulator treat
+    the card as "castable for the printed cost; on-cast effect not
+    modelled" — which is fine for castability statistics.
     """
     path = parsed_cards_path(set_code, data_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    sorted_cards = sorted(cards, key=_collector_sort_key)
+    normalised = [_ensure_default_cast_mode_for_castable(c) for c in cards]
+    sorted_cards = sorted(normalised, key=_collector_sort_key)
     payload = [c.model_dump(mode="json") for c in sorted_cards]
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path
+
+
+# Marker on the synthesised effect so the cast mode is searchable in
+# logs / dumps. Anyone looking at "why does this card have a noop
+# cast mode?" can grep for this string.
+DEFAULT_CAST_ROLE_TAG = "default_cast_unencoded_effects"
+
+
+def _ensure_default_cast_mode_for_castable(card: ParsedCard) -> ParsedCard:
+    """Return *card* unchanged, or with a default cast Mode prepended.
+
+    Triggers when the card has a non-None ``mana_cost`` but an empty
+    ``modes`` list. The injected mode is::
+
+        Mode(
+            kind="cast",
+            cost=Cost(mana=card.mana_cost),
+            effects=[NoopEffect(role_tag=DEFAULT_CAST_ROLE_TAG)],
+        )
+
+    The cast mode goes at index 0 to honour the
+    "cast Mode first, alternatives follow" convention documented in
+    ``packages/cards/CLAUDE.md``.
+    """
+    if card.mana_cost is None or card.modes:
+        return card
+    default_mode = Mode(
+        kind="cast",
+        cost=Cost(mana=card.mana_cost),
+        effects=[NoopEffect(role_tag=DEFAULT_CAST_ROLE_TAG)],
+    )
+    return card.model_copy(update={"modes": [default_mode]})
 
 
 def update_parsed_card(

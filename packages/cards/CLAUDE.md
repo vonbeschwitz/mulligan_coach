@@ -52,7 +52,16 @@ scripts/                         # Dev helpers: summarize_batch, apply_patches,
 * **Simulator side**:
   * `modes: list[Mode]` — every legal way to play / activate the card.
     The cast Mode (if any) is first; cycling / land-cycling / channel /
-    activated abilities follow.
+    activated abilities follow. **Invariant**: every card whose
+    `mana_cost is not None` has at least one cast Mode after passing
+    through `save_parsed_cards`. If the LLM-encoding step left modes
+    empty (because the card's alt-cost mechanics — kicker, flashback,
+    foretell, behold — don't fit the Mode vocabulary), `save_parsed_cards`
+    injects a stub `Mode(kind="cast", cost=Cost(mana=printed_cost),
+    effects=[NoopEffect(role_tag=DEFAULT_CAST_ROLE_TAG)])`. That gives
+    the simulator's `check_deck_encodings` a non-empty modes list while
+    keeping it explicit (via the role_tag) that the on-cast effect
+    isn't actually modeled.
   * `mana_abilities: list[ManaAbility]` — permanent-resident mana
     abilities, populated for lands, mana dorks, mana rocks, filter
     lands.
@@ -319,9 +328,12 @@ uv run mulligan-coach-cards run-detector --sets TMT,ECL,TLA
 ```
 
 `llm_encoded` cards have their `role_features` hand-set; `modes` /
-`mana_abilities` may be partial (the simulator already tolerates that on
-non-AUTO cards). `is_saga` and `is_class` flags are set on every Saga /
-Class regardless of whether the deterministic parser was able to fully
+`mana_abilities` may be partial, but `save_parsed_cards` enforces the
+"every castable card has at least one cast Mode" invariant (see the
+`modes` bullet under "Datatype shape" above), so the simulator's
+`check_deck_encodings` always passes for these. `is_saga` and `is_class`
+flags are set on every Saga / Class regardless of whether the
+deterministic parser was able to fully
 encode the chapter-I / level-1 effect.
 
 ## Known sharp edges
