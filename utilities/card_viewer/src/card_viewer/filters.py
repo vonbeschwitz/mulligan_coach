@@ -95,7 +95,7 @@ class Filter(BaseModel):
     """
 
     q: str = Field(default="", description="Case-insensitive substring of the card name.")
-    status: Literal["", "auto", "needs_llm"] = ""
+    status: Literal["", "auto", "needs_llm", "llm_encoded", "needs_human"] = ""
     sets: list[str] = Field(
         default_factory=list,
         description="Restrict to these set codes. Empty = all loaded sets.",
