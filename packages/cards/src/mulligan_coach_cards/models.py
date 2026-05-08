@@ -391,6 +391,20 @@ class RoleFeatures(BaseModel):
     is_planeswalker: bool = False
     is_equipment: bool = False
     is_vehicle: bool = False
+    is_saga: bool = Field(
+        default=False,
+        description=(
+            "The card is an Enchantment — Saga (or transform-DFC whose front face is a Saga). "
+            "Set whenever the parser saw a Saga; we only encode chapter I deterministically."
+        ),
+    )
+    is_class: bool = Field(
+        default=False,
+        description=(
+            "The card is an Enchantment — Class. Set whenever the parser saw a Class; we only "
+            "encode the always-on level-1 effect deterministically."
+        ),
+    )
     is_punch_fight: bool = Field(
         default=False,
         description="Punch (one-sided fight) and fight spells, grouped per design decision.",

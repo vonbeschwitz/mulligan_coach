@@ -63,6 +63,16 @@ def test_search_role_flag_filter(client: TestClient) -> None:
     assert r.status_code == 200
 
 
+def test_search_saga_role_flag_filter(client: TestClient) -> None:
+    r = client.get("/search", params={"role_flags": "is_saga"})
+    assert r.status_code == 200
+
+
+def test_search_class_role_flag_filter(client: TestClient) -> None:
+    r = client.get("/search", params={"role_flags": "is_class"})
+    assert r.status_code == 200
+
+
 def test_card_detail_renders(client: TestClient) -> None:
     """Pull the first loaded entry from the store and fetch its detail page."""
     from card_viewer.app import app

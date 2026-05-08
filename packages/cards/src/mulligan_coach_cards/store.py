@@ -125,6 +125,7 @@ def merge_detector_run(
     freshly_parsed: list[ParsedCard],
     data_root: Path | None = None,
     force: bool = False,
+    reparse_needs_human: bool = False,
 ) -> tuple[list[ParsedCard], int, int]:
     """Merge a fresh deterministic-parser pass with existing stored cards.
 
@@ -136,12 +137,19 @@ def merge_detector_run(
     With ``force=True``, even ``LLM_ENCODED`` / ``NEEDS_HUMAN`` entries
     are overwritten — useful if the LLM encoding is known to be stale.
 
+    With ``reparse_needs_human=True`` (and ``force=False``), only
+    ``NEEDS_HUMAN`` entries are re-parsed; ``LLM_ENCODED`` is still
+    preserved. Useful after the parser has been widened to handle
+    cases that previously needed human attention.
+
     Returns ``(merged_list, n_preserved, n_rewritten)``.
     """
     existing = load_parsed_cards(set_code, data_root)
     by_oracle: dict[str, ParsedCard] = {c.oracle_id: c for c in existing}
 
     preserved_statuses = {ParseStatus.LLM_ENCODED, ParseStatus.NEEDS_HUMAN}
+    if reparse_needs_human:
+        preserved_statuses.discard(ParseStatus.NEEDS_HUMAN)
     n_preserved = 0
     n_rewritten = 0
     merged: list[ParsedCard] = []

@@ -249,6 +249,17 @@ ForceOption = Annotated[
         help="Overwrite even llm_encoded / needs_human entries.",
     ),
 ]
+ReparseNeedsHumanOption = Annotated[
+    bool,
+    typer.Option(
+        "--reparse-needs-human",
+        help=(
+            "Re-parse needs_human entries with the current parser; preserve "
+            "llm_encoded entries. Use after widening the parser to pick up "
+            "cards that previously fell to human review."
+        ),
+    ),
+]
 LimitOption = Annotated[
     int,
     typer.Option(
@@ -282,6 +293,7 @@ def run_detector(
     sets: SetsOption = "TMT,ECL,TLA",
     data_root: DataRootOption = None,
     force: ForceOption = False,
+    reparse_needs_human: ReparseNeedsHumanOption = False,
 ) -> None:
     """Re-run the deterministic parser across each set, persisting results.
 
@@ -309,7 +321,11 @@ def run_detector(
             continue
         freshly_parsed = [parse_card(card) for card in pool]
         merged, n_preserved, n_rewritten = merge_detector_run(
-            code, freshly_parsed, data_root=data_root, force=force
+            code,
+            freshly_parsed,
+            data_root=data_root,
+            force=force,
+            reparse_needs_human=reparse_needs_human,
         )
         path = save_parsed_cards(code, merged, data_root=data_root)
         hist = status_histogram(code, data_root=data_root)

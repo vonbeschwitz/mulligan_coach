@@ -1149,3 +1149,287 @@ def test_modal_choose_one_with_bullets_still_blocked_at_low_mv() -> None:
     )
     p = parse_card(card)
     assert p.status is ParseStatus.NEEDS_LLM
+
+
+# ---------------------------------------------------------------------------
+# Sagas — encode chapter I only.
+# ---------------------------------------------------------------------------
+
+
+def test_saga_chapter_one_token_creation_auto() -> None:
+    card = _scryfall(
+        name="Test Saga",
+        type_line="Enchantment — Saga",
+        layout="saga",
+        mana_cost="{2}{W}",
+        oracle_text=(
+            "(As this Saga enters and after your draw step, add a lore counter. "
+            "Sacrifice after III.)\n"
+            "I — Create two 1/1 white Soldier creature tokens.\n"
+            "II — Search your library for a Plains card and put it onto the battlefield.\n"
+            "III — Draw three cards."
+        ),
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_saga is True
+    # Chapter I creates one token-shape (a 1/1 white Soldier); the count
+    # word "two" is recorded by the body's parent context (one body per
+    # distinct token shape, per the cards-package convention).
+    assert len(p.role_features.creates_creatures) == 1
+    body = p.role_features.creates_creatures[0]
+    assert body.power == "1" and body.toughness == "1"
+    # Chapter II / III effects are NOT carried — encoding chapter I only.
+    assert p.role_features.cards_drawn == 0
+
+
+def test_saga_combined_chapter_label_treated_as_chapter_one() -> None:
+    card = _scryfall(
+        name="Combined Saga",
+        type_line="Enchantment — Saga",
+        layout="saga",
+        mana_cost="{1}{G}",
+        oracle_text=(
+            "(reminder)\nI, II — Create a 2/2 green Bear creature token.\nIII — Draw a card."
+        ),
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_saga is True
+    assert len(p.role_features.creates_creatures) == 1
+    assert p.role_features.creates_creatures[0].power == "2"
+
+
+def test_saga_with_unparseable_chapter_one_falls_to_mv4_fast_path() -> None:
+    card = _scryfall(
+        name="Big Saga",
+        type_line="Enchantment — Saga",
+        layout="saga",
+        mana_cost="{3}{W}{W}",
+        oracle_text=(
+            "(reminder)\n"
+            "I — Starting with you, each player chooses up to one permanent "
+            "with mana value 3 or greater from among permanents your "
+            "opponents control. Exile those permanents.\n"
+            "II — Draw three cards.\n"
+            "III — Exile this Saga, then return it to the battlefield "
+            "transformed under your control."
+        ),
+    )
+    p = parse_card(card)
+    # MV=5 ≥ 4, no modal, no alt cost → fast-path promotes to AUTO.
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_saga is True
+    # is_saga already counts as a category — fast-path shouldn't also set is_other.
+    assert p.role_features.is_other is False
+
+
+# ---------------------------------------------------------------------------
+# Classes — encode level-1 (always-on) effect only.
+# ---------------------------------------------------------------------------
+
+
+def test_class_level_one_etb_token_creation_auto() -> None:
+    card = _scryfall(
+        name="Test Class",
+        type_line="Enchantment — Class",
+        layout="class",
+        mana_cost="{G}",
+        oracle_text=(
+            "(Gain the next level as a sorcery to add its ability.)\n"
+            "When this Class enters, create a 1/1 green Squirrel creature token.\n"
+            "{1}{G}: Level 2\n"
+            "Creatures you control get +1/+1.\n"
+            "{4}{G}: Level 3\n"
+            "Whenever a creature enters under your control, you gain 2 life."
+        ),
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_class is True
+    # Only level-1 ETB token-creation should be captured.
+    assert len(p.role_features.creates_creatures) == 1
+    body = p.role_features.creates_creatures[0]
+    assert (body.power, body.toughness) == ("1", "1")
+
+
+def test_class_level_one_triggered_draw_auto() -> None:
+    card = _scryfall(
+        name="Loot Class",
+        type_line="Enchantment — Class",
+        layout="class",
+        mana_cost="{1}{R}",
+        oracle_text=(
+            "(reminder text)\n"
+            "Whenever you attack, you may discard a card. If you do, draw a card.\n"
+            "{1}{R}: Level 2\n"
+            "Whenever you discard a card, this Class deals 2 damage to each opponent."
+        ),
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_class is True
+
+
+# ---------------------------------------------------------------------------
+# Transform DFCs — collapse to front face when the back side is uncastable.
+# ---------------------------------------------------------------------------
+
+
+def test_transform_dfc_with_uncastable_back_collapses_to_front() -> None:
+    card = _scryfall(
+        name="Front Face // Back Face",
+        type_line="Legendary Creature — Human // Legendary Creature — Avatar",
+        layout="transform",
+        mana_cost="",
+        card_faces=[
+            {
+                "name": "Front Face",
+                "mana_cost": "{2}{W}",
+                "type_line": "Legendary Creature — Human",
+                "oracle_text": (
+                    "When this creature enters, create a 1/1 green and white "
+                    "Kithkin creature token.\n"
+                    "At the beginning of your first main phase, you may pay "
+                    "{G}. If you do, transform this creature."
+                ),
+                "power": "2",
+                "toughness": "2",
+                "colors": ["W"],
+                "keywords": [],
+            },
+            {
+                "name": "Back Face",
+                "mana_cost": "",  # uncastable — only enters via transform
+                "type_line": "Legendary Creature — Avatar",
+                "oracle_text": "{T}: Add {G} or {W}.",
+                "power": "3",
+                "toughness": "3",
+                "colors": [],
+                "keywords": [],
+            },
+        ],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    # Front-face ETB token captured.
+    assert len(p.role_features.creates_creatures) >= 1
+    body = p.role_features.creates_creatures[0]
+    assert (body.power, body.toughness) == ("1", "1")
+    # Display fields preserve the joint name / type line.
+    assert p.name == "Front Face // Back Face"
+
+
+def test_transform_dfc_with_castable_back_still_needs_llm() -> None:
+    card = _scryfall(
+        name="Front // Castable Back",
+        type_line="Creature — Human // Creature — Werewolf",
+        layout="transform",
+        mana_cost="",
+        card_faces=[
+            {
+                "name": "Front",
+                "mana_cost": "{1}{R}",
+                "type_line": "Creature — Human",
+                "oracle_text": "Vanilla 2/1.",
+                "power": "2",
+                "toughness": "1",
+                "colors": ["R"],
+                "keywords": [],
+            },
+            {
+                "name": "Castable Back",
+                "mana_cost": "{2}{R}",  # castable in its own right
+                "type_line": "Creature — Werewolf",
+                "oracle_text": "Trample.",
+                "power": "4",
+                "toughness": "4",
+                "colors": ["R"],
+                "keywords": ["Trample"],
+            },
+        ],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+
+
+def test_transform_dfc_back_is_land_collapses_to_front() -> None:
+    card = _scryfall(
+        name="Front Saga // Back Land",
+        type_line="Enchantment — Saga // Land",
+        layout="transform",
+        mana_cost="",
+        card_faces=[
+            {
+                "name": "Front Saga",
+                "mana_cost": "{1}{W}",
+                "type_line": "Enchantment — Saga",
+                "oracle_text": (
+                    "(reminder)\n"
+                    "I — Create a 1/1 white Soldier creature token.\n"
+                    "II — Draw a card.\n"
+                    "III — Exile this Saga, then return it transformed."
+                ),
+                "colors": ["W"],
+                "keywords": [],
+            },
+            {
+                "name": "Back Land",
+                "mana_cost": "",
+                "type_line": "Land",
+                "oracle_text": "{T}: Add {W}.",
+                "colors": [],
+                "keywords": [],
+            },
+        ],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_saga is True
+    assert len(p.role_features.creates_creatures) == 1
+
+
+def test_creature_name_static_modifier_silently_dropped_auto() -> None:
+    """A creature whose oracle text refers to it by its own name in a
+    static line ("Sygg can't be blocked.") should auto-classify."""
+    card = _scryfall(
+        name="Sygg, Wanderwine Wisdom",
+        type_line="Legendary Creature — Merfolk Wizard",
+        oracle_text="Sygg can't be blocked.",
+        mana_cost="{1}{U}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+def test_creature_static_creature_spells_grant_silently_dropped_auto() -> None:
+    """A creature with a static affecting other creature spells ("Creature
+    spells you cast have convoke.") should auto-classify."""
+    card = _scryfall(
+        name="Big Convoke Lord",
+        type_line="Creature — God",
+        oracle_text=("Flying, lifelink\nCreature spells you cast have convoke."),
+        mana_cost="{3}{W}{W}",
+        power="5",
+        toughness="5",
+        keywords=["Flying", "Lifelink"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+
+
+def test_unrelated_non_normal_layout_still_needs_llm() -> None:
+    """Layouts we still don't model (split, adventure, modal_dfc, …) should
+    keep the NEEDS_LLM bail with a clear reason."""
+    card = _scryfall(
+        name="Some Adventure",
+        type_line="Creature — Human Adventurer",
+        layout="adventure",
+        mana_cost="{2}{R}",
+        oracle_text="Some text.",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert any("non-normal layout" in r for r in p.reasons)
