@@ -37,11 +37,12 @@ dependencies = [
     "mulligan-coach-data-download",
     "mulligan-coach-cards",
     "mulligan-coach-simulation",
-    # Dev-only utility (workspace member under utilities/). Listed here so a
-    # plain `uv sync` installs it into .venv. Safe to include because this
-    # root has `package = false` — nothing is ever built/shipped from it,
-    # so dev utilities here can't leak into a downstream wheel.
+    # Dev-only utilities (workspace members under utilities/). Listed here
+    # so a plain `uv sync` installs them into .venv. Safe to include because
+    # this root has `package = false` — nothing is ever built/shipped from
+    # it, so dev utilities here can't leak into a downstream wheel.
     "card-viewer",
+    "simulation-viewer",
 ]
 
 [tool.uv]
@@ -64,6 +65,7 @@ mulligan-coach-data-download = { workspace = true }
 mulligan-coach-cards = { workspace = true }
 mulligan-coach-simulation = { workspace = true }
 card-viewer = { workspace = true }
+simulation-viewer = { workspace = true }
 
 # PEP 735 dependency groups. `dev` is installed by `uv sync` by default.
 [dependency-groups]
@@ -119,6 +121,7 @@ mypy_path = [
     "packages/cards/src",
     "packages/simulation/src",
     "utilities/card_viewer/src",
+    "utilities/simulation_viewer/src",
 ]
 files = ["packages", "utilities"]
 

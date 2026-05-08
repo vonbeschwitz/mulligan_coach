@@ -1,0 +1,123 @@
+{# One simulated game's trace, rendered turn-by-turn. #}
+
+{% if error %}
+  <p class="status bad">{{ error }}</p>
+{% elif trace %}
+  <header class="trace-header">
+    <h2>Game trace</h2>
+    <p class="muted small">
+      seed = <code>{{ trace.seed }}</code>,
+      {{ "on the play" if trace.on_the_play else "on the draw" }}
+    </p>
+  </header>
+
+  {% for snap in trace.turns %}
+    <section class="turn-block">
+      <h3>Turn {{ snap.turn }}</h3>
+
+      {# --- Cards drawn ------------------------------------------------ #}
+      <p class="turn-section-label">Drew</p>
+      <p class="turn-content">
+        {% if snap.cards_drawn %}
+          {{ snap.cards_drawn|join(", ") }}
+        {% elif snap.turn == 1 and trace.on_the_play %}
+          <span class="muted">(no draw on the play)</span>
+        {% else %}
+          <span class="muted">(nothing)</span>
+        {% endif %}
+      </p>
+
+      {# --- Castability snapshot -------------------------------------- #}
+      <p class="turn-section-label">
+        Castable (start of main phase)
+      </p>
+      {% if snap.castability %}
+        <ul class="castability">
+          {% for r in snap.castability %}
+            <li class="cast-row {{ 'ok' if r.castable else 'bad' }}">
+              <span class="cast-state">{{ '✓' if r.castable else '✗' }}</span>
+              <span class="cast-name">{{ r.card_name }}</span>
+              <span class="cast-mode">{{ r.mode_kind }}</span>
+              {% if r.witness_land_choice is not none %}
+                <span class="cast-witness">
+                  (after playing {{ name_by_id.get(r.witness_land_choice, '?') }})
+                </span>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="turn-content muted">(empty hand)</p>
+      {% endif %}
+
+      {# --- Decisions made this turn ---------------------------------- #}
+      {% set events = actions_by_turn.get(snap.turn, []) %}
+      {% if events %}
+        <p class="turn-section-label">Decisions</p>
+        <ul class="decisions">
+          {% for ev in events %}
+            {% if ev.kind == "land_drop" %}
+              <li class="decision-land">
+                <strong>Land drop:</strong>
+                {% if ev.chosen_name %}
+                  played <em>{{ ev.chosen_name }}</em>
+                  <span class="rule-tag">rule {{ ev.rule_fired }}</span>
+                {% else %}
+                  skipped <span class="rule-tag">{{ ev.rule_fired }}</span>
+                {% endif %}
+              </li>
+            {% elif ev.kind == "spell_cast" %}
+              <li class="decision-cast">
+                <strong>Cast:</strong>
+                <em>{{ ev.card_name }}</em>
+                ({{ ev.mode_kind }})
+                <span class="rule-tag">priority {{ ev.priority }}</span>
+                {% if ev.payment_sources %}
+                  <span class="muted small">
+                    paid with
+                    {%- for src_id in ev.payment_sources -%}
+                      {{ ' ' if loop.first else ', ' }}{{ name_by_id.get(src_id, '?') }}
+                    {%- endfor -%}
+                  </span>
+                {% endif %}
+              </li>
+            {% elif ev.kind == "scry" %}
+              <li class="decision-scry">
+                <strong>Scry:</strong>
+                saw {{ ev.saw|join(', ') or '(empty)' }};
+                kept on top {{ ev.kept_on_top|join(', ') or '(none)' }};
+                bottomed {{ ev.bottomed|join(', ') or '(none)' }}
+              </li>
+            {% elif ev.kind == "draw" %}
+              {# Already covered by `Drew` above — skip. #}
+            {% endif %}
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </section>
+  {% endfor %}
+
+  {# --- First-castable summary ---------------------------------------- #}
+  {% if first_castable_summary %}
+    <section class="summary-block">
+      <h3>First-castable turn (per copy)</h3>
+      <ul class="first-castable">
+        {% for name, labels in first_castable_summary %}
+          <li><strong>{{ name }}</strong>: {{ labels|join(', ') }}</li>
+        {% endfor %}
+      </ul>
+      <p class="muted small">
+        <code>5+</code> means "never castable in the simulator's
+        4-turn window".
+      </p>
+    </section>
+  {% endif %}
+
+  <details class="raw-trace">
+    <summary>Raw GameTrace JSON</summary>
+    <pre class="json">{{ trace.model_dump_json(indent=2) }}</pre>
+  </details>
+
+{% else %}
+  <p class="muted">No trace yet. Run a simulation to see the per-turn detail.</p>
+{% endif %}

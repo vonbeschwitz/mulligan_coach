@@ -5,12 +5,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from mulligan_coach_cards.mana import parse_mana_cost
 from mulligan_coach_cards.models import (
+    Cost,
+    Mode,
+    NoopEffect,
     ParsedCard,
     ParseStatus,
     RoleFeatures,
 )
 from mulligan_coach_cards.store import (
+    DEFAULT_CAST_ROLE_TAG,
     cards_by_status,
     load_parsed_cards,
     merge_detector_run,
@@ -218,6 +223,120 @@ def test_merge_force_overwrites_everything(tmp_path: Path) -> None:
     assert n_preserved == 0
     assert n_rewritten == 1
     assert merged[0].name == "Fresh"
+
+
+def _make_castable(
+    *,
+    name: str,
+    collector_number: str,
+    oracle_id: str,
+    cost: str,
+    modes: list[Mode] | None = None,
+    status: ParseStatus = ParseStatus.LLM_ENCODED,
+) -> ParsedCard:
+    """A non-creature castable card with the given cost.
+
+    Used by the default-cast-mode invariant tests below.
+    """
+    return ParsedCard(
+        name=name,
+        set_code="TST",
+        collector_number=collector_number,
+        oracle_id=oracle_id,
+        rarity="rare",
+        raw_oracle_text="Test card.",
+        type_line="Sorcery",
+        types=["Sorcery"],
+        subtypes=[],
+        supertypes=[],
+        colors=[],
+        mana_cost=parse_mana_cost(cost),
+        modes=modes or [],
+        mana_abilities=[],
+        enter_condition=None,
+        role_features=RoleFeatures(),
+        status=status,
+        reasons=[],
+    )
+
+
+def test_save_adds_default_cast_mode_for_castable_card_with_no_modes(tmp_path: Path) -> None:
+    """A castable card with empty modes gets a stub cast mode on save.
+
+    Mirrors the LLM-encoded entries that initially shipped with empty
+    modes because their alt-cost mechanics (kicker / flashback) were
+    too complex to fit the Mode vocabulary. The simulator's
+    check_deck_encodings rejects such entries; the stub fixes that.
+    """
+    card = _make_castable(name="Empty Modes", collector_number="1", oracle_id="o1", cost="{2}{R}")
+    save_parsed_cards("TST", [card], data_root=tmp_path)
+    [reloaded] = load_parsed_cards("TST", data_root=tmp_path)
+
+    assert len(reloaded.modes) == 1
+    only = reloaded.modes[0]
+    assert only.kind == "cast"
+    assert only.cost.mana.raw == "{2}{R}"
+    # The stub effect carries the role_tag marker so this synthesised
+    # mode is greppable in dumps.
+    assert len(only.effects) == 1
+    effect = only.effects[0]
+    assert isinstance(effect, NoopEffect)
+    assert effect.role_tag == DEFAULT_CAST_ROLE_TAG
+
+
+def test_save_leaves_existing_modes_alone(tmp_path: Path) -> None:
+    """If the card already has modes, save doesn't touch them."""
+    real_mode = Mode(
+        kind="cast",
+        cost=Cost(mana=parse_mana_cost("{1}{G}")),
+        effects=[NoopEffect(role_tag="real_effect")],
+    )
+    card = _make_castable(
+        name="Already Encoded",
+        collector_number="1",
+        oracle_id="o1",
+        cost="{1}{G}",
+        modes=[real_mode],
+    )
+    save_parsed_cards("TST", [card], data_root=tmp_path)
+    [reloaded] = load_parsed_cards("TST", data_root=tmp_path)
+
+    assert len(reloaded.modes) == 1
+    [effect] = reloaded.modes[0].effects
+    assert isinstance(effect, NoopEffect)
+    assert effect.role_tag == "real_effect"
+
+
+def test_save_leaves_noncastable_card_alone(tmp_path: Path) -> None:
+    """Lands (mana_cost=None) don't trigger the helper."""
+    land = _make_card(name="Plains", collector_number="1", oracle_id="o1")
+    # _make_card builds a creature; lands have mana_cost=None and types=Land.
+    # Use model_copy to flip it into a land for this test.
+    land = land.model_copy(
+        update={
+            "type_line": "Basic Land — Plains",
+            "types": ["Land"],
+            "subtypes": ["Plains"],
+            "supertypes": ["Basic"],
+            "mana_cost": None,
+            "modes": [],
+        }
+    )
+    save_parsed_cards("TST", [land], data_root=tmp_path)
+    [reloaded] = load_parsed_cards("TST", data_root=tmp_path)
+    assert reloaded.modes == []
+    assert reloaded.mana_cost is None
+
+
+def test_default_cast_mode_round_trip_is_idempotent(tmp_path: Path) -> None:
+    """Saving twice doesn't duplicate the stub mode."""
+    card = _make_castable(name="Twice-saved", collector_number="1", oracle_id="o1", cost="{R}")
+    save_parsed_cards("TST", [card], data_root=tmp_path)
+    once = load_parsed_cards("TST", data_root=tmp_path)
+    save_parsed_cards("TST", once, data_root=tmp_path)
+    twice = load_parsed_cards("TST", data_root=tmp_path)
+
+    assert len(twice[0].modes) == 1
 
 
 def test_merge_drops_orphans_no_longer_in_fresh(tmp_path: Path) -> None:

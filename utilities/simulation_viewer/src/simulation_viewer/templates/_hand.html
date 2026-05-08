@@ -1,0 +1,60 @@
+{# Hand chip strip + controls (HTMX partial swapped into #hand). #}
+
+{% if error %}
+  <p class="status bad">{{ error }}</p>
+{% endif %}
+
+{% if entries %}
+  <ol class="hand-chips">
+    {% for entry in entries %}
+      <li class="hand-chip {{ 'missing' if entry.card is none else '' }}">
+        {# Hidden input keeps the slot in the form so the next request
+           knows the current hand. Order in the form == order rendered. #}
+        <input type="hidden" name="hand_ids" value="{{ entry.id }}">
+        <span class="hand-chip-name">
+          {% if entry.card %}{{ entry.card.name }}{% else %}{{ entry.id }} (?){% endif %}
+        </span>
+        {% if entry.card and entry.card.mana_cost %}
+          <span class="hand-chip-cost">{{ entry.card.mana_cost.raw }}</span>
+        {% endif %}
+        <button type="button"
+                class="hand-chip-remove"
+                title="Remove from hand"
+                hx-post="/hand"
+                hx-target="#hand"
+                hx-include="#decksim"
+                hx-vals='{"action":"remove","index":{{ entry.index }}}'>
+          ✕
+        </button>
+      </li>
+    {% endfor %}
+  </ol>
+  <p class="muted small">
+    {{ entries|length }} of {{ hand_size }} card{{ '' if hand_size == 1 else 's' }} selected.
+  </p>
+{% else %}
+  <p class="muted">No cards selected yet.</p>
+{% endif %}
+
+<div class="hand-controls">
+  <button type="button"
+          hx-post="/hand"
+          hx-target="#hand"
+          hx-include="#decksim"
+          hx-vals='{"action":"random"}'>
+    Random hand
+  </button>
+
+  <input type="text"
+         name="add_name"
+         list="deck-cards"
+         placeholder="Card name (autocomplete from deck)"
+         autocomplete="off">
+  <button type="button"
+          hx-post="/hand"
+          hx-target="#hand"
+          hx-include="#decksim"
+          hx-vals='{"action":"add"}'>
+    Add
+  </button>
+</div>
