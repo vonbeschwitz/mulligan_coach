@@ -8,7 +8,7 @@ Monte Carlo simulator for the first 4 turns of a Magic: The Gathering game (gold
 
 For each simulation run, output per turn (1–4):
 - For each card in hand at the start of that turn's main phase: `castable: yes/no`
-- "Castable" means: there exists *some* legal land drop this turn (using a land in hand) such that the card could be cast with the resulting mana. This captures option value — a card is castable even if the policy chose to play a different land for curve reasons.
+- "Castable" means: there exists *some* legal land drop this turn (using a land in hand) such that the card could be cast with the resulting mana. This captures option value — a card is castable even if the policy chooses to play a different land for curve reasons.
 - For each card across all turns: `first_castable_turn: 1 / 2 / 3 / 4 / 5+`. (5+ = never castable in the 4-turn window.)
 
 Aggregate across N runs to compute, for each card in the decklist:
@@ -35,35 +35,7 @@ Parameter, default `on_the_play=True`. Affects whether turn 1 includes a draw.
 
 ## Card model
 
-Each card is a structured object with:
-
-- `name: str`
-- `types: list[str]` (e.g., ["Creature", "Vehicle"], ["Land"], ["Sorcery"])
-- `subtypes: list[str]` (e.g., ["Human", "Druid"])
-- `modes: list[Mode]` — most cards have one mode (their normal cast cost). Cards with cycling, channel, or other alt costs have multiple modes.
-
-A `Mode` has:
-- `cost: ManaCost` (parsed: `{generic: int, colors: dict[color → count], other_costs: list}`)
-- `effect: Effect`
-- `kind: str` — one of `"cast"`, `"cycle"`, `"channel"`, `"activated_ability"`, etc.
-
-An `Effect` describes what happens on resolution. For the simulator, the effects that matter are:
-- `enters_battlefield(card)` — for permanents, the card enters play
-- `fetch_land(target_filter, destination)` — Environmental Scientist, Cultivate, Evolving Wilds, etc.
-- `draw_cards(n)`
-- `scry(n)`
-- `produce_mana(color)`
-- `noop` — for spells whose effects don't matter to the simulator (damage, removal, creatures with combat-only abilities). These are still tracked as castable but their resolution doesn't change game state beyond entering play (if a permanent) or going to graveyard (if instant/sorcery).
-
-Permanents (creatures, artifacts, lands) additionally have:
-- `mana_abilities: list[ManaAbility]`
-- `etb_tapped: bool | Predicate` — for lands, can be a predicate evaluated at ETB
-- `summoning_sickness_relevant: bool` — true for creatures, false for non-creature artifacts/lands
-
-A `ManaAbility` has:
-- `cost: list[Cost]` — e.g., `[Tap]`, `[Tap, Pay({1})]`, `[Tap, Sacrifice]`
-- `produces: list[ManaOption]` — e.g., `[{G}]`, `[{B}, {G}]` for a dual, `[{W}, {U}, {B}, {R}, {G}]` for filter lands
-- `condition: Predicate | None` — for lands like "Add G. Add U if you control a Forest."
+The cards package provides the encoding of cards. Please look at the cards package and its CLAUDE.md file to understand the data structure.
 
 ## Land patterns to support
 
@@ -162,6 +134,7 @@ If hand is empty of lands, cast spells that fetch lands to hand (Environmental S
 
 **Priority S3 — Card draw, cycling, scry.**
 Cast/activate effects that find more cards. Useful for digging toward lands or playable spells. Cycling counts as card draw.
+For decisions on scry, draw-discard, etc. maximize (1) hitting a land drop every turn and (2) the amount of cards that become playable next turn, i.e. if no land in hand, make sure to try and scry a land on top. If there is a land in hand, but no card is castable next turn, try to scry an additional castable spell on top, etc.
 
 **Priority S4 - Hand-fetch effects (if lands in hand).**
 If mana is still available, cast hand-fetch effects to find additional lands.
@@ -222,33 +195,34 @@ Build incrementally with checkpoints. Each step produces a runnable artifact tha
 
 ## Testing strategy
 
-Hand-trace the following test cases and verify the simulator's output matches:
+Generate random hands from the card pool. Have the deterministic code analyze the hand. Then analyze the hand using LLM (no API call, just load the hand into context) and see if the deterministic code is correct. If not, fix the code. 
+Start with simple hands but then go to more complicated ones that include mana dorks, non-basic lands, card draw, etc.
 
-1. **Hand**: Forest, Forest, Deathcap Glade, Environmental Scientist, Pestbrood Sloth, Brotherhood's End, Brotherhood's End. Expected first-castable-turn: Scientist=2, Sloth=4, Brotherhood's End=never (no red source available without draws).
+## Decisions locked in (during v1 implementation)
 
-2. **Hand**: Forest, Deathcap Glade, Environmental Scientist, Strixhaven Skycoach, Brotherhood's End, Pestbrood Sloth. Expected: Scientist=2, Skycoach=3, Sloth=4 (need Scientist's fetch), Brotherhood's End=4 or 5 (need both fetches → 2 Mountains).
-
-3. **Hand**: Mountain, Mountain, Environmental Scientist, Strixhaven Skycoach, Brotherhood's End, Pestbrood Sloth. Expected: nothing castable on the existing 2 lands except Brotherhood's End once we have 3 lands. With a colorless land drawn turn 2: Skycoach=3, Brotherhood's End=3, then Scientist becomes castable after Skycoach fetches a Forest.
-
-4. Land-drop policy tests:
-   - Forest, Forest, Plains in hand, no spells with double-pips: rule L4 picks Forest (duplicate).
-   - Forest, Mountain, Brotherhood's End in hand: rule L2 picks Mountain (enables {R}{R} double-pip).
-   - Tapped land, untapped land of same color: rule L1 picks untapped.
-
-5. Spell-casting policy tests:
-   - Hand has mana dork and creature, both castable: cast mana dork (S1 > non-utility).
-   - Hand has Cultivate and Divination, both castable: cast Cultivate (S1 > S3).
-   - Hand has Environmental Scientist and Forest in hand: don't cast Scientist for fetch (S2 only triggers if hand has no lands). But cast Scientist anyway as a 2/2 — actually no, we don't cast non-utility spells. So Scientist sits in hand if hand has a Forest. *This may be wrong* — flag for review.
-
-The Scientist edge case in test 5 is worth thinking about: if the spell is a utility spell *and* a body, do we cast it? Recommendation: yes if S1 priority applies (it's a fetch effect), regardless of whether we have lands in hand. The "no land in hand" condition was meant for hand-fetches that don't help if you already have lands — but Scientist getting into play also matters because it's a 2/2 and counts as a creature. Actually for the *simulator* it doesn't matter — we don't model combat. Revisit this rule in implementation.
-
-## Open design questions (defer until implementation)
-
-1. **What format for decklists?** Suggest: text file with card names, one per line, with quantities like "4 Forest". Plus a separate `cards.json` defining mechanical properties for each card name.
-2. **How to handle cards not in the cards.json?** Suggest: error out, or treat as a vanilla creature/spell with a placeholder cost. Better to error.
-3. **Should the simulator support sideboard / wishboard for Lessons (Strixhaven mechanic)?** Out of scope for v1.
-4. **Should logging output be JSON-serializable?** Yes, for downstream analysis.
-5. **Random seed control?** Yes, accept a seed parameter for reproducibility.
+1. **No decklist parser in this package.** The public entrypoint
+   `simulate(hand, library, ...)` takes lists of `ParsedCard` directly.
+   A text-decklist convenience can land in the `cards` package or the
+   website later; mulligan-time consumers (overlay / website) already
+   have card names from their own input pipelines.
+2. **Hard error on incomplete card data.** `simulate` calls
+   `check_deck_encodings` first; any card with `status` of `NEEDS_LLM`
+   or `NEEDS_HUMAN`, or with a non-None `mana_cost` and empty `modes`,
+   raises `DeckEncodingError` listing every offender. Treating an
+   unencoded card as "vanilla" would corrupt downstream training data.
+3. **L1 ("castable next turn") considers lands only.** No simulation of
+   mana-producing spells we'd cast this turn. Decoupled from S1–S4.
+4. **Per-mode + per-card aggregate output.** First-castable-turn is
+   tracked separately for each `Mode` of kind `cast` / `cycle` /
+   `land_cycle` / `channel`, AND rolled up to a per-card "any mode
+   castable" value. Both reach `AggregateStats`.
+5. **X costs treated as X = 1.** Most X-spells are useless at X = 0;
+   requiring one extra generic mana on top of the printed cost gives
+   a more realistic earliest-castable turn.
+6. **Logging is JSON-serializable.** All trace types are Pydantic
+   models; `pretty_print` renders a transcript on demand.
+7. **Random seed control.** `simulate(..., seed=N)` is reproducible
+   bit-for-bit.
 
 ## Things explicitly out of scope
 
@@ -264,6 +238,6 @@ The Scientist edge case in test 5 is worth thinking about: if the spell is a uti
 ## Validation
 
 Before trusting Monte Carlo results, validate by:
-1. Running the test cases above and confirming expected first-castable-turn.
+1. Running  test cases  and confirming expected first-castable-turn.
 2. Sampling individual game logs (verbose mode) and hand-checking 5–10 of them.
 3. Comparing aggregate statistics on a known deck (e.g., a mono-color deck with all 1-drops should have ~100% turn-1 castability) against intuition.
