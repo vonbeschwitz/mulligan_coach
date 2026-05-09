@@ -222,6 +222,86 @@ def test_mana_dork_auto() -> None:
     assert p.mana_abilities[0].produces == [["G"]]
 
 
+def test_any_color_mana_dork_auto() -> None:
+    # Great Forest Druid (ECL): the prose "Add one mana of any color"
+    # form. Simulator treats "any" as a wildcard ManaOption.
+    card = _scryfall(
+        name="Great Forest Druid",
+        type_line="Creature — Treefolk Druid",
+        oracle_text="{T}: Add one mana of any color.",
+        mana_cost="{1}{G}",
+        power="0",
+        toughness="4",
+        colors=["G"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert len(p.mana_abilities) == 1
+    assert p.mana_abilities[0].cost.tap is True
+    assert p.mana_abilities[0].cost.mana.cmc == 0
+    assert p.mana_abilities[0].produces == [["any"]]
+
+
+def test_conditional_mana_dork_encodes_baseline_only() -> None:
+    # Raucous Audience (TLA): unconditional baseline + a "creature with
+    # power N+" conditional buff. Predicate has no kind for that, so we
+    # encode the baseline ({G}) and silently drop the conditional half.
+    card = _scryfall(
+        name="Raucous Audience",
+        type_line="Creature — Goblin",
+        oracle_text=(
+            "{T}: Add {G}. If you control a creature with power 4 or greater, add {G}{G} instead."
+        ),
+        mana_cost="{2}{G}",
+        power="2",
+        toughness="2",
+        colors=["G"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert len(p.mana_abilities) == 1
+    assert p.mana_abilities[0].produces == [["G"]]
+
+
+def test_cost_prefix_mana_artifact_auto() -> None:
+    # Filter mana rock: "{1}, {T}: Add one mana of any color." The
+    # captured cost prefix is fed back through _parse_cost_string so
+    # cost.mana carries the {1}.
+    card = _scryfall(
+        name="Filter Stone",
+        type_line="Artifact",
+        oracle_text="{1}, {T}: Add one mana of any color.",
+        mana_cost="{1}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert len(p.mana_abilities) == 1
+    assert p.mana_abilities[0].cost.tap is True
+    assert p.mana_abilities[0].cost.mana.cmc == 1
+    assert p.mana_abilities[0].produces == [["any"]]
+
+
+def test_artifact_mana_rock_with_untap_static_auto() -> None:
+    # Bender's Waterskin (TLA) shape: static "Untap this artifact ..."
+    # line tolerated via _STATIC_PREFIXES, plus an any-color mana
+    # ability picked up by _extract_mana_ability and routed through
+    # _parse_other_permanent's mana_abilities accumulator.
+    card = _scryfall(
+        name="Bender's Waterskin",
+        type_line="Artifact",
+        oracle_text=(
+            "Untap this artifact during each other player's untap step.\n"
+            "{T}: Add one mana of any color."
+        ),
+        mana_cost="{2}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert len(p.mana_abilities) == 1
+    assert p.mana_abilities[0].cost.tap is True
+    assert p.mana_abilities[0].produces == [["any"]]
+
+
 def test_creature_with_cycling_emits_extra_mode() -> None:
     card = _scryfall(
         name="Cycling Beast",

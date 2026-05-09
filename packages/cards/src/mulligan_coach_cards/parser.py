@@ -549,6 +549,7 @@ _STATIC_PREFIXES: tuple[str, ...] = (
     "this land",
     "this card",
     "this spell",
+    "untap this ",  # "Untap this artifact during each other player's untap step." (Bender's Waterskin)
     "cards in",
     "players can't",
     "creatures can't",
@@ -1111,9 +1112,32 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
 # Land-specific helpers: mana production, ETB-tapped predicates.
 # ---------------------------------------------------------------------------
 
-# "{T}: Add {<color>}." — possibly with multiple "or {…}" alternatives.
+# Color-pip producer: "{T}: Add {G}." / "{T}: Add {G} or {U}.".
+# No end anchor — trailing prose after the period is tolerated so cards
+# with a conditional buff (Raucous Audience: "{T}: Add {G}. If you
+# control a creature with power 4 or greater, add {G}{G} instead.")
+# match the unconditional baseline. Predicate has no
+# "creature with power N+" kind, so we encode the baseline and drop
+# the conditional half — the v1 simplification rule.
 _TAP_FOR_RE = re.compile(
-    r"^\{T\}:\s*Add\s+((?:\{[WUBRGC]\})(?:\s+or\s+\{[WUBRGC]\})*)\.?$",
+    r"^\{T\}:\s*Add\s+((?:\{[WUBRGC]\})(?:\s+or\s+\{[WUBRGC]\})*)\.",
+    re.IGNORECASE,
+)
+# Prose any-color producer: "{T}: Add one mana of any color."
+_TAP_FOR_ANY_RE = re.compile(
+    r"^\{T\}:\s*Add\s+one\s+mana\s+of\s+any\s+color\.",
+    re.IGNORECASE,
+)
+# Cost-prefix variants: "{N}, {T}: Add ..." for filter mana rocks.
+# The captured cost group is fed back through _parse_cost_string so
+# the resulting Cost.mana carries the {N}.
+_COST_TAP_FOR_RE = re.compile(
+    r"^(?P<cost>(?:\{[^{}]+\}\s*,\s*)+)\{T\}:\s*Add\s+"
+    r"((?:\{[WUBRGC]\})(?:\s+or\s+\{[WUBRGC]\})*)\.",
+    re.IGNORECASE,
+)
+_COST_TAP_FOR_ANY_RE = re.compile(
+    r"^(?P<cost>(?:\{[^{}]+\}\s*,\s*)+)\{T\}:\s*Add\s+one\s+mana\s+of\s+any\s+color\.",
     re.IGNORECASE,
 )
 
@@ -1140,15 +1164,58 @@ _ENTERS_TAPPED_PLAIN = re.compile(
 )
 
 
-def _extract_taps_for(chunk: str) -> list[str] | None:
-    """If ``chunk`` is a plain "{T}: Add {…}" line, return the colors.
+def _build_cost_with_tap(cost_prefix: str) -> Cost | None:
+    """Build a Cost from a captured cost prefix plus an implicit {T}.
 
-    Returns ``None`` if the line isn't a plain mana ability."""
-    match = _TAP_FOR_RE.match(chunk)
-    if not match:
-        return None
-    colors_part = match.group(1)
-    return list(re.findall(r"\{([WUBRGC])\}", colors_part))
+    ``cost_prefix`` is the text before the ``{T}`` in a mana-ability
+    chunk, e.g. ``"{1}, "`` for a filter mana rock. Trailing commas and
+    whitespace are stripped before delegating to ``_parse_cost_string``.
+    Returns ``None`` if the prefix doesn't parse cleanly."""
+    cleaned = cost_prefix.strip().rstrip(",").strip()
+    if not cleaned:
+        return Cost(mana=_empty_mana(), tap=True)
+    return _parse_cost_string(f"{cleaned}, {{T}}")
+
+
+def _extract_mana_ability(chunk: str) -> ManaAbility | None:
+    """If ``chunk`` is a tap-for-mana ability line, return the structured
+    ``ManaAbility``. Recognises four shapes:
+
+    * Plain          — ``{T}: Add {G}`` (or ``{G} or {U}``).
+    * Prose any      — ``{T}: Add one mana of any color.``
+    * Cost-prefix    — ``{N}, {T}: Add {G}`` (filter mana rocks).
+    * Cost-prefix +  — ``{N}, {T}: Add one mana of any color.``
+      prose any
+
+    Trailing prose after the colors (Raucous Audience's conditional
+    "...add {G}{G} instead." clause) is tolerated; the baseline gets
+    encoded. Returns ``None`` when the chunk isn't a mana ability."""
+    if m := _TAP_FOR_RE.match(chunk):
+        colors = re.findall(r"\{([WUBRGC])\}", m.group(1))
+        return ManaAbility(
+            cost=Cost(mana=_empty_mana(), tap=True),
+            produces=[[c] for c in colors],
+        )
+    if _TAP_FOR_ANY_RE.match(chunk):
+        return ManaAbility(
+            cost=Cost(mana=_empty_mana(), tap=True),
+            produces=[["any"]],
+        )
+    if m := _COST_TAP_FOR_RE.match(chunk):
+        cost = _build_cost_with_tap(m.group("cost"))
+        if cost is None:
+            return None
+        colors = re.findall(r"\{([WUBRGC])\}", m.group(2))
+        return ManaAbility(
+            cost=cost,
+            produces=[[c] for c in colors],
+        )
+    if m := _COST_TAP_FOR_ANY_RE.match(chunk):
+        cost = _build_cost_with_tap(m.group("cost"))
+        if cost is None:
+            return None
+        return ManaAbility(cost=cost, produces=[["any"]])
+    return None
 
 
 def _match_etb_tapped_predicate(oracle_text: str) -> Predicate | None:
@@ -1522,13 +1589,8 @@ def _parse_land(
         chunk = _strip_label_prefix(raw_chunk)
         if "enters tapped" in chunk.lower() or "enters the battlefield tapped" in chunk.lower():
             continue
-        if colors := _extract_taps_for(chunk):
-            mana_abilities.append(
-                ManaAbility(
-                    cost=Cost(mana=_empty_mana(), tap=True),
-                    produces=[[c] for c in colors],  # type: ignore[list-item]
-                )
-            )
+        if ab := _extract_mana_ability(chunk):
+            mana_abilities.append(ab)
             continue
         # Pure-keyword line (Vigilance on a land, etc.).
         if _is_pure_keyword_line(chunk):
@@ -1715,13 +1777,8 @@ def _parse_creature(
 
         # 6. Activated abilities. Try mana ability first (it's a special
         # shape: "{T}: Add {…}." on a creature is a mana dork).
-        if mana_colors := _extract_taps_for(chunk):
-            mana_abilities.append(
-                ManaAbility(
-                    cost=Cost(mana=_empty_mana(), tap=True),
-                    produces=[[c] for c in mana_colors],  # type: ignore[list-item]
-                )
-            )
+        if ab := _extract_mana_ability(chunk):
+            mana_abilities.append(ab)
             continue
 
         # General activated ability — captured as a Mode regardless of cost.
@@ -2218,6 +2275,7 @@ def _parse_other_permanent(
         )
 
     extra_modes: list[Mode] = []
+    mana_abilities: list[ManaAbility] = []
     blockers: list[str] = []
     for raw_chunk in chunks:
         chunk = _strip_label_prefix(raw_chunk)
@@ -2246,30 +2304,10 @@ def _parse_other_permanent(
         if wb := _try_build_waterbend_mode(chunk, role_features):
             extra_modes.append(wb)
             continue
-        # Mana ability on a non-creature artifact / enchantment.
-        if mana_colors := _extract_taps_for(chunk):
-            # Permanent-resident mana ability — model on cast Mode only by
-            # appending; downstream code reads from `mana_abilities` for
-            # lands/dorks and from `modes` for activated abilities.
-            # _parse_other_permanent doesn't have a separate mana_abilities
-            # accumulator, so we route through extra_modes as an activated
-            # mode. That's good enough for v1.
-            extra_modes.append(
-                Mode(
-                    kind="activated",
-                    cost=Cost(mana=_empty_mana(), tap=True),
-                    effects=[
-                        # Synthesize ProduceManaEffect inline.
-                        # Outer list = OR; inner list = AND.
-                        # parse_card consumers know to read mana_abilities
-                        # for non-activated forms; this is a fallback.
-                    ],
-                )
-            )
-            # Capture as breadcrumb only — leaves the simulator without
-            # full mana modeling for now (artifact/enchantment mana sources
-            # are rare and we'll widen this when the simulator needs it).
-            _ = mana_colors
+        # Mana ability on a non-creature artifact / enchantment — same
+        # shapes the land and creature branches recognise.
+        if ab := _extract_mana_ability(chunk):
+            mana_abilities.append(ab)
             continue
         act, blocker = _build_activated_mode(chunk, rf=role_features)
         if act is not None:
@@ -2293,6 +2331,7 @@ def _parse_other_permanent(
         return ParsedCard(
             status=ParseStatus.NEEDS_LLM,
             modes=modes,
+            mana_abilities=mana_abilities,
             role_features=role_features,
             reasons=[f"{type_word.lower()}: " + r for r in blockers],
             **base,
@@ -2301,6 +2340,7 @@ def _parse_other_permanent(
     return ParsedCard(
         status=ParseStatus.AUTO,
         modes=modes,
+        mana_abilities=mana_abilities,
         role_features=role_features,
         reasons=[type_word.lower()],
         **base,
