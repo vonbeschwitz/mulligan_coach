@@ -38,6 +38,7 @@ from mulligan_coach_cards import (
     DrawCardsEffect,
     Effect,
     FetchLandEffect,
+    LookAtTopEffect,
     Mode,
     ScryEffect,
 )
@@ -211,6 +212,24 @@ def _has_fetch_to(mode: Mode, destination: str) -> bool:
     )
 
 
+def _has_land_to_hand(mode: Mode) -> bool:
+    """True if *mode* may put a land in hand on resolution.
+
+    Covers ``FetchLandEffect(destination="hand")`` (Environmental Scientist,
+    land-cycling) AND ``LookAtTopEffect(accepts_land=True)`` (Midnight
+    Tilling, Cowabunga!, etc.). The latter only finds a land
+    probabilistically — when one happens to be in the top N — but for
+    the policy's purposes that's still a hand-fetch shape.
+    """
+    return _has_effect(
+        mode,
+        lambda e: (
+            (isinstance(e, FetchLandEffect) and e.destination == "hand")
+            or (isinstance(e, LookAtTopEffect) and e.accepts_land)
+        ),
+    )
+
+
 def _has_draw_or_scry(mode: Mode) -> bool:
     return _has_effect(mode, lambda e: isinstance(e, DrawCardsEffect | ScryEffect))
 
@@ -312,19 +331,19 @@ def _pick_s2_hand_fetch_when_no_land(state: GameState) -> CastAction | None:
     if _hand_has_land(state):
         return None
     # From hand: cast modes (Environmental Scientist, etc.) and the
-    # land-cycling alt mode all qualify.
+    # land-cycling alt mode all qualify. LookAtTopEffect with
+    # accepts_land=True (Midnight Tilling) is treated as a hand-fetch
+    # too — it only finds a land probabilistically, but the shape is
+    # the same from the policy's perspective.
     hand_action = _first_or_none(
-        _hand_castable_options(
-            state,
-            lambda m: _has_fetch_to(m, "hand"),
-        ),
+        _hand_castable_options(state, _has_land_to_hand),
         "S2",
     )
     if hand_action is not None:
         return hand_action
     # From battlefield: any activated ability that fetches to hand.
     return _first_or_none(
-        _battlefield_activated_options(state, lambda m: _has_fetch_to(m, "hand")),
+        _battlefield_activated_options(state, _has_land_to_hand),
         "S2",
     )
 
@@ -345,13 +364,13 @@ def _pick_s3_card_draw_or_scry(state: GameState) -> CastAction | None:
 
 def _pick_s4_hand_fetch(state: GameState) -> CastAction | None:
     hand_action = _first_or_none(
-        _hand_castable_options(state, lambda m: _has_fetch_to(m, "hand")),
+        _hand_castable_options(state, _has_land_to_hand),
         "S4",
     )
     if hand_action is not None:
         return hand_action
     return _first_or_none(
-        _battlefield_activated_options(state, lambda m: _has_fetch_to(m, "hand")),
+        _battlefield_activated_options(state, _has_land_to_hand),
         "S4",
     )
 

@@ -96,18 +96,41 @@ class Cost:
     # Pay-N-life is deferred to v2.
 
 # Effect is a discriminated union over `kind`:
-# ProduceManaEffect | FetchLandEffect | DrawCardsEffect |
-# ScryEffect | EntersBattlefieldEffect | NoopEffect
+# ProduceManaEffect | FetchLandEffect | LookAtTopEffect |
+# DrawCardsEffect | ScryEffect | EntersBattlefieldEffect | NoopEffect
 ```
 
 * `FetchLandEffect` has three independent axes: `target_filter`
   (basic / any / specific_subtype), `subtype` (when specific),
   `destination` (battlefield_untapped / battlefield_tapped / hand). The
   TRIGGER axis (ETB / cast / activated / sac) is the enclosing Mode's
-  `kind`.
+  `kind`. Use it for **deck-wide** searches.
+* `LookAtTopEffect` covers the **top-N** filter case: look at the top
+  `n` cards, take a land first if `accepts_land`, fall back to a
+  nonland if `accepts_nonland`, bottom the rest. Use this — not
+  FetchLandEffect — for "Look at the top 3, put one in your hand"
+  (Accumulate Wisdom), "Mill 4 then return a permanent to hand"
+  (Midnight Tilling), and "Top 4, may take a creature, ninja or land"
+  (Cowabunga!). Type filters more granular than land/nonland (e.g.
+  "Mutant or Ninja or Turtle") collapse to `accepts_nonland=True`.
+  Variable-N effects (Seismic Sense's "top X where X = lands controlled")
+  encode a fixed approximation noted in `reasons`.
 * `NoopEffect` carries a `role_tag` breadcrumb (e.g. `"removal_destroy"`,
   `"life_gain"`). Don't read `role_tag` from downstream code — read
   `role_features` instead.
+
+#### Encoding alt-cost casts
+
+Alt-cost mechanics (evoke / flashback / foretell / madness / jump-start
+/ aftermath) get a **second `Mode(kind="cast")`** with the alt cost in
+`cost.mana` and effects describing what happens when paying the alt
+cost. The simulator iterates every cast mode and picks the cheapest
+castable one (`policy_spells.py:_first_or_none` sorts by mode CMC), so
+this lets a short-mana hand play the alt-cost form. Omit
+`EntersBattlefieldEffect` from evoke modes — the creature is
+sacrificed on entry, never persisting to the battlefield. New effect
+kinds get a resolver in `simulation/effects.py` and (if hand-affecting)
+a policy hook in `policy_spells.py`.
 
 ### ManaAbility
 
@@ -405,6 +428,17 @@ encode the chapter-I / level-1 effect.
   the conditional doubling is dropped because `Predicate` has no
   "creature with power N+" kind. Adding one is a v2 task — until then,
   the simulator slightly underestimates these cards.
+* LLM-encoded cards with alt-cost keywords (evoke / flashback /
+  foretell / madness / jump-start / aftermath) historically only
+  encoded the standard cast Mode and dropped the alt-cost form. The
+  encoding guidance now requires a second `Mode(kind="cast")` for the
+  alt cost (see "Encoding alt-cost casts" above) — older entries (the
+  ECL Evoke incarnations and the few flashback/foretell sorceries) may
+  still be missing it. Re-encode when revisited.
+* The parser doesn't auto-detect "Look at the top N cards" patterns
+  yet; cards using `LookAtTopEffect` are LLM-encoded by hand. A
+  deterministic regex would land in `_match_spell_effect` —
+  straightforward but not yet written.
 * The Aura branch's destroy/exile matcher doesn't recognise
   "Exile **enchanted** creature" (vs "Exile **target** creature");
   multi-sentence aura activations bail. Workaround in v1: aura still

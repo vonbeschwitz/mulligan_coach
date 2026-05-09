@@ -14,6 +14,7 @@ from mulligan_coach_cards import (
     DrawCardsEffect,
     EntersBattlefieldEffect,
     FetchLandEffect,
+    LookAtTopEffect,
     Mode,
     ParsedCard,
     ParseStatus,
@@ -261,6 +262,59 @@ def test_s2_skipped_when_land_in_hand_falls_to_s4() -> None:
     assert action is not None
     assert action.priority == "S4"
     assert action.card is es
+
+
+def _midnight_tilling_card() -> ParsedCard:
+    """{1}{G} sorcery: top 4, may put a permanent in hand. Encoded as a
+    LookAtTopEffect with accepts_land=True so the policy treats it as a
+    hand-fetch."""
+    cost = Cost(mana=parse_mana_cost("{1}{G}"))
+    return ParsedCard(
+        name="Midnight Tilling",
+        set_code="TST",
+        collector_number="mt",
+        oracle_id="00000000-0000-0000-0000-000000003004",
+        rarity="common",
+        raw_oracle_text="Mill four cards, then put a permanent card from among them into your hand.",
+        type_line="Sorcery",
+        types=["Sorcery"],
+        mana_cost=parse_mana_cost("{1}{G}"),
+        modes=[
+            Mode(
+                kind="cast",
+                cost=cost,
+                effects=[LookAtTopEffect(n=4, accepts_land=True, accepts_nonland=True)],
+            )
+        ],
+        status=ParseStatus.LLM_ENCODED,
+    )
+
+
+def test_s2_fires_for_look_at_top_card_when_no_land_in_hand() -> None:
+    """A LookAtTopEffect(accepts_land=True) card behaves as a hand-fetch:
+    when the hand has no lands, S2 should pick it."""
+    forests_bf = [Card(instance_id=i, parsed=f.forest()) for i in range(1, 3)]
+    tilling = Card(instance_id=10, parsed=_midnight_tilling_card())
+    library = [Card(instance_id=20, parsed=f.forest())]
+    state = _state(hand=[tilling], lands=forests_bf, library=library)
+    action = pick_next_action(state)
+    assert action is not None
+    assert action.priority == "S2"
+    assert action.card is tilling
+
+
+def test_s4_fires_for_look_at_top_card_when_land_in_hand() -> None:
+    """When the hand already has a land, the LookAtTop card falls through
+    to S4 just like a FetchLandEffect-based hand-fetch."""
+    forests_bf = [Card(instance_id=i, parsed=f.forest()) for i in range(1, 3)]
+    extra_forest = Card(instance_id=20, parsed=f.forest())
+    tilling = Card(instance_id=10, parsed=_midnight_tilling_card())
+    library = [Card(instance_id=30, parsed=f.forest())]
+    state = _state(hand=[tilling, extra_forest], lands=forests_bf, library=library)
+    action = pick_next_action(state)
+    assert action is not None
+    assert action.priority == "S4"
+    assert action.card is tilling
 
 
 # ----------------------------------------------------------------------

@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 from mulligan_coach_cards import (
     Effect,
     FetchLandEffect,
+    LookAtTopEffect,
     ParsedCard,
     Predicate,
 )
@@ -164,6 +165,8 @@ def apply_mode_effects(state: GameState, effects: list[Effect]) -> None:
     for fx in effects:
         if isinstance(fx, FetchLandEffect):
             resolve_fetch(state, fx)
+        elif isinstance(fx, LookAtTopEffect):
+            resolve_look_at_top(state, fx)
         # Other effects: deliberately ignored at this layer in v1.
 
 
@@ -219,3 +222,35 @@ def _put_fetched_card(state: GameState, card: Card, destination: str) -> None:
         state.tapped.add(card.instance_id)
     elif destination != "battlefield_untapped":
         raise AssertionError(f"unknown fetch destination {destination!r}")
+
+
+def resolve_look_at_top(state: GameState, fx: LookAtTopEffect) -> None:
+    """Pop the top *fx.n* cards of the library; if a land is among them
+    and the effect ``accepts_land``, take the first land; else if the
+    effect ``accepts_nonland`` take the first nonland; else nothing.
+    The taken card goes to ``state.hand``; the rest are placed at the
+    bottom of the library in original order.
+
+    Library shorter than n is fine — we just look at what's there. No
+    shuffle (the cards we pass over are bottomed in place; no reorder).
+    """
+    n = min(fx.n, len(state.library))
+    if n == 0:
+        return
+    top = state.library[:n]
+    state.library = state.library[n:]
+    chosen: Card | None = None
+    if fx.accepts_land:
+        for card in top:
+            if card.is_land:
+                chosen = card
+                break
+    if chosen is None and fx.accepts_nonland:
+        for card in top:
+            if not card.is_land:
+                chosen = card
+                break
+    if chosen is not None:
+        top.remove(chosen)
+        state.hand.append(chosen)
+    state.library.extend(top)
