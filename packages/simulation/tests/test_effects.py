@@ -15,6 +15,7 @@ import random
 from mulligan_coach_cards import (
     Cost,
     FetchLandEffect,
+    LookAtTopEffect,
     ManaAbility,
     ParsedCard,
     ParseStatus,
@@ -25,6 +26,7 @@ from mulligan_coach_simulation.effects import (
     enters_tapped,
     predicate_holds,
     resolve_fetch,
+    resolve_look_at_top,
 )
 from mulligan_coach_simulation.runtime import Card, GameState
 
@@ -265,3 +267,70 @@ def test_apply_mode_effects_runs_only_fetch_in_v1() -> None:
     assert state.library == []
     # No draw cards effect was on Cultivate, but the test ensures we
     # don't crash on FetchLandEffects with count=1 each.
+
+
+# ----------------------------------------------------------------------
+# resolve_look_at_top
+# ----------------------------------------------------------------------
+
+
+def test_look_at_top_takes_first_land() -> None:
+    """Top 4 of [creature, creature, land, creature] with accepts_land=True
+    pulls the land into hand and bottoms the three creatures in their
+    original order."""
+    creatures = [
+        Card(instance_id=10, parsed=f.cantrip("c0", "{U}")),
+        Card(instance_id=11, parsed=f.cantrip("c1", "{U}")),
+        Card(instance_id=13, parsed=f.cantrip("c2", "{U}")),
+    ]
+    land = Card(instance_id=12, parsed=f.forest())
+    state = _state(library=[creatures[0], creatures[1], land, creatures[2]])
+    resolve_look_at_top(state, LookAtTopEffect(n=4, accepts_land=True))
+    assert state.hand == [land]
+    assert [c.instance_id for c in state.library] == [10, 11, 13]
+
+
+def test_look_at_top_no_land_falls_back_to_nonland() -> None:
+    creatures = [
+        Card(instance_id=20, parsed=f.cantrip("c0", "{U}")),
+        Card(instance_id=21, parsed=f.cantrip("c1", "{U}")),
+    ]
+    state = _state(library=list(creatures))
+    resolve_look_at_top(state, LookAtTopEffect(n=2, accepts_land=True, accepts_nonland=True))
+    # First nonland gets taken; second gets bottomed.
+    assert [c.instance_id for c in state.hand] == [20]
+    assert [c.instance_id for c in state.library] == [21]
+
+
+def test_look_at_top_no_land_no_nonland_bottoms_everything() -> None:
+    creature = Card(instance_id=30, parsed=f.cantrip("c0", "{U}"))
+    state = _state(library=[creature])
+    resolve_look_at_top(state, LookAtTopEffect(n=2, accepts_land=True, accepts_nonland=False))
+    assert state.hand == []
+    assert [c.instance_id for c in state.library] == [30]
+
+
+def test_look_at_top_short_library_doesnt_error() -> None:
+    """Library shorter than n is fine — look at what's there."""
+    state = _state(library=[Card(instance_id=40, parsed=f.forest())])
+    resolve_look_at_top(state, LookAtTopEffect(n=4, accepts_land=True))
+    assert state.hand and state.hand[0].instance_id == 40
+    assert state.library == []
+
+
+def test_look_at_top_empty_library_is_noop() -> None:
+    state = _state(library=[])
+    resolve_look_at_top(state, LookAtTopEffect(n=4, accepts_land=True))
+    assert state.hand == []
+    assert state.library == []
+
+
+def test_apply_mode_effects_dispatches_look_at_top() -> None:
+    """apply_mode_effects should route LookAtTopEffect through
+    resolve_look_at_top."""
+    creature = Card(instance_id=50, parsed=f.cantrip("c0", "{U}"))
+    land = Card(instance_id=51, parsed=f.forest())
+    state = _state(library=[creature, land])
+    apply_mode_effects(state, [LookAtTopEffect(n=2, accepts_land=True)])
+    assert [c.instance_id for c in state.hand] == [51]
+    assert [c.instance_id for c in state.library] == [50]

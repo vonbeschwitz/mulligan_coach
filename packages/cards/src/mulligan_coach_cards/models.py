@@ -241,6 +241,47 @@ class FetchLandEffect(BaseModel):
     count: int = Field(default=1, ge=1, description="Number of lands fetched by this effect.")
 
 
+class LookAtTopEffect(BaseModel):
+    """Look at the top N cards of your library; put one in your hand
+    (preferring a land if available), then bottom the rest.
+
+    Captures cards like Midnight Tilling ("Mill 4 cards, then return a
+    permanent card from among them to your hand"), Accumulate Wisdom
+    ("Look at the top 3 cards, put one in hand"), and Cowabunga!
+    ("Look at the top 4, may take a creature or land"). Distinct from
+    ``FetchLandEffect`` because the search is bounded to the top N
+    rather than the whole library — so finding a land is probabilistic.
+
+    For mulligan-relevant purposes the v1 resolver pops the top n cards,
+    then:
+
+    * if ``accepts_land`` and a land is among them, takes the first land;
+    * otherwise if ``accepts_nonland``, takes the first non-land card;
+    * otherwise nothing.
+
+    The taken card goes to ``destination`` (currently always "hand");
+    the rest are placed at the bottom of the library in original order.
+
+    ``accepts_nonland`` is True for almost every printed card; the few
+    "creatures only" / "permanents only" filters are approximated by
+    keeping it True (slight overcount of what's takeable, but the
+    simulator only cares about whether a land ends up in hand, and the
+    land branch is checked first).
+    """
+
+    kind: Literal["look_at_top"] = "look_at_top"
+    n: int = Field(ge=1, description="Number of cards looked at from the top of the library.")
+    accepts_land: bool = Field(description="True if a land card from the top N is a valid choice.")
+    accepts_nonland: bool = Field(
+        default=True,
+        description=(
+            "True if a non-land card may be taken when no land is found "
+            "(or when the printed effect doesn't restrict to lands)."
+        ),
+    )
+    destination: Literal["hand"] = "hand"
+
+
 class DrawCardsEffect(BaseModel):
     """Draw N cards. Cycling and looting are modelled as separate Modes
     whose effects include this one (cycling: discard-self + draw 1)."""
@@ -287,6 +328,7 @@ class NoopEffect(BaseModel):
 Effect = Annotated[
     ProduceManaEffect
     | FetchLandEffect
+    | LookAtTopEffect
     | DrawCardsEffect
     | ScryEffect
     | EntersBattlefieldEffect

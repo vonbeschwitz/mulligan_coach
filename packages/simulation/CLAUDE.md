@@ -60,6 +60,8 @@ Examples:
 - Three Visits: cast → Forest → battlefield_untapped
 - Evolving Wilds: activated (sac) → basic → battlefield_tapped
 
+`LookAtTopEffect` is a sibling for the **top-N filter** case (Midnight Tilling, Cowabunga!, Accumulate Wisdom): pop the top n cards, take the first land if `accepts_land`, fall back to the first nonland if `accepts_nonland`, bottom the rest. Treated as a hand-fetch by the spell-casting policy (S2 / S4) so it gates on whether the hand already has a land.
+
 ## Mana sources beyond lands
 
 - **Mana dorks** (creatures with mana abilities): respect summoning sickness. Cannot tap for mana the turn they enter.

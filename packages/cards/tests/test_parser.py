@@ -15,9 +15,12 @@ from __future__ import annotations
 from typing import Any
 
 from mulligan_coach_cards.models import (
+    Cost,
     DrawCardsEffect,
     EntersBattlefieldEffect,
     FetchLandEffect,
+    LookAtTopEffect,
+    Mode,
     NoopEffect,
     ParseStatus,
 )
@@ -1574,3 +1577,38 @@ def test_arena_id_propagates_through_transform_dfc() -> None:
     idx = {("oracle-dfc", "TST"): 55555}
     p = parse_card(card, arena_id_index=idx)
     assert p.arena_id == 55555
+
+
+# ---------------------------------------------------------------------------
+# LookAtTopEffect — round-trip through Pydantic to confirm the
+# discriminated union picks it up from JSON and that field defaults work.
+# ---------------------------------------------------------------------------
+
+
+def test_look_at_top_effect_round_trip() -> None:
+    fx = LookAtTopEffect(n=4, accepts_land=True)
+    # Default for accepts_nonland.
+    assert fx.accepts_nonland is True
+    assert fx.destination == "hand"
+    # Round-trip through JSON dump/load — exercises the discriminator.
+    dumped = fx.model_dump()
+    assert dumped["kind"] == "look_at_top"
+    reloaded = LookAtTopEffect.model_validate(dumped)
+    assert reloaded == fx
+
+
+def test_mode_with_look_at_top_round_trip_via_discriminator() -> None:
+    """A Mode whose effects list contains a LookAtTopEffect must
+    deserialise back to the same concrete type via the Effect
+    discriminated union."""
+    mode = Mode(
+        kind="cast",
+        cost=Cost(),
+        effects=[LookAtTopEffect(n=3, accepts_land=True, accepts_nonland=False)],
+    )
+    dumped = mode.model_dump()
+    reloaded = Mode.model_validate(dumped)
+    assert isinstance(reloaded.effects[0], LookAtTopEffect)
+    assert reloaded.effects[0].n == 3
+    assert reloaded.effects[0].accepts_land is True
+    assert reloaded.effects[0].accepts_nonland is False
