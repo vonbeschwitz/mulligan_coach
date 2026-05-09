@@ -19,7 +19,7 @@ from typing import Annotated, Any
 
 import typer
 
-from .loader import filter_cards, load_all_cards
+from .loader import filter_cards, load_all_cards, load_arena_id_index
 from .models import ParsedCard, ParseStatus
 from .parser import parse_card
 from .store import (
@@ -304,6 +304,11 @@ def run_detector(
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     log.info("Loading Scryfall snapshot…")
     all_cards = load_all_cards(data_root)
+    log.info("Loading MTGJSON arena_id index…")
+    # One-shot load — the file is ~120 MiB and parsing it per set would
+    # be silly. Build once, reuse across every parse_card call below.
+    arena_id_index = load_arena_id_index(data_root)
+    log.info("MTGJSON arena_id index covers %d printings.", len(arena_id_index))
     set_codes = _parse_set_list(sets)
     if not set_codes:
         typer.echo("No set codes provided. Aborting.")
@@ -319,7 +324,7 @@ def run_detector(
         if not pool:
             typer.echo(f"\n[{code}] no cards found in Scryfall snapshot — skipping.")
             continue
-        freshly_parsed = [parse_card(card) for card in pool]
+        freshly_parsed = [parse_card(card, arena_id_index=arena_id_index) for card in pool]
         merged, n_preserved, n_rewritten = merge_detector_run(
             code,
             freshly_parsed,

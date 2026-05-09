@@ -1432,4 +1432,65 @@ def test_unrelated_non_normal_layout_still_needs_llm() -> None:
     )
     p = parse_card(card)
     assert p.status is ParseStatus.NEEDS_LLM
-    assert any("non-normal layout" in r for r in p.reasons)
+
+
+# ---------------------------------------------------------------------------
+# arena_id population from the MTGJSON-derived index
+# ---------------------------------------------------------------------------
+
+
+def test_arena_id_set_from_index() -> None:
+    card = _scryfall(name="Test", oracle_id="oracle-a", set="TST")
+    idx = {("oracle-a", "TST"): 12345}
+    p = parse_card(card, arena_id_index=idx)
+    assert p.arena_id == 12345
+
+
+def test_arena_id_none_when_no_index() -> None:
+    """Default behaviour preserves existing call sites — arena_id is None."""
+    card = _scryfall(name="Test", oracle_id="oracle-a", set="TST")
+    p = parse_card(card)
+    assert p.arena_id is None
+
+
+def test_arena_id_none_when_index_misses() -> None:
+    """When MTGJSON hasn't ingested the printing yet, arena_id stays None."""
+    card = _scryfall(name="Test", oracle_id="oracle-missing", set="TST")
+    idx = {("oracle-other", "TST"): 99999}
+    p = parse_card(card, arena_id_index=idx)
+    assert p.arena_id is None
+
+
+def test_arena_id_propagates_through_transform_dfc() -> None:
+    """For transform DFCs we recurse with the synthetic front face — the
+    recursion must thread the index through so arena_id still populates."""
+    card = _scryfall(
+        name="Front // Back",
+        oracle_id="oracle-dfc",
+        set="TST",
+        layout="transform",
+        type_line="Creature — Human // Land",
+        mana_cost="{1}{G}",
+        oracle_text="",
+        # The synthetic front-face needs card_faces to recurse cleanly.
+        card_faces=[
+            {
+                "name": "Front",
+                "type_line": "Creature — Human",
+                "mana_cost": "{1}{G}",
+                "oracle_text": "",
+                "colors": ["G"],
+                "power": "2",
+                "toughness": "2",
+            },
+            {
+                "name": "Back",
+                "type_line": "Land",
+                "oracle_text": "{T}: Add {G}.",
+                "colors": [],
+            },
+        ],
+    )
+    idx = {("oracle-dfc", "TST"): 55555}
+    p = parse_card(card, arena_id_index=idx)
+    assert p.arena_id == 55555

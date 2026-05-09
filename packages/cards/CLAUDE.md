@@ -31,6 +31,9 @@ src/mulligan_coach_cards/
 ├── parser.py                    # Deterministic Scryfall → ParsedCard
 ├── store.py                     # Persistent per-set ParsedCard JSON + merge_detector_run
 ├── loader.py                    # Reads data/raw/scryfall/oracle_cards.<date>.json
+│                                # + load_arena_id_index() reading MTGJSON AllIdentifiers.json
+├── seventeenlands_stats.py      # SeventeenLandsStats + StatsLookup + load_premier_draft_stats:
+│                                # parquet → typed per-card 17Lands aggregates with three-tier match
 └── cli.py                       # `mulligan-coach-cards` typer app: parse-demo, run-detector,
                                  # list-needs-llm, mark
 scripts/                         # Dev helpers: summarize_batch, apply_patches,
@@ -42,7 +45,9 @@ scripts/                         # Dev helpers: summarize_batch, apply_patches,
 `ParsedCard` carries:
 
 * **Identity**: `name`, `set_code`, `collector_number`, `oracle_id`,
-  `rarity`, `raw_oracle_text`.
+  `arena_id` (the MTGA card ID — primary join key for 17Lands stats and
+  Arena log events; `None` when MTGJSON hasn't yet ingested the
+  printing), `rarity`, `raw_oracle_text`.
 * **Type system**: `type_line`, `types: list[str]`, `subtypes: list[str]`,
   `supertypes: list[str]`. Multi-typed cards (Artifact Creature) get all
   applicable types.
@@ -166,6 +171,55 @@ Categories (per design):
 
 A card may set multiple flags (Artifact Creature Vehicle = creature +
 vehicle, etc.). Categories are not mutually exclusive.
+
+## 17Lands stats
+
+Per-card 17Lands aggregate statistics live in
+`seventeenlands_stats.py`, separate from `ParsedCard`. The split is
+deliberate: card structure changes rarely (only when the parser is
+extended), but format stats refresh weekly — keeping them in different
+files means a stats refresh doesn't churn the persisted ParsedCard
+JSON.
+
+Public surface:
+
+* `SeventeenLandsStats` — Pydantic model whose field names mirror the
+  17Lands JSON schema one-for-one (no renaming). Win-rate / ALSA / ATA
+  / play-rate fields are `float | None` because 17Lands publishes
+  `null` for cards with too few games to compute a meaningful rate.
+  Game-count fields are always populated.
+* `StatsLookup` — frozen dataclass with `by_arena_id: dict[int, ...]`,
+  `by_name: dict[str, ...]`, and a `match(card)` helper that runs a
+  three-tier fallback: arena_id → exact name → front-face name (split
+  on `" // "`). The front-face fallback catches DFCs whose
+  `ParsedCard.name` is the joint `Front // Back` form while 17Lands
+  uses the front face only.
+* `load_premier_draft_stats(set_code, *, data_root=None) -> StatsLookup`
+  — reads
+  `data/processed/seventeenlands/ratings/<SET>/PremierDraft.parquet`
+  and returns the lookup with both indices populated.
+* `ratings_parquet_path(set_code, event_type='PremierDraft', data_root=None)`
+  — canonical path resolver. Set codes are upper-cased.
+
+This module deliberately contains **only raw fields**. Derived
+features (earliness score, sample-size shrunk WRs, z-scores within
+format) belong in the future `packages/model/` — keeping that boundary
+clear means the cards package stays focused on "represent the cards".
+
+Join key sourcing — `arena_id` (a.k.a. MTGA ID) on `ParsedCard` is
+populated at parse time from a `(scryfall_oracle_id, set_code) -> mtga_id`
+index built by `loader.load_arena_id_index()` from
+`data/raw/mtgjson/AllIdentifiers.json`. MTGJSON lags very-new sets by
+a few weeks, so newly-released sets may have `arena_id=None` on every
+card until MTGJSON catches up — the three-tier fallback in `match()`
+keeps things working in the meantime via name canonicalisation.
+`merge_detector_run` carries fresh `arena_id` values forward onto
+preserved (LLM_ENCODED / NEEDS_HUMAN) entries on every detector run,
+so the next run after an MTGJSON refresh picks up the IDs without a
+forced re-encode.
+
+Premier Draft only in v1: Sealed / TradDraft / TradSealed parquets
+exist on disk but aren't exposed; add a parameter when needed.
 
 ## Parser layering
 

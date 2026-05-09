@@ -82,6 +82,76 @@ def load_all_cards(data_root: Path | None = None) -> list[dict[str, Any]]:
     return data
 
 
+def load_arena_id_index(
+    data_root: Path | None = None,
+) -> dict[tuple[str, str], int]:
+    """Build a ``(scryfall_oracle_id, set_code) -> mtga_id`` index from MTGJSON.
+
+    Reads ``<data_root>/raw/mtgjson/AllIdentifiers.json`` (downloaded by
+    the data-download package) and joins ``identifiers.scryfallOracleId``
+    to ``int(identifiers.mtgArenaId)``. Records without one of those two
+    fields are skipped — typical reasons:
+
+    * The card has never been printed on Arena (paper-only / digital-only
+      products): no ``mtgArenaId``.
+    * Tokens / art-series / non-game records: no ``scryfallOracleId``.
+    * Very new sets where MTGJSON hasn't yet ingested Arena IDs (TLA today
+      is in this state): all entries skipped, the index returns no rows
+      for that ``set_code``.
+
+    The (oracle_id, set_code) compound key avoids collisions when a card
+    is reprinted across sets — Arena assigns a fresh ``mtga_id`` per
+    printing, and we want the printing matching the format we're parsing.
+
+    First-write-wins on collisions within a (oracle_id, set_code) pair
+    (different art treatments of the same card share both keys but get
+    distinct mtga_ids in Arena). 17Lands' aggregate stats collapse art
+    treatments, and the loader's name-based fallback backstops cases
+    where the chosen mtga_id doesn't match 17Lands' canonical pick.
+
+    Loading is one-shot — call once per CLI invocation and pass the
+    resulting dict to :func:`mulligan_coach_cards.parser.parse_card`.
+    The file is large (~120 MiB) so building the index takes a few
+    seconds; doing it per-card would be unworkable.
+    """
+    path = (data_root or _data_root()) / "raw" / "mtgjson" / "AllIdentifiers.json"
+    if not path.exists():
+        raise FileNotFoundError(
+            f"MTGJSON AllIdentifiers not found at {path}. "
+            f"Run 'mulligan-coach-data refresh-mtgjson' first."
+        )
+    with path.open(encoding="utf-8") as f:
+        raw: Any = json.load(f)
+    # Top-level shape is ``{"meta": ..., "data": {uuid: record, ...}}``.
+    cards = raw.get("data", raw) if isinstance(raw, dict) else raw
+    if not isinstance(cards, dict):
+        raise RuntimeError(
+            f"Unexpected MTGJSON shape at {path}: top-level 'data' is "
+            f"{type(cards).__name__}, expected dict"
+        )
+
+    index: dict[tuple[str, str], int] = {}
+    for record in cards.values():
+        if not isinstance(record, dict):
+            continue
+        idents = record.get("identifiers") or {}
+        oracle_id = idents.get("scryfallOracleId")
+        mtga_id_raw = idents.get("mtgArenaId")
+        set_code = record.get("setCode")
+        if not (oracle_id and mtga_id_raw and set_code):
+            continue
+        try:
+            mtga_id = int(mtga_id_raw)
+        except (TypeError, ValueError):
+            continue
+        key = (str(oracle_id), str(set_code).upper())
+        # setdefault preserves the first-write-wins semantic. The dict
+        # iteration order is whatever MTGJSON wrote, but for our purposes
+        # any consistent winner is fine — see docstring caveat.
+        index.setdefault(key, mtga_id)
+    return index
+
+
 def filter_cards(
     cards: Iterable[dict[str, Any]],
     *,

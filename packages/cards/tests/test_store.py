@@ -33,6 +33,7 @@ def _make_card(
     oracle_id: str,
     status: ParseStatus = ParseStatus.AUTO,
     role_features: RoleFeatures | None = None,
+    arena_id: int | None = None,
 ) -> ParsedCard:
     """Build a minimal ParsedCard for store tests."""
     return ParsedCard(
@@ -40,6 +41,7 @@ def _make_card(
         set_code="TST",
         collector_number=collector_number,
         oracle_id=oracle_id,
+        arena_id=arena_id,
         rarity="common",
         raw_oracle_text="",
         type_line="Creature — Human",
@@ -355,3 +357,96 @@ def test_merge_drops_orphans_no_longer_in_fresh(tmp_path: Path) -> None:
     ]
     merged, _, _ = merge_detector_run("TST", fresh, data_root=tmp_path)
     assert [c.oracle_id for c in merged] == ["oracle-new"]
+
+
+# ---------------------------------------------------------------------------
+# arena_id carry-forward on merge
+# ---------------------------------------------------------------------------
+
+
+def test_merge_carries_fresh_arena_id_onto_preserved_entry(tmp_path: Path) -> None:
+    """When a preserved LLM_ENCODED entry's arena_id is None and the fresh
+    parse has it, the merge should populate it. This is the path used when
+    MTGJSON catches up with a new set after the LLM has already encoded it.
+    """
+    existing = [
+        _make_card(
+            name="Hand-encoded",
+            collector_number="1",
+            oracle_id="o1",
+            status=ParseStatus.LLM_ENCODED,
+            arena_id=None,
+        ),
+    ]
+    save_parsed_cards("TST", existing, data_root=tmp_path)
+    fresh = [
+        _make_card(
+            name="Fresh",  # would be ignored normally; arena_id should NOT be
+            collector_number="1",
+            oracle_id="o1",
+            status=ParseStatus.AUTO,
+            arena_id=12345,
+        ),
+    ]
+    merged, n_preserved, _ = merge_detector_run("TST", fresh, data_root=tmp_path)
+    assert n_preserved == 1
+    only = merged[0]
+    # LLM-encoded fields preserved.
+    assert only.name == "Hand-encoded"
+    assert only.status is ParseStatus.LLM_ENCODED
+    # arena_id carried forward from fresh.
+    assert only.arena_id == 12345
+
+
+def test_merge_does_not_blow_away_existing_arena_id_when_fresh_is_none(
+    tmp_path: Path,
+) -> None:
+    """If MTGJSON regresses (or run-detector is invoked before MTGJSON
+    refresh on a new install), don't lose an arena_id we already had."""
+    existing = [
+        _make_card(
+            name="Hand-encoded",
+            collector_number="1",
+            oracle_id="o1",
+            status=ParseStatus.LLM_ENCODED,
+            arena_id=99999,
+        ),
+    ]
+    save_parsed_cards("TST", existing, data_root=tmp_path)
+    fresh = [
+        _make_card(
+            name="Fresh",
+            collector_number="1",
+            oracle_id="o1",
+            status=ParseStatus.AUTO,
+            arena_id=None,  # MTGJSON hadn't ingested it yet
+        ),
+    ]
+    merged, _, _ = merge_detector_run("TST", fresh, data_root=tmp_path)
+    assert merged[0].arena_id == 99999
+
+
+def test_merge_does_not_modify_arena_id_when_unchanged(tmp_path: Path) -> None:
+    """No model_copy when fresh and prior agree — small efficiency check."""
+    existing = [
+        _make_card(
+            name="Hand-encoded",
+            collector_number="1",
+            oracle_id="o1",
+            status=ParseStatus.LLM_ENCODED,
+            arena_id=12345,
+        ),
+    ]
+    save_parsed_cards("TST", existing, data_root=tmp_path)
+    fresh = [
+        _make_card(
+            name="Fresh",
+            collector_number="1",
+            oracle_id="o1",
+            status=ParseStatus.AUTO,
+            arena_id=12345,
+        ),
+    ]
+    merged, _, _ = merge_detector_run("TST", fresh, data_root=tmp_path)
+    assert merged[0].arena_id == 12345
+    assert merged[0].name == "Hand-encoded"

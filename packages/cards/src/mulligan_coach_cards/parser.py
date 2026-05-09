@@ -2646,29 +2646,48 @@ def _parse_class(
 # ---------------------------------------------------------------------------
 
 
-def parse_card(card: dict[str, Any]) -> ParsedCard:
+def parse_card(
+    card: dict[str, Any],
+    *,
+    arena_id_index: dict[tuple[str, str], int] | None = None,
+) -> ParsedCard:
     """Parse a single Scryfall card dictionary into a ``ParsedCard``.
 
     The input must be a dict shaped like a row from Scryfall's bulk
     ``oracle_cards`` JSON. Any input we don't fully understand returns a
     ``ParsedCard`` with ``status=NEEDS_LLM`` and reasons explaining why —
     never an exception.
+
+    ``arena_id_index`` (optional) is a ``(oracle_id, set_code) -> mtga_id``
+    map produced by :func:`mulligan_coach_cards.loader.load_arena_id_index`.
+    When provided, the matching ``arena_id`` is set on the returned card.
+    When None, ``arena_id`` is None — fine for unit tests and for sets
+    MTGJSON hasn't ingested yet.
     """
     name = str(card.get("name", "<unknown>"))
     type_line = str(card.get("type_line", ""))
     oracle_text = str(card.get("oracle_text") or "")
     layout = str(card.get("layout", "normal"))
+    oracle_id = str(card.get("oracle_id", ""))
+    set_code = str(card.get("set", "")).upper()
 
     supertypes, types, subtypes = _parse_type_line(type_line)
     raw_keywords = [str(k).lower() for k in card.get("keywords") or []]
     evergreens = [k for k in raw_keywords if k in EVERGREEN_KEYWORDS]
 
+    # Resolve arena_id once at the top — every ParsedCard(**base) call
+    # below picks it up automatically.
+    arena_id: int | None = None
+    if arena_id_index is not None and oracle_id and set_code:
+        arena_id = arena_id_index.get((oracle_id, set_code))
+
     # Build the base dict fed to ParsedCard's constructor.
     base: dict[str, Any] = {
         "name": name,
-        "set_code": str(card.get("set", "")).upper(),
+        "set_code": set_code,
         "collector_number": str(card.get("collector_number", "")),
-        "oracle_id": str(card.get("oracle_id", "")),
+        "oracle_id": oracle_id,
+        "arena_id": arena_id,
         "rarity": str(card.get("rarity", "")),
         "raw_oracle_text": oracle_text,
         "type_line": type_line,
@@ -2688,7 +2707,7 @@ def parse_card(card: dict[str, Any]) -> ParsedCard:
     if layout == "transform":
         synthetic = _synthesize_front_face_card(card)
         if synthetic is not None:
-            result = parse_card(synthetic)
+            result = parse_card(synthetic, arena_id_index=arena_id_index)
             # Preserve display fields from the original (full DFC) card so
             # the user still sees the joint name / type line in listings.
             result.name = name
