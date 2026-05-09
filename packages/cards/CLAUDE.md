@@ -399,9 +399,12 @@ encode the chapter-I / level-1 effect.
   any-basic patterns; sea-gate-style "enters tapped unless you control
   X noncreature, nonland permanents" doesn't match yet — add a new
   Predicate kind when needed.
-* Filter mana abilities (`{T}: Add one mana of any color.`,
-  `{1}, {T}: Add one mana of any color.`) aren't recognised by
-  `_extract_taps_for` yet — White Lotus Hideout-style lands bail.
+* Conditional mana buffs encode the unconditional baseline only.
+  Raucous Audience's `{T}: Add {G}. If you control a creature with
+  power 4 or greater, add {G}{G} instead.` lands as `produces=[["G"]]`;
+  the conditional doubling is dropped because `Predicate` has no
+  "creature with power N+" kind. Adding one is a v2 task — until then,
+  the simulator slightly underestimates these cards.
 * The Aura branch's destroy/exile matcher doesn't recognise
   "Exile **enchanted** creature" (vs "Exile **target** creature");
   multi-sentence aura activations bail. Workaround in v1: aura still
