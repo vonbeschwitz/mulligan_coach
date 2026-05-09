@@ -18,6 +18,7 @@ we just record which cards need it.
 
 from __future__ import annotations
 
+from .loader import load_all_cards, load_arena_id_index
 from .mana import ManaCost, Pip, parse_mana_cost
 from .models import (
     Cost,
@@ -38,6 +39,12 @@ from .models import (
     ScryEffect,
 )
 from .parser import parse_card
+from .seventeenlands_stats import (
+    SeventeenLandsStats,
+    StatsLookup,
+    load_premier_draft_stats,
+    ratings_parquet_path,
+)
 from .store import (
     cards_by_status,
     load_parsed_cards,
@@ -67,12 +74,18 @@ __all__ = [
     "RoleFeatures",
     "SacrificeSpec",
     "ScryEffect",
+    "SeventeenLandsStats",
+    "StatsLookup",
     "cards_by_status",
+    "load_all_cards",
+    "load_arena_id_index",
     "load_parsed_cards",
+    "load_premier_draft_stats",
     "merge_detector_run",
     "parse_card",
     "parse_mana_cost",
     "parsed_cards_path",
+    "ratings_parquet_path",
     "save_parsed_cards",
     "status_histogram",
     "update_parsed_card",

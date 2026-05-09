@@ -501,6 +501,15 @@ class ParsedCard(BaseModel):
     set_code: str
     collector_number: str
     oracle_id: str
+    arena_id: int | None = Field(
+        default=None,
+        description=(
+            "MTGA card ID. The stable join key for 17Lands stats and Arena log "
+            "events. Populated from MTGJSON's AllIdentifiers.json at parse time; "
+            "None when MTGJSON hasn't yet ingested the printing (typical for "
+            "very new sets — fall back to name-based matching in that case)."
+        ),
+    )
     rarity: str
     raw_oracle_text: str = Field(
         description="The original oracle text, preserved for the LLM and for human review."

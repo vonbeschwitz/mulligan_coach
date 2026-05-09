@@ -203,6 +203,15 @@ def merge_detector_run(
         seen_oracle_ids.add(fresh.oracle_id)
         prior = by_oracle.get(fresh.oracle_id)
         if prior is not None and prior.status in preserved_statuses and not force:
+            # Carry forward structural metadata that comes from external
+            # sources (MTGJSON), not from the LLM's oracle-text encoding.
+            # arena_id should track the upstream MTGJSON value regardless of
+            # the preserved entry's encoding status. Only update when the
+            # fresh parse has a non-None value, so an MTGJSON regression
+            # (e.g. running run-detector before MTGJSON has been refreshed)
+            # doesn't blow away an existing arena_id.
+            if fresh.arena_id is not None and prior.arena_id != fresh.arena_id:
+                prior = prior.model_copy(update={"arena_id": fresh.arena_id})
             merged.append(prior)
             n_preserved += 1
         else:
