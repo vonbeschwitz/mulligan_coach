@@ -60,9 +60,7 @@ def _row(**overrides: Any) -> dict[str, Any]:
     return base
 
 
-def _write_ratings_parquet(
-    data_root: Path, set_code: str, rows: list[dict[str, Any]]
-) -> Path:
+def _write_ratings_parquet(data_root: Path, set_code: str, rows: list[dict[str, Any]]) -> Path:
     """Write a hand-rolled parquet at the canonical location for tests."""
     path = ratings_parquet_path(set_code, "PremierDraft", data_root=data_root)
     path.parent.mkdir(parents=True, exist_ok=True)

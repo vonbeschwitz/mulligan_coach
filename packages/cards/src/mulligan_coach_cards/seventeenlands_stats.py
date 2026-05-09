@@ -215,9 +215,7 @@ class StatsLookup:
         return None
 
 
-def load_premier_draft_stats(
-    set_code: str, *, data_root: Path | None = None
-) -> StatsLookup:
+def load_premier_draft_stats(set_code: str, *, data_root: Path | None = None) -> StatsLookup:
     """Load all PremierDraft 17Lands stats for ``set_code``.
 
     Returns a :class:`StatsLookup` indexed by both ``mtga_id`` and card
@@ -244,9 +242,7 @@ def load_premier_draft_stats(
     try:
         path_literal = "'" + path.as_posix().replace("'", "''") + "'"
         rows: list[dict[str, Any]] = (
-            con.execute(f"SELECT * FROM read_parquet({path_literal})")
-            .to_arrow_table()
-            .to_pylist()
+            con.execute(f"SELECT * FROM read_parquet({path_literal})").to_arrow_table().to_pylist()
         )
     finally:
         con.close()
