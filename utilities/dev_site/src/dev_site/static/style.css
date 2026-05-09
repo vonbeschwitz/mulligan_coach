@@ -1,0 +1,79 @@
+/* Minimal styling for the dev-utilities landing page.
+ * Matches the look-and-feel of card-viewer and simulation-viewer so the
+ * three pages don't feel jarring as you navigate between them. */
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  margin: 0;
+  background: #fafafa;
+  color: #222;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.muted { color: #777; }
+
+/* ------- topbar (matches existing utilities) ------- */
+.topbar {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.6rem 1rem;
+  background: #1f2937;
+  color: white;
+}
+.topbar .brand {
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+}
+.topbar .muted { color: #94a3b8; }
+
+main { padding: 1rem; }
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.page h1 {
+  margin: 0.4rem 0 0.6rem 0;
+}
+
+/* ------- tiles ------- */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.tile {
+  display: block;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.2rem 1.4rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+.tile:hover {
+  border-color: #6366f1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.tile h2 {
+  margin: 0 0 0.4rem 0;
+  font-size: 18px;
+  color: #1f2937;
+}
+.tile p {
+  margin: 0;
+  color: #555;
+}

@@ -16,7 +16,7 @@
   #}
   <aside class="sidebar">
     <form id="filters"
-          hx-get="/search"
+          hx-get="{{ url_for('search') }}"
           hx-trigger="change, keyup delay:200ms from:input[name=q], load"
           hx-target="#results"
           hx-push-url="false">

@@ -19,13 +19,15 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from importlib.resources import files
-from typing import Annotated
+from typing import Annotated, Any
 
+import jinja2
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.datastructures import URL, URLPath
 
 from .data import CardStore, image_url
 from .filters import (
@@ -74,6 +76,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Mulligan Coach — card encoding viewer", lifespan=lifespan)
 templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+
+# Starlette's default Jinja ``url_for`` global calls ``request.url_for``,
+# which resolves against ``scope["router"]``. That key is set by the
+# OUTERMOST router (the umbrella, when this app is mounted under dev_site)
+# and never overwritten when mounted sub-apps process the request. So a
+# sub-app's ``url_for("index")`` collides with sibling sub-apps that share
+# a route name and the umbrella iterates mounts in registration order,
+# returning whichever sibling won the race. Override the Jinja global to
+# always query THIS app's router, producing correct links in both
+# standalone and mounted modes.
+#
+# We have to prepend ``scope["root_path"]`` ourselves: ``request.base_url``
+# uses ``app_root_path`` (the OUTERMOST app's root, empty for the umbrella)
+# rather than the mount prefix, so ``URLPath.make_absolute_url`` alone
+# doesn't include it.
+@jinja2.pass_context
+def _app_url_for(context: Any, name: str, /, **path_params: Any) -> URL:
+    request: Request = context["request"]
+    url_path = request.app.url_path_for(name, **path_params)
+    root_path = request.scope.get("root_path", "")
+    prefixed = URLPath(
+        root_path + str(url_path),
+        protocol=url_path.protocol,
+        host=url_path.host,
+    )
+    return prefixed.make_absolute_url(base_url=request.base_url)
+
+
+templates.env.globals["url_for"] = _app_url_for
 
 
 @app.get("/", response_class=HTMLResponse)

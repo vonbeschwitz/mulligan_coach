@@ -9,14 +9,25 @@ recommendation pipeline.
 
 ## Run it
 
-From the workspace root:
+The simulation-viewer is normally launched from the unified [dev-site
+umbrella](../dev_site/README.md), which also serves the card-viewer at
+the same time:
 
 ```
 uv sync
+uv run dev-site
+```
+
+Then open <http://127.0.0.1:8000/simulation-viewer/> in a browser.
+
+To run *just* the simulation-viewer standalone (e.g. while debugging
+this utility in isolation), use its own console script:
+
+```
 uv run simulation-viewer
 ```
 
-Then open <http://127.0.0.1:8000> in a browser.
+That binds <http://127.0.0.1:8000/> directly with no URL prefix.
 
 By default it loads every set with a file in
 `data/processed/parsed_cards/` (currently TMT, ECL, TLA). Override via
