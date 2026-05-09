@@ -11,14 +11,25 @@ recommendation pipeline.
 
 ## Run it
 
-From the workspace root:
+The card-viewer is normally launched from the unified [dev-site
+umbrella](../dev_site/README.md), which also serves the
+simulation-viewer at the same time:
 
 ```
 uv sync
+uv run dev-site
+```
+
+Then open <http://127.0.0.1:8000/card-viewer/> in a browser.
+
+To run *just* the card-viewer standalone (e.g. while debugging this
+utility in isolation), use its own console script:
+
+```
 uv run card-viewer
 ```
 
-Then open <http://127.0.0.1:8000> in a browser.
+That binds <http://127.0.0.1:8000/> directly with no URL prefix.
 
 By default it loads the current Premier-Draft sets (TMT, ECL, TLA — about
 740 cards). Override via env var:

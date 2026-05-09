@@ -23,7 +23,7 @@
                 rows="14"
                 placeholder="Deck&#10;17 Mountain (TLA) 270&#10;4 Goblin (TLA) 100&#10;..."
                 spellcheck="false"
-                hx-post="/validate"
+                hx-post="{{ url_for('validate') }}"
                 hx-trigger="input changed delay:300ms"
                 hx-target="#validation"
                 hx-include="#decksim"></textarea>
@@ -47,7 +47,7 @@
 
         <div class="hand-controls">
           <button type="button"
-                  hx-post="/hand"
+                  hx-post="{{ url_for('hand') }}"
                   hx-target="#hand"
                   hx-include="#decksim"
                   hx-vals='{"action":"random"}'>
@@ -60,7 +60,7 @@
                  placeholder="Card name (autocomplete from deck)"
                  autocomplete="off">
           <button type="button"
-                  hx-post="/hand"
+                  hx-post="{{ url_for('hand') }}"
                   hx-target="#hand"
                   hx-include="#decksim"
                   hx-vals='{"action":"add"}'>
@@ -81,7 +81,7 @@
       </fieldset>
       <button type="button"
               class="primary"
-              hx-post="/simulate"
+              hx-post="{{ url_for('simulate') }}"
               hx-target="#trace"
               hx-include="#decksim">
         Run one simulation

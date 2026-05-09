@@ -11,7 +11,7 @@
   <div class="grid">
     {% for e in entries %}
       <a class="tile"
-         href="/card/{{ e.parsed.set_code }}/{{ e.parsed.collector_number }}">
+         href="{{ url_for('card_detail', set_code=e.parsed.set_code, collector_number=e.parsed.collector_number) }}">
         {% set img = image_url(e, "small") %}
         {% if img %}
           <img loading="lazy" src="{{ img }}" alt="{{ e.parsed.name }}">

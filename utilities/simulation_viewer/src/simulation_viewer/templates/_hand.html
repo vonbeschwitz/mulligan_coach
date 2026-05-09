@@ -20,7 +20,7 @@
         <button type="button"
                 class="hand-chip-remove"
                 title="Remove from hand"
-                hx-post="/hand"
+                hx-post="{{ url_for('hand') }}"
                 hx-target="#hand"
                 hx-include="#decksim"
                 hx-vals='{"action":"remove","index":{{ entry.index }}}'>
@@ -38,7 +38,7 @@
 
 <div class="hand-controls">
   <button type="button"
-          hx-post="/hand"
+          hx-post="{{ url_for('hand') }}"
           hx-target="#hand"
           hx-include="#decksim"
           hx-vals='{"action":"random"}'>
@@ -51,7 +51,7 @@
          placeholder="Card name (autocomplete from deck)"
          autocomplete="off">
   <button type="button"
-          hx-post="/hand"
+          hx-post="{{ url_for('hand') }}"
           hx-target="#hand"
           hx-include="#decksim"
           hx-vals='{"action":"add"}'>

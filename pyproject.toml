@@ -43,6 +43,7 @@ dependencies = [
     # it, so dev utilities here can't leak into a downstream wheel.
     "card-viewer",
     "simulation-viewer",
+    "dev-site",
 ]
 
 [tool.uv]
@@ -66,6 +67,7 @@ mulligan-coach-cards = { workspace = true }
 mulligan-coach-simulation = { workspace = true }
 card-viewer = { workspace = true }
 simulation-viewer = { workspace = true }
+dev-site = { workspace = true }
 
 # PEP 735 dependency groups. `dev` is installed by `uv sync` by default.
 [dependency-groups]
@@ -122,6 +124,7 @@ mypy_path = [
     "packages/simulation/src",
     "utilities/card_viewer/src",
     "utilities/simulation_viewer/src",
+    "utilities/dev_site/src",
 ]
 files = ["packages", "utilities"]
 

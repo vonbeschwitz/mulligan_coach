@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page">
+  <h1>Dev utilities</h1>
+  <p class="muted">
+    Local tools for visually verifying parts of the Mulligan Coach
+    recommendation pipeline. Each tile opens the full utility under a
+    URL prefix.
+  </p>
+
+  <div class="tiles">
+    {#
+      Mount prefixes come from the MOUNTS dict in app.py — same source of
+      truth used to register the mounts. Trailing slash so the sub-app's
+      lifespan-loaded index page (e.g. /card-viewer/) is reached cleanly.
+    #}
+    <a class="tile" href="{{ mounts.card_viewer.prefix }}/">
+      <h2>{{ mounts.card_viewer.label }}</h2>
+      <p>
+        Browse the parser's <code>ParsedCard</code> output side-by-side
+        with the actual Scryfall card image. Filter by parser status,
+        color, role flag, mode kind, and more.
+      </p>
+    </a>
+
+    <a class="tile" href="{{ mounts.simulation_viewer.prefix }}/">
+      <h2>{{ mounts.simulation_viewer.label }}</h2>
+      <p>
+        Step through one Monte Carlo trace turn by turn. Paste a
+        decklist, build an opening hand, and run a single goldfish to
+        see exactly what the simulator does on turns 1&ndash;4.
+      </p>
+    </a>
+  </div>
+</div>
+
+{% endblock %}
