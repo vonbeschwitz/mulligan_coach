@@ -229,9 +229,59 @@ or test log-loss is overstated. The trade-off is slightly noisier
 baseline coefficients (~70% of the rows instead of 100%) — at
 ~700k training rows the difference is negligible.
 
-## What's deferred to later PRs
+## PR 5 — `inference.py`
 
-* **Inference + recommendation.** PR 5.
+The single model-side interface that the website (PR 6) and
+overlay (PR 7) consume.
+
+* `ModelBundle.load(model_dir)` — load all four artifacts from a
+  saved directory. `ModelBundle.from_train_result(result)` for
+  the in-process path.
+* `predict_win_probability(bundle, hand, deck, on_the_play,
+  mulligan_number, opp_mulligan_number, event_type, set_code,
+  shrunk, zscores, n_sims, seed)` — single-hand prediction.
+  Returns a calibrated probability in `[0, 1]`. Runs the same
+  pipeline training used: simulate -> build_feature_row -> baseline
+  margin -> XGBoost -> isotonic.
+* `recommend(bundle, ..., n_mulligan_samples=30)` -> `Recommendation`
+  — compares `P(win | keep)` vs `P(win | mulligan-to-(N+1))`.
+  The mulligan arm is a Monte Carlo over fresh 7-card draws from
+  the shuffled deck; the verdict is "keep" iff the keep arm wins
+  (ties resolve to keep).
+
+### Baseline cancellation at inference
+
+User-skill buckets aren't passed to inference — we don't query
+17Lands at runtime. The baseline's
+`margin(None, None, on_play, opp_mull)` path uses the precomputed
+population marginal for the on-play cell. Both arms of the
+recommend comparison see the SAME baseline (same context), so
+the baseline term cancels and the verdict reflects only the
+XGBoost delta.
+
+### NaN handling for missing features
+
+`_predict_proba` defaults missing feature columns to `np.nan` so a
+ParsedCard set whose feature builder doesn't emit some
+column (e.g. an older parser run) doesn't crash an inference
+call against a newer model — XGBoost uses NaN as missing and
+routes it according to the trained tree splits.
+
+## End-to-end verification
+
+After all five PRs merge, the full pipeline runs as:
+
+1. `materialize_feature_matrix(set_code="TLA", ...)` — build the
+   slim feature parquet for TLA Premier Draft.
+2. `train_model(parquet_paths=[...], output_dir="models/v1")` —
+   fit baseline + XGBoost + isotonic; save the four artifacts.
+3. `bundle = ModelBundle.load("models/v1")` — load for inference.
+4. `recommend(bundle, hand=..., deck=..., ...)` — get a keep/mull
+   verdict on a hand.
+
+The `tests/test_inference.py::test_recommend_produces_valid_recommendation`
+integration test exercises 1-4 end-to-end on synthetic data; it's
+the canonical proof that the pipeline composes correctly.
 
 ## Tests
 
