@@ -1,0 +1,160 @@
+# model — Claude instructions
+
+## Purpose
+
+XGBoost mulligan-recommendation model. Consumes the upstream
+feature row built by `packages/features` and the simulator's
+per-row castability aggregates, predicts P(win | this hand,
+context), and compares keep vs. mulligan to produce the
+recommendation.
+
+Five logical layers, landing as five sequential PRs:
+
+```
+src/mulligan_coach_model/
+├── training_rows.py    # PR 1 (this PR): DuckDB games view -> TrainingRow tuples
+├── feature_matrix.py   # PR 2: simulate() + build_feature_row -> slim parquet cache
+├── baseline.py         # PR 3: saturated-cell logistic regression -> base_margin
+├── train.py            # PR 4: XGBoost fit + isotonic calibration + serialization
+└── inference.py        # PR 5: predict(...) -> P(win) + recommend(...) keep-vs-mull
+```
+
+## Why residualize on context
+
+The 17Lands game data carries strong context signals (player skill
+bucket, opponent mulligan count) that are predictive of game
+outcome but mostly orthogonal to the mulligan decision itself. We
+strip that variance out via XGBoost's ``base_margin`` mechanism: a
+logistic-regression baseline predicts a per-row logit offset; the
+gradient-boosted ensemble learns the *delta* on top of it. The
+output remains a calibrated probability, and the keep-vs-mull
+comparison is invariant to the per-player skill term (it cancels in
+the comparison).
+
+## PR 1 — `training_rows.py`
+
+Pure data-prep. Reads the unified `games` view (set up by
+`packages/data-download/.../seventeenlands/duckdb_views.py`) and
+emits one :class:`TrainingRow` per game with:
+
+* `hand` — a tuple of 7 `ParsedCard` instances reconstructed from
+  the `opening_hand_<NAME>` columns. The 17Lands London-mulligan
+  convention is that this is the *pre-bottom* draw; the actual
+  cards the player bottomed are not recorded. Downstream feature
+  building treats this as the hand and passes `mulligan_number` as
+  a separate context feature.
+* `deck` — a tuple of 40 `ParsedCard` instances reconstructed from
+  the `deck_<NAME>` columns. Includes the hand cards.
+* Context: `on_the_play`, `mulligan_number`, `opp_mulligan_number`,
+  `expansion`, `event_type`, `draft_id`, `game_number`, `won`.
+* Coarsened user-skill buckets: `user_wr_bucket` (5 bins +
+  "unknown") and `user_n_games_bucket` (5 bins + "unknown"). Five
+  bins is the size the saturated-cell baseline can support with
+  ~1M training rows without going hollow.
+
+### Card-name reconstruction
+
+The 17Lands columns use card names directly. We match via a
+per-set lookup built from
+:func:`mulligan_coach_cards.load_parsed_cards(set_code)`, augmented
+with:
+
+* **DFC front-face fallback.** `ParsedCard.name` for a DFC is the
+  joint `"Front // Back"` form; 17Lands columns use the front-face
+  name only. `build_name_lookup` indexes both keys.
+* **Synthesised basic lands.** Basics live in Scryfall's main bulk,
+  not the per-set parsed-cards JSON, so we synthesise them on the
+  fly with the same shape used by
+  `packages/features/tests/_factories.py:basic`. The simulator only
+  needs `RoleFeatures(is_land=True)` plus the single `ManaAbility`
+  for these to work.
+
+Names that resolve to neither cause the row to be skipped (logged
+via :class:`TrainingRowStats.unknown_card_names`).
+
+### Row-quality filters
+
+A row is dropped when:
+
+* The SQL filter (`expansion = ? AND event_type = ?`) eliminates
+  it. Wrong set / event type is the dominant case.
+* Required context columns are NULL (`won`, `draft_id`, etc.).
+* `num_mulligans` is outside `[0, 6]` (data quirks: we observed 2
+  rows with `num_mulligans=7` across ~1.1M games).
+* `hand_size != 7` or `deck_size != 40` (data corruption).
+* Any non-zero deck or opening_hand card name is absent from the
+  lookup (truly unknown card — likely a 17Lands column from a
+  different set that bled in via `union_by_name=True`).
+
+Drop counts and per-name unknown-card frequencies are accumulated
+on the caller's :class:`TrainingRowStats` instance for audit.
+
+### Why a streaming iterator
+
+The wide `games` view has ~1700 deck / opening_hand columns. A
+plain SELECT into pandas materialises tens of GB of NULL-padded
+cells. The iterator uses ``cursor.fetchmany(batch_size=1000)`` so
+memory stays bounded; the trade-off is one Python-level scan of
+the row's wide column tuple per game, which is fast enough for
+~1M rows per format.
+
+## What's deferred to later PRs
+
+* **Feature materialisation.** PR 2 turns each :class:`TrainingRow`
+  into a feature parquet row by running the Monte Carlo simulator
+  and the 200-column `build_feature_row`. That step caches its
+  output to `data/processed/model_training/<EXPANSION>/<EVENT_TYPE>.parquet`
+  (gitignored) so model experiments can re-fit without re-running
+  the slow simulator.
+* **Baseline + XGBoost + calibration.** PR 3 / 4.
+* **Inference + recommendation.** PR 5.
+
+## Tests
+
+```
+uv run pytest packages/model
+```
+
+Tests build an in-memory DuckDB ``games`` view from column-oriented
+dicts (no parquet I/O, no parsed_cards-JSON dependency) and exercise
+the iterator against hand-built rows. Bucketing helpers are
+parametrised directly.
+
+## Decisions locked in
+
+* **Approach B with `base_margin` residualization** (logistic
+  baseline on context buckets; XGBoost predicts the delta).
+* **Saturated cell baseline** for `(user_wr_bucket x
+  user_n_games_bucket x on_the_play)` rather than additive main
+  effects — captures the interaction between win rate and number
+  of games (low-N high-WR players should shrink more than low-N
+  low-WR players; opposite directions of shrinkage can't be one
+  constant additive coefficient).
+* **`opp_mulligan_count_if_known` as a conditional feature** —
+  missing on the play, value on the draw, using XGBoost's native
+  missing-value handling. Conceptually two roles: appears in the
+  baseline for residualization (both info sets) AND as a feature
+  only on the draw.
+* **Single unified multi-format model** — `set_code` is a feature
+  in the row; all formats train together.
+* **Slim feature parquet cache** — features + label + context only.
+* **Grouped train/val/calibration/test split by `draft_id`** —
+  prevents same-draft leakage in CV.
+* **Isotonic calibration on a separate held-out split** — for
+  displaying probabilities the user can trust.
+
+## Known limitations
+
+* The hand surfaced from 17Lands is the **pre-bottom 7-card draw**,
+  not the post-bottom 7-N hand the player actually started the
+  game with. The model treats this as the hand and `mulligan_number`
+  as context — implicitly learning "with 2 mulligans, only 5 of
+  these 7 were actually playable." This is the best we can do
+  with the 17Lands data shape; 17Lands doesn't record which
+  cards were bottomed.
+* MTGJSON's arena_id lag affects all three current sets (TLA, ECL,
+  TMT have ``arena_id=None`` on every ParsedCard). The downstream
+  feature builder's `avg_*_wr_of_*` / Z-bucket-count features fall
+  to 0 as a result. The model still trains (per-card features are
+  a small fraction of the 200) but per-card signal is weak until
+  MTGJSON catches up.
