@@ -6,7 +6,7 @@ needs are re-exported here.
 """
 
 from .monte_carlo import iter_traces, simulate
-from .stats import AggregateStats, CardStats, ModeStats
+from .stats import AggregateStats, CardStats, GameLevelStats, ModeStats, aggregate_game_level
 from .trace import (
     ActionEvent,
     CastabilityRecord,
@@ -29,6 +29,7 @@ __all__ = [
     "CastabilityRecord",
     "DeckEncodingError",
     "DrawEvent",
+    "GameLevelStats",
     "GameTrace",
     "InstanceOutcome",
     "LandDropEvent",
@@ -37,6 +38,7 @@ __all__ = [
     "ScryEvent",
     "SpellCastEvent",
     "TurnSnapshot",
+    "aggregate_game_level",
     "check_deck_encodings",
     "iter_traces",
     "pretty_print",

@@ -51,9 +51,19 @@ class TurnSnapshot(BaseModel):
     Aggregated across games and turns, the ``castability`` rows feed
     the per-card aggregate stats. ``aggregate_castable`` is the
     per-card "any mode castable" rollup, useful for quick lookups.
+
+    ``lands_in_play_after_drop`` and ``mana_sources_at_start_of_main``
+    are set by the engine after each turn's land drop, and feed the
+    game-level "did you make your Nth land drop?" / "how much mana
+    did you have?" aggregates downstream.
+
+    Turn 5 is a partial snapshot — the engine runs only draw + land
+    drop on turn 5, so ``castability`` / ``aggregate_castable`` are
+    empty there. It exists solely so ``p_land_drop_by_turn_5`` is
+    computable without extending the full turn pipeline.
     """
 
-    turn: int = Field(ge=1, le=4)
+    turn: int = Field(ge=1, le=5)
     cards_drawn: list[str] = Field(
         default_factory=list, description="Names drawn this turn (empty for turn 1 on the play)."
     )
@@ -61,6 +71,25 @@ class TurnSnapshot(BaseModel):
     aggregate_castable: dict[int, bool] = Field(
         default_factory=dict,
         description="instance_id → 'any hand-mode castable this turn'",
+    )
+    lands_in_play_after_drop: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Number of lands on the battlefield after this turn's land drop "
+            "(or after the choice to skip it). Used by the game-level "
+            "``p_land_drop_by_turn`` aggregate."
+        ),
+    )
+    mana_sources_at_start_of_main: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Lands plus non-creature mana permanents plus non-summoning-sick "
+            "mana dorks on the battlefield, at start of main phase after this "
+            "turn's land drop. Feeds ``expected_mana_count_turn`` downstream. "
+            "Always zero on turn 5 (the lookahead step doesn't track mana use)."
+        ),
     )
 
 

@@ -101,14 +101,16 @@ def simulate_one_game(
             if mode_record.first_castable_turn == _NEVER:
                 mode_record.first_castable_turn = turn
 
-        turn_snapshots.append(
-            TurnSnapshot(
-                turn=turn,
-                cards_drawn=[c.parsed.name for c in cards_drawn],
-                castability=records,
-                aggregate_castable=aggregate,
-            )
+        # Append the snapshot pre-drop, then patch in the game-level
+        # counters after the drop. Pydantic BaseModel isn't frozen, so
+        # in-place mutation is fine and avoids a copy.
+        snapshot = TurnSnapshot(
+            turn=turn,
+            cards_drawn=[c.parsed.name for c in cards_drawn],
+            castability=records,
+            aggregate_castable=aggregate,
         )
+        turn_snapshots.append(snapshot)
 
         lands_in_hand_before = [c.instance_id for c in state.hand if c.is_land]
         land, rule = choose_land(state)
@@ -124,6 +126,16 @@ def simulate_one_game(
                     candidates=lands_in_hand_before,
                 )
             )
+
+        # Game-level counters: lands and mana sources usable at start of
+        # main phase, after the land drop, before any spells go off.
+        # All permanents are untapped at this point (just untapped this
+        # turn) and the summoning-sick set was cleared by begin_turn(),
+        # so the available mana count is just lands + mana_perms.
+        snapshot.lands_in_play_after_drop = len(state.battlefield_lands)
+        snapshot.mana_sources_at_start_of_main = len(state.battlefield_lands) + len(
+            state.battlefield_mana_perms
+        )
 
         cast_results = cast_main_phase(state)
         if verbose:
@@ -152,6 +164,50 @@ def simulate_one_game(
                     )
 
         state.end_turn()
+
+    # Turn 5 lookahead: draw + land drop only. Lets the game-level
+    # aggregator compute ``p_land_drop_by_turn_5`` without growing the
+    # full castability / spell-casting pipeline to a fifth turn (which
+    # would also collide with the ``_NEVER = 5`` "never castable" sentinel).
+    # Castability / mana-source recording stays at zero here on purpose.
+    # We deliberately do NOT update ``first_in_hand_turn`` for cards
+    # drawn on turn 5 — the per-card aggregate's ``range(1, 5)``
+    # never reads beyond turn 4, and leaving the ``5 == _NEVER``
+    # convention intact avoids muddling the "never drawn in the
+    # castability window" semantic.
+    state.begin_turn()
+    turn5_drawn = state.draw(1)
+    if verbose:
+        for c in turn5_drawn:
+            actions.append(DrawEvent(turn=5, card_name=c.parsed.name))
+    lands_in_hand_before_t5 = [c.instance_id for c in state.hand if c.is_land]
+    land_t5, rule_t5 = choose_land(state)
+    if land_t5 is not None:
+        state.play_land(land_t5)
+    if verbose:
+        actions.append(
+            LandDropEvent(
+                turn=5,
+                chosen_instance_id=land_t5.instance_id if land_t5 is not None else None,
+                chosen_name=land_t5.parsed.name if land_t5 is not None else None,
+                rule_fired=rule_t5,
+                candidates=lands_in_hand_before_t5,
+            )
+        )
+    turn_snapshots.append(
+        TurnSnapshot(
+            turn=5,
+            cards_drawn=[c.parsed.name for c in turn5_drawn],
+            castability=[],
+            aggregate_castable={},
+            lands_in_play_after_drop=len(state.battlefield_lands),
+            # mana_sources_at_start_of_main stays 0 — turn 5 has no
+            # main phase in this simulator. Feature spec doesn't ask
+            # for an expected_mana_count_turn_5 either.
+            mana_sources_at_start_of_main=0,
+        )
+    )
+    state.end_turn()
 
     return GameTrace(
         seed=seed,
