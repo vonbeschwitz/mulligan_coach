@@ -16,11 +16,22 @@ src/mulligan_coach_features/
 ├── __init__.py                       # Re-exports the public surface
 ├── seventeenlands_shrinkage.py       # PlayRateBins / FormatPriors / ShrunkWinRates
 │                                     # + compute_format_priors + shrink_stats
-└── seventeenlands_zscores.py         # FormatWRDistribution / CardZScores
-                                      # + compute_format_wr_distribution + zscore_stats
+├── seventeenlands_zscores.py         # FormatWRDistribution / CardZScores
+│                                     # + compute_format_wr_distribution + zscore_stats
+├── categories.py                     # Card-classification predicates
+│                                     # (is_ramp / is_removal / has_alt_mode / mv_* / …)
+└── feature_builder.py                # 196-feature XGBoost row assembler
+                                      # (build_deck_features / build_hand_features /
+                                      # build_simulation_features / build_feature_row)
 scripts/
-└── inspect_shrinkage.py              # Eyeball the shrinkage on real (set, format) data
+├── inspect_shrinkage.py              # Eyeball the shrinkage on real (set, format) data
+└── smoke_feature_builder.py          # End-to-end smoke: builds a 200-column row
+                                      # on real TLA data + a hand-built 40-card deck
 tests/
+├── _factories.py                     # Hand-built ParsedCard fixtures
+│                                     # (basic/dual lands, creatures, cantrips, etc.)
+├── test_categories.py
+├── test_feature_builder.py
 ├── test_seventeenlands_shrinkage.py
 └── test_seventeenlands_zscores.py
 ```
@@ -164,6 +175,70 @@ project grows, hand-level features over a `ParsedCard` opening hand
 (mana, castability, role mix). Anything that takes raw 17Lands rows
 or raw Scryfall dicts as input belongs in `cards` or `data-download`,
 not here.
+
+## feature_builder
+
+The XGBoost feature row assembler. The catalogue of features (and the
+naming conventions) lives in `features_list.md`; this module
+implements it.
+
+`build_feature_row(hand, deck, aggregate_stats, shrunk, zscores,
+on_the_play, mulligan_number, event_type, set_code)` returns a flat
+`dict[str, float]` of 200 columns (196 features per the spec, with
+the three context one-hot families counted as one feature each):
+
+* **Context (3 / 7 columns)** — `on_the_play` + one-hot event_type
+  + one-hot set_code. Default vocabularies cover today's three
+  Premier Draft sets and three event types; new sets at inference
+  time produce all-zero columns rather than blowing up the row's
+  shape.
+* **Deck-level (16)** — curve percentages, removal %, color counts,
+  avg WR of spells (shrunk).
+* **Hand-level (72)** — 13 basic counts + 42 role-by-MV grid
+  + 11 Z-bucket / max / avg performance summaries + 4 hand-quality
+  additions + 2 color-availability additions.
+* **Simulation-sourced (105)** — 7 game-level mana-availability
+  features + 96 per-turn castability features (broad buckets carry
+  both an `all` and a `high_oh` variant; narrow buckets are `all`
+  only) + 2 additional castability summaries.
+
+Castability uses `aggregate_stats.by_card_name[name].p_castable_by_turn`
+joined to each hand spell by name. Duplicate hand copies of the same
+card share one per-name probability; the `p_any` aggregator treats
+them as independent given that probability (1 - prod(1 - p_i)) — the
+natural approximation for per-name aggregate output.
+
+The `high_oh` filter restricts a broad-bucket category to hand cards
+with shrunken OH WR z-score > 0.5, using the `zscores` map keyed on
+arena_id (mtga_id).
+
+Category predicates live in `categories.py` — `is_ramp`,
+`is_removal`, `is_pump_broad`, `is_card_manipulation`, `has_alt_mode`,
+and the MV-bucket helpers. They're broken out so the builder stays
+focused on the bookkeeping; new categories land there first.
+
+### Run the smoke test
+
+```
+.venv/Scripts/python.exe packages/features/scripts/smoke_feature_builder.py
+```
+
+Builds a 200-column row on real TLA data and a hand-built 40-card
+deck. Useful for eyeballing feature values after pipeline changes.
+
+### Known limitations
+
+* MTGJSON's `arena_id` lag affects the current shipping sets (TLA,
+  ECL, TMT all have `arena_id=None` on their `ParsedCard` JSON
+  today). The shrunk-WR / z-score dicts are keyed by `arena_id`, so
+  every hand card's lookup returns None and the
+  `avg_*_wr_of_*` / Z-bucket-count features fall to 0. Once MTGJSON
+  refreshes (or a name-based join lands), the values will populate
+  naturally — no code change needed.
+* The `is_other` castability bucket on T2–T4 reads
+  `role_features.is_other` directly. Cards the parser couldn't fully
+  classify and which left `is_other` False (typically those with a
+  populated non-creature-removal effect) won't be counted.
 
 ## Known limitations
 
