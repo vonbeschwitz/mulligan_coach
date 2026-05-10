@@ -12,6 +12,9 @@ dependencies = [
     # consume cards via this typed surface only — never reach into raw
     # Scryfall or raw 17Lands parquets.
     "mulligan-coach-cards",
+    # Provides AggregateStats: the Monte Carlo output that the simulation
+    # feature builder turns into castability / mana-availability features.
+    "mulligan-coach-simulation",
     # Used internally by the decile-binning lookup. Already a dep of
     # data-download via duckdb/pyarrow, so no new top-level install.
     "numpy>=1.26",
