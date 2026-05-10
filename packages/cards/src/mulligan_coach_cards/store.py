@@ -97,11 +97,64 @@ def save_parsed_cards(
     """
     path = parsed_cards_path(set_code, data_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    normalised = [_ensure_default_cast_mode_for_castable(c) for c in cards]
+    normalised = [_ensure_role_invariants(_ensure_default_cast_mode_for_castable(c)) for c in cards]
     sorted_cards = sorted(normalised, key=_collector_sort_key)
     payload = [c.model_dump(mode="json") for c in sorted_cards]
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path
+
+
+def _ensure_role_invariants(card: ParsedCard) -> ParsedCard:
+    """Apply the role-feature invariants that must hold for every saved card.
+
+    Two fix-ups, both safe for LLM_ENCODED entries (which bypass
+    :func:`mulligan_coach_cards.parser.parse_card` on detector re-runs):
+
+    1. Type-derived flags are forced on whenever the type line says so —
+       ``is_creature``, ``is_planeswalker``, ``is_equipment``,
+       ``is_vehicle``, ``is_land``. These are 100% derivable from
+       ``ParsedCard.types`` / ``subtypes`` and don't depend on oracle
+       text, so an LLM-encoded card with an empty ``role_features``
+       still ends up correctly tagged.
+    2. ``is_other`` catchall — set iff no specific role flag fires
+       after the type-derived pass. Mirrors the parser-side catchall
+       in :func:`mulligan_coach_cards.parser._ensure_role_other_catchall`,
+       but applies to every card on disk regardless of provenance.
+
+    Note: ``is_mana_rock`` is *not* inferred here, because identifying
+    a mana ability requires oracle-text parsing — that's the parser's
+    job, not the store's. An LLM-encoded artifact that should be a
+    mana rock relies on the LLM having set the flag.
+    """
+    rf = card.role_features
+    updates: dict[str, bool] = {}
+    if "Creature" in card.types and not rf.is_creature:
+        updates["is_creature"] = True
+    if "Planeswalker" in card.types and not rf.is_planeswalker:
+        updates["is_planeswalker"] = True
+    if "Land" in card.types and not rf.is_land:
+        updates["is_land"] = True
+    if "Equipment" in card.subtypes and not rf.is_equipment:
+        updates["is_equipment"] = True
+    if "Vehicle" in card.subtypes and not rf.is_vehicle:
+        updates["is_vehicle"] = True
+
+    if updates:
+        rf = rf.model_copy(update=updates)
+
+    # is_other invariant: it's set iff NO other role flag is set. Apply
+    # both directions so a card whose LLM encoding came in stale (e.g.
+    # is_other from an earlier save plus a newly-derived is_land here)
+    # gets cleaned up.
+    has_specific = rf.has_any_role_flag()
+    if has_specific and rf.is_other:
+        rf = rf.model_copy(update={"is_other": False})
+    elif not has_specific and not rf.is_other:
+        rf = rf.model_copy(update={"is_other": True})
+
+    if rf is card.role_features:
+        return card
+    return card.model_copy(update={"role_features": rf})
 
 
 # Marker on the synthesised effect so the cast mode is searchable in

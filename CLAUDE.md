@@ -12,7 +12,7 @@ The recommendation pipeline has three stages:
 
 1. **Card representation.** Each card in the format is converted into a structured representation capturing what it does mechanically (creature, removal, mana dork, card draw, land that ETBs tapped, etc.), its mana cost and color requirements, its 17Lands aggregate stats (GIH WR, OH WR, drawn WR), and any other features useful for simulation or modeling.
 
-2. **Monte Carlo simulation.** Given a hand and the rest of the deck, simulate thousands of games' worth of draws to estimate playability statistics — e.g., probability of making land drops 1–4, probability of casting your 2-drop on turn 2, probability of casting your most expensive spell on time, expected mana available each turn. This produces a vector of "playability features" that summarizes how the hand is likely to play out.
+2. **Monte Carlo simulation.** Given a hand and the rest of the deck, simulate thousands of games' worth of draws to estimate playability statistics — e.g., probability of making land drops 1–4, probability of casting your 2-drop on turn 2, expected mana available each turn. This produces a vector of "playability features" that summarizes how the hand is likely to play out.
 
 3. **XGBoost model.** Trained on 17Lands public game data, this model takes the playability features from the Monte Carlo simulation, plus hand- and deck-level features derived from card stats (sum of GIH WR, "earliness score" from OH WR vs. drawn WR differential, role counts, etc.), plus context (on play/draw, mulligan number, hand size), and predicts P(win | this hand). The recommendation compares P(win | keep current hand) vs. P(win | mulligan to N-1).
 

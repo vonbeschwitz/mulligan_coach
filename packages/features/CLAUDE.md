@@ -115,3 +115,15 @@ project grows, hand-level features over a `ParsedCard` opening hand
 (mana, castability, role mix). Anything that takes raw 17Lands rows
 or raw Scryfall dicts as input belongs in `cards` or `data-download`,
 not here.
+
+## Known limitations
+
+* **"Alternative mode" features count cycling / evoke / flashback only.**
+  The features list uses `len(card.modes) > 1` as the operational
+  definition of "has an alternative mode" — that captures cycling,
+  land-cycling, channel, and the alt-cost-cast family
+  (evoke / flashback / madness / jump-start / aftermath). It **does not**
+  capture Adventure / MDFC / Split / "choose one" modal cards, because
+  those bail to NEEDS_LLM in the parser today and never get multiple
+  Modes attached. Re-evaluate when the parser gains support for those
+  layouts.

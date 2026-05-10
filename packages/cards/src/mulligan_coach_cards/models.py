@@ -433,6 +433,24 @@ class RoleFeatures(BaseModel):
     is_planeswalker: bool = False
     is_equipment: bool = False
     is_vehicle: bool = False
+    is_land: bool = Field(
+        default=False,
+        description=(
+            "The card is a land — basic, typed dual, utility, legendary land. "
+            "Set whenever the type line includes 'Land', covering everything "
+            "that resolves through `_parse_land`."
+        ),
+    )
+    is_mana_rock: bool = Field(
+        default=False,
+        description=(
+            "Non-creature, non-equipment, non-vehicle artifact whose primary "
+            "value is mana production — i.e. the deterministic parser found "
+            "at least one mana ability on it. Equipment / Vehicle artifacts "
+            "that happen to tap for mana keep their `is_equipment` / "
+            "`is_vehicle` classification instead."
+        ),
+    )
     is_saga: bool = Field(
         default=False,
         description=(
@@ -479,6 +497,16 @@ class RoleFeatures(BaseModel):
             "Records the damage amount. None for non-burn or face-only burn."
         ),
     )
+    is_counterspell: bool = Field(
+        default=False,
+        description=(
+            "Counters target spell or activated ability — Cancel, Negate, Essence "
+            "Scatter, Mana Leak, etc. Includes 'counter target spell' variants "
+            "with restrictions ('with mana value 4 or greater', 'unless its "
+            "controller pays {2}', etc.) and 'counter target activated ability'. "
+            "Grouped with removal at the deck/hand-feature level."
+        ),
+    )
 
     # Soft removal -------------------------------------------------------------
     is_bounce: bool = Field(
@@ -520,6 +548,43 @@ class RoleFeatures(BaseModel):
         ge=0,
         description="Cards seen but not necessarily drawn — scry / loot / surveil count.",
     )
+
+    def has_any_role_flag(self) -> bool:
+        """True iff at least one role category is populated.
+
+        ``is_other`` is intentionally excluded — it's the catchall, set
+        by the parser (and by the save-time invariant in ``store.py``)
+        precisely when this method returns False. Including it would
+        let a previously-set ``is_other`` short-circuit a
+        re-classification when new positive flags become available.
+        """
+        return bool(
+            self.is_creature
+            or self.is_planeswalker
+            or self.is_equipment
+            or self.is_vehicle
+            or self.is_land
+            or self.is_mana_rock
+            or self.is_saga
+            or self.is_class
+            or self.is_punch_fight
+            or self.removal_destroy_or_exile
+            or self.removal_burn_damage is not None
+            or self.is_counterspell
+            or self.is_bounce
+            or self.is_top_library
+            or self.combat_trick_power is not None
+            or self.combat_trick_toughness is not None
+            or self.combat_trick_granted_keywords
+            or self.is_removal_aura
+            or self.is_pump_aura
+            or self.aura_pump_power is not None
+            or self.aura_pump_toughness is not None
+            or self.aura_pump_granted_keywords
+            or self.cards_drawn > 0
+            or self.cards_manipulated > 0
+            or self.creates_creatures
+        )
 
 
 # ---------------------------------------------------------------------------
