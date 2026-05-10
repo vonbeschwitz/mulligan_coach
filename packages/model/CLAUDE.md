@@ -148,9 +148,55 @@ identical feature row. Mid-format simulator changes will break
 this hash equivalence; that's intentional, because the cached
 shard would be stale anyway and should be re-materialised.
 
+## PR 3 — `baseline.py`
+
+Saturated-cell logistic regression for residualising the
+training label on player skill + opp_mulligan. Used as XGBoost's
+``base_margin`` so the gradient-boosted predictor only learns
+the *delta* on top of the per-row baseline.
+
+* `BaselineModel.fit(parquet_paths, l2_C=10.0)` reads one or more
+  feature parquet shards, builds the saturated-cell + opp_mull
+  feature matrix via one-hot encoding (`pd.get_dummies`), and
+  fits `sklearn.LogisticRegression(C=l2_C, solver="lbfgs",
+  fit_intercept=True)`. The fitted intercept is folded into each
+  cell margin so inference is a clean `cell + opp` sum.
+* `BaselineModel.margin(user_wr_bucket, user_n_games_bucket,
+  on_the_play, opp_mulligan_number)` is the inference entry point.
+  Handles three info-set cases:
+    * Training time: both user buckets and opp_mull known.
+    * Deploy on the draw: user buckets None, opp_mull known.
+    * Deploy on the play: both unknown -> falls back to the
+      precomputed population marginals (per-on_play cell marginal
+      + population-mean opp_mull margin).
+  Mixed-state (one user bucket known, the other not) raises —
+  that's not a case the codebase generates.
+* `BaselineModel.save` / `.load` use a small JSON document
+  (~50 cells x a few floats) so a human can eyeball the fitted
+  coefficients.
+
+### Why saturated cells
+
+The plan calls for `β_cell[wr x n_games x on_play]` rather than
+`β_wr + β_n_games + β_on_play`. The wr-by-n_games interaction is
+real: low-n-games / high-wr players regress toward the mean *more*
+than low-n-games / low-wr players, and in opposite directions.
+An additive decomposition would force the n_games effect to be a
+constant shift independent of WR. Saturated cells (one coefficient
+per (wr, n_games, on_play) triple) plus L2 shrinkage is the
+right answer for ~50–70 cells × ~1M training rows.
+
+### Why XGBoost cancellation
+
+The recommendation compares `P(win | keep)` vs `P(win | mull-to-N)`.
+Both use the same `(user_wr, user_n_games, on_play, opp_mull)`
+context, so the baseline margin cancels in the comparison. The
+recommendation only reflects the XGBoost-learned delta — exactly
+what we want for a hand-specific decision.
+
 ## What's deferred to later PRs
 
-* **Baseline + XGBoost + calibration.** PR 3 / 4.
+* **XGBoost + calibration.** PR 4.
 * **Inference + recommendation.** PR 5.
 
 ## Tests
