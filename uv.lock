@@ -14,6 +14,7 @@ members = [
     "mulligan-coach",
     "mulligan-coach-cards",
     "mulligan-coach-data-download",
+    "mulligan-coach-features",
     "mulligan-coach-simulation",
     "simulation-viewer",
 ]
@@ -403,6 +404,7 @@ dependencies = [
     { name = "dev-site" },
     { name = "mulligan-coach-cards" },
     { name = "mulligan-coach-data-download" },
+    { name = "mulligan-coach-features" },
     { name = "mulligan-coach-simulation" },
     { name = "simulation-viewer" },
 ]
@@ -422,6 +424,7 @@ requires-dist = [
     { name = "dev-site", editable = "utilities/dev_site" },
     { name = "mulligan-coach-cards", editable = "packages/cards" },
     { name = "mulligan-coach-data-download", editable = "packages/data-download" },
+    { name = "mulligan-coach-features", editable = "packages/features" },
     { name = "mulligan-coach-simulation", editable = "packages/simulation" },
     { name = "simulation-viewer", editable = "utilities/simulation_viewer" },
 ]
@@ -481,6 +484,21 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "tqdm", specifier = ">=4.66" },
     { name = "typer", specifier = ">=0.12,<1.0" },
+]
+
+[[package]]
+name = "mulligan-coach-features"
+version = "0.0.0"
+source = { editable = "packages/features" }
+dependencies = [
+    { name = "mulligan-coach-cards" },
+    { name = "numpy" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "mulligan-coach-cards", editable = "packages/cards" },
+    { name = "numpy", specifier = ">=1.26" },
 ]
 
 [[package]]

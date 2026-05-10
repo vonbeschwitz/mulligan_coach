@@ -1014,7 +1014,7 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
     # Counter target spell — counterspell role flag.
     if _COUNTER_SPELL_RE.match(chunk):
         if rf is not None:
-            rf.is_other = True
+            rf.is_counterspell = True
         return [NoopEffect(role_tag="counter_spell")]
 
     # Single-target +1/+1 counter pump — buff effect.
@@ -1140,6 +1140,23 @@ _COST_TAP_FOR_ANY_RE = re.compile(
     r"^(?P<cost>(?:\{[^{}]+\}\s*,\s*)+)\{T\}:\s*Add\s+one\s+mana\s+of\s+any\s+color\.",
     re.IGNORECASE,
 )
+# Cost-only mana ability (no tap): "{N}: Add {color}." / "{N}: Add one
+# mana of any color." Used by mana sources whose once-per-turn limit
+# comes from a trailing "Activate only once each turn." line rather
+# than a tap requirement (Barrels of Blasting Jelly). The negative
+# lookahead rejects chunks starting with `{T}` so the tap-based patterns
+# above keep precedence — necessary because `\{[^{}]+\}` would
+# otherwise also match `{T}`.
+_COST_ONLY_FOR_RE = re.compile(
+    r"^(?!\{T\})(?P<cost>\{[^{}]+\}(?:\s*,\s*\{[^{}]+\})*):\s*Add\s+"
+    r"((?:\{[WUBRGC]\})(?:\s+or\s+\{[WUBRGC]\})*)\.",
+    re.IGNORECASE,
+)
+_COST_ONLY_FOR_ANY_RE = re.compile(
+    r"^(?!\{T\})(?P<cost>\{[^{}]+\}(?:\s*,\s*\{[^{}]+\})*):\s*"
+    r"Add\s+one\s+mana\s+of\s+any\s+color\.",
+    re.IGNORECASE,
+)
 
 # Conditional ETB-tapped patterns.
 _DEATHCAP_RE = re.compile(
@@ -1178,18 +1195,23 @@ def _build_cost_with_tap(cost_prefix: str) -> Cost | None:
 
 
 def _extract_mana_ability(chunk: str) -> ManaAbility | None:
-    """If ``chunk`` is a tap-for-mana ability line, return the structured
-    ``ManaAbility``. Recognises four shapes:
+    """If ``chunk`` is a mana ability line, return the structured
+    ``ManaAbility``. Recognises six shapes:
 
     * Plain          — ``{T}: Add {G}`` (or ``{G} or {U}``).
     * Prose any      — ``{T}: Add one mana of any color.``
     * Cost-prefix    — ``{N}, {T}: Add {G}`` (filter mana rocks).
     * Cost-prefix +  — ``{N}, {T}: Add one mana of any color.``
       prose any
+    * Cost-only      — ``{N}: Add {G}.`` (no tap; the limit comes from a
+      trailing "Activate only once each turn." line we don't model).
+    * Cost-only +    — ``{N}: Add one mana of any color.``
+      prose any
 
     Trailing prose after the colors (Raucous Audience's conditional
-    "...add {G}{G} instead." clause) is tolerated; the baseline gets
-    encoded. Returns ``None`` when the chunk isn't a mana ability."""
+    "...add {G}{G} instead." clause, or the "Activate only once each
+    turn." limiter) is tolerated; the baseline gets encoded. Returns
+    ``None`` when the chunk isn't a mana ability."""
     if m := _TAP_FOR_RE.match(chunk):
         colors = re.findall(r"\{([WUBRGC])\}", m.group(1))
         return ManaAbility(
@@ -1212,6 +1234,20 @@ def _extract_mana_ability(chunk: str) -> ManaAbility | None:
         )
     if m := _COST_TAP_FOR_ANY_RE.match(chunk):
         cost = _build_cost_with_tap(m.group("cost"))
+        if cost is None:
+            return None
+        return ManaAbility(cost=cost, produces=[["any"]])
+    if m := _COST_ONLY_FOR_RE.match(chunk):
+        cost = _parse_cost_string(m.group("cost"))
+        if cost is None:
+            return None
+        colors = re.findall(r"\{([WUBRGC])\}", m.group(2))
+        return ManaAbility(
+            cost=cost,
+            produces=[[c] for c in colors],
+        )
+    if m := _COST_ONLY_FOR_ANY_RE.match(chunk):
+        cost = _parse_cost_string(m.group("cost"))
         if cost is None:
             return None
         return ManaAbility(cost=cost, produces=[["any"]])
@@ -2327,6 +2363,15 @@ def _parse_other_permanent(
 
     modes.extend(extra_modes)
 
+    # Non-creature, non-equipment, non-vehicle artifact with at least one
+    # mana ability = "mana rock" (Sol Ring, Springleaf Drum, etc.). Routing
+    # via `_parse_other_permanent` already excludes Equipment / Vehicle
+    # (they go through `_parse_artifact_typed`) and creatures (which take
+    # the Creature branch first), so the `type_word == "Artifact"` check is
+    # the only filter needed here.
+    if type_word == "Artifact" and mana_abilities:
+        role_features.is_mana_rock = True
+
     if blockers:
         return ParsedCard(
             status=ParseStatus.NEEDS_LLM,
@@ -2456,39 +2501,33 @@ def _qualifies_for_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> bo
     return not _MODAL_RE.search(oracle_text)
 
 
+def _ensure_role_other_catchall(parsed: ParsedCard) -> ParsedCard:
+    """Set ``is_other`` if the card ended up with no role flag at all.
+
+    The ``is_other`` flag is the design's catchall for cards that don't
+    fit any specific category (see ``packages/cards/CLAUDE.md``). Most
+    branches populate at least one flag implicitly — creatures get
+    ``is_creature`` from the type seeder, lands get ``is_land``, etc.
+    But a vanilla enchantment or oddball artifact with no recognised
+    oracle pattern can fall through with everything default-False.
+    This helper guarantees the invariant "every parsed card has at
+    least one role classification" so the XGBoost stage never sees a
+    blank role vector.
+    """
+    if not parsed.role_features.has_any_role_flag():
+        parsed.role_features.is_other = True
+    return parsed
+
+
 def _maybe_apply_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> ParsedCard:
     """If the card was flagged NEEDS_LLM but qualifies for the MV ≥ 4
-    fast-path, promote it to AUTO. Sets ``is_other`` if no other role
-    flag was populated, so the XGBoost stage doesn't see an entirely
-    blank classification."""
+    fast-path, promote it to AUTO. The universal catchall in
+    :func:`_ensure_role_other_catchall` (called after this) handles
+    setting ``is_other`` when no other role flag is populated."""
     if parsed.status is not ParseStatus.NEEDS_LLM:
         return parsed
     if not _qualifies_for_mv4_fast_path(card, parsed):
         return parsed
-    rf = parsed.role_features
-    has_any_role_flag = (
-        rf.is_creature
-        or rf.is_planeswalker
-        or rf.is_equipment
-        or rf.is_vehicle
-        or rf.is_saga
-        or rf.is_class
-        or rf.is_punch_fight
-        or rf.removal_destroy_or_exile
-        or rf.removal_burn_damage is not None
-        or rf.is_bounce
-        or rf.is_top_library
-        or rf.combat_trick_power is not None
-        or rf.combat_trick_toughness is not None
-        or rf.combat_trick_granted_keywords
-        or rf.is_removal_aura
-        or rf.is_pump_aura
-        or rf.cards_drawn > 0
-        or rf.cards_manipulated > 0
-        or rf.creates_creatures
-    )
-    if not has_any_role_flag:
-        rf.is_other = True
     parsed.status = ParseStatus.AUTO
     # `_qualifies_for_mv4_fast_path` already returns False when mana_cost
     # is None, so it's non-None here — the assertion narrows for mypy.
@@ -2833,7 +2872,9 @@ def parse_card(
 
     # MV >= 4 fast-path: promote NEEDS_LLM cards that can't realistically
     # affect mulligan-relevant turns 1-4 to AUTO.
-    return _maybe_apply_mv4_fast_path(card, result)
+    result = _maybe_apply_mv4_fast_path(card, result)
+    # Universal catchall: anything with no role flag set lands on `is_other`.
+    return _ensure_role_other_catchall(result)
 
 
 def _initial_role_features(types: list[str], subtypes: list[str]) -> RoleFeatures:
@@ -2853,4 +2894,6 @@ def _initial_role_features(types: list[str], subtypes: list[str]) -> RoleFeature
         rf.is_equipment = True
     if "Vehicle" in subtypes:
         rf.is_vehicle = True
+    if "Land" in types:
+        rf.is_land = True
     return rf

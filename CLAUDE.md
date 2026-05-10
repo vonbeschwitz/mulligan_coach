@@ -12,7 +12,7 @@ The recommendation pipeline has three stages:
 
 1. **Card representation.** Each card in the format is converted into a structured representation capturing what it does mechanically (creature, removal, mana dork, card draw, land that ETBs tapped, etc.), its mana cost and color requirements, its 17Lands aggregate stats (GIH WR, OH WR, drawn WR), and any other features useful for simulation or modeling.
 
-2. **Monte Carlo simulation.** Given a hand and the rest of the deck, simulate thousands of games' worth of draws to estimate playability statistics — e.g., probability of making land drops 1–4, probability of casting your 2-drop on turn 2, probability of casting your most expensive spell on time, expected mana available each turn. This produces a vector of "playability features" that summarizes how the hand is likely to play out.
+2. **Monte Carlo simulation.** Given a hand and the rest of the deck, simulate thousands of games' worth of draws to estimate playability statistics — e.g., probability of making land drops 1–4, probability of casting your 2-drop on turn 2, expected mana available each turn. This produces a vector of "playability features" that summarizes how the hand is likely to play out.
 
 3. **XGBoost model.** Trained on 17Lands public game data, this model takes the playability features from the Monte Carlo simulation, plus hand- and deck-level features derived from card stats (sum of GIH WR, "earliness score" from OH WR vs. drawn WR differential, role counts, etc.), plus context (on play/draw, mulligan number, hand size), and predicts P(win | this hand). The recommendation compares P(win | keep current hand) vs. P(win | mulligan to N-1).
 
@@ -31,6 +31,7 @@ mulligan-coach/
 ├── packages/
 │   ├── data-download/           # Pulls 17Lands, Scryfall, MTGJSON
 │   ├── cards/                   # Shared card representation + role categorization
+│   ├── features/                # Derived per-card / hand-level features (e.g. shrunk WRs)
 │   ├── simulation/              # Monte Carlo playability engine
 │   ├── model/                   # XGBoost training + inference
 │   ├── website/                 # FastAPI + HTMX testing interface
@@ -70,7 +71,19 @@ Shared library used by simulation, model, and overlay. Converts raw card data in
 - 17Lands stats (joined in when available).
 - Arena ID for log-parsing lookups.
 
-### 3. simulation
+### 3. features
+
+Derived per-card and hand-level features over `ParsedCard` +
+`SeventeenLandsStats`. Sits between `cards/` (raw representation) and
+`model/` (XGBoost). The first inhabitant is sample-size shrinkage of
+17Lands per-card OH/GD/GIH win rates — uses `pick_count` as the
+weight numerator (so heavily-picked-but-rarely-played cards aren't
+falsely flattered) and a play-rate-conditional decile mean as the
+prior (so sideboard-tier cards are shrunk toward "typical sideboard
+WR," not the format mean). Hand-level features (mana / castability
+turn-by-turn, role-mix counts) land here as they're built.
+
+### 4. simulation
 
 Monte Carlo engine. Pure function: `(hand, deck, on_play) -> playability_features`.
 
@@ -79,7 +92,7 @@ Monte Carlo engine. Pure function: `(hand, deck, on_play) -> playability_feature
 - Outputs features like P(land drop turn N), P(cast on-curve turn N), P(stuck on lands), expected mana turn N, P(cast specific hand card by turn N), etc.
 - Does not attempt to model combat, opponent interaction, or game-winning conditions — that's the model's job.
 
-### 4. model
+### 5. model
 
 XGBoost training and inference.
 
@@ -88,7 +101,7 @@ XGBoost training and inference.
 - Trains across multiple recent formats to mitigate the ~4-week 17Lands data lag for new sets. Format-specific fine-tuning when sufficient data is available.
 - Inference: `(hand, deck, on_play, mulligan_number) -> P(win)`. Calling it twice (current hand vs. simulated mulligan to N-1) gives the comparison needed for a recommendation.
 
-### 5. website
+### 6. website
 
 FastAPI backend + HTMX frontend. Lightweight and easy to iterate on. Lets the user:
 
@@ -99,7 +112,7 @@ FastAPI backend + HTMX frontend. Lightweight and easy to iterate on. Lets the us
 
 This is the primary testing/validation surface for the simulation and model. It exists before the overlay because it isolates the recommendation pipeline from all the Arena-specific complexity (log parsing, transparent windows, fullscreen handling). Once the website produces good recommendations, the overlay just replaces the manual input step with automatic log-tailing.
 
-### 6. overlay
+### 7. overlay
 
 PyQt6 transparent always-on-top window over MTG Arena.
 
@@ -134,11 +147,12 @@ PyQt6 transparent always-on-top window over MTG Arena.
 Recommended order for building this out:
 
 1. **data-download** first — without data, nothing else works.
-2. **cards** — needed by simulation and model.
-3. **simulation** — pure function, easy to test in isolation, produces features for the model.
-4. **model** — trains on simulation outputs + 17Lands data.
-5. **website** — validates the full pipeline end-to-end with manual input.
-6. **overlay** — final integration; reuses everything from website.
+2. **cards** — needed by features, simulation, and model.
+3. **features** — derived per-card / hand-level features over cards + 17Lands.
+4. **simulation** — pure function, easy to test in isolation, produces features for the model.
+5. **model** — trains on simulation + features outputs + 17Lands data.
+6. **website** — validates the full pipeline end-to-end with manual input.
+7. **overlay** — final integration; reuses everything from website.
 
 Each step should be working and tested before starting the next.
 

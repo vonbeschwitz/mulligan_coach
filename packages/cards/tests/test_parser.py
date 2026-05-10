@@ -67,6 +67,10 @@ def test_basic_plains_auto() -> None:
     ab = p.mana_abilities[0]
     assert ab.cost.tap is True
     assert ab.produces == [["W"]]
+    # is_land catchall: every Land-type card gets the flag from the
+    # type-driven seeder, and is_other does NOT fire as a catchall.
+    assert p.role_features.is_land
+    assert not p.role_features.is_other
 
 
 def test_dual_land_enters_tapped_auto() -> None:
@@ -82,6 +86,26 @@ def test_dual_land_enters_tapped_auto() -> None:
     assert p.enter_condition.kind == "always"
     # Two payment options on a single ability.
     assert p.mana_abilities[0].produces == [["R"], ["W"]]
+    assert p.role_features.is_land
+    assert not p.role_features.is_other
+
+
+def test_typed_dual_land_sets_is_land() -> None:
+    # Shock-land shape: type line carries both basic subtypes, no oracle
+    # mana ability — the parser synthesises one from the typed subtypes.
+    card = _scryfall(
+        name="Blood Crypt",
+        type_line="Land — Swamp Mountain",
+        oracle_text=(
+            "({T}: Add {B} or {R}.)\n"
+            "As Blood Crypt enters, you may pay 2 life. If you don't, it enters tapped."
+        ),
+        mana_cost="",
+    )
+    p = parse_card(card)
+    assert "Land" in p.types
+    assert p.role_features.is_land
+    assert not p.role_features.is_other
 
 
 def test_deathcap_style_conditional_etb_tapped_auto() -> None:
@@ -282,6 +306,35 @@ def test_cost_prefix_mana_artifact_auto() -> None:
     assert p.mana_abilities[0].cost.tap is True
     assert p.mana_abilities[0].cost.mana.cmc == 1
     assert p.mana_abilities[0].produces == [["any"]]
+    # Non-equipment, non-vehicle artifact with a mana ability → mana rock.
+    assert p.role_features.is_mana_rock
+    assert not p.role_features.is_equipment
+    assert not p.role_features.is_other
+
+
+def test_cost_only_no_tap_mana_artifact_auto() -> None:
+    # Barrels of Blasting Jelly (TLA) shape: cost-only mana ability
+    # without {T}, limited by a trailing "Activate only once each turn."
+    # line we don't model. The mana ability must still be picked up so
+    # the simulator counts the artifact as a mana source for castability,
+    # and is_mana_rock must fire so the model sees the role flag.
+    card = _scryfall(
+        name="Barrels of Blasting Jelly",
+        type_line="Artifact",
+        oracle_text=(
+            "{1}: Add one mana of any color. Activate only once each turn.\n"
+            "{5}, {T}, Sacrifice this artifact: It deals 5 damage to target creature."
+        ),
+        mana_cost="{3}",
+    )
+    p = parse_card(card)
+    assert len(p.mana_abilities) == 1
+    ab = p.mana_abilities[0]
+    assert ab.cost.tap is False
+    assert ab.cost.mana.cmc == 1
+    assert ab.produces == [["any"]]
+    assert p.role_features.is_mana_rock
+    assert not p.role_features.is_other
 
 
 def test_artifact_mana_rock_with_untap_static_auto() -> None:
@@ -303,6 +356,28 @@ def test_artifact_mana_rock_with_untap_static_auto() -> None:
     assert len(p.mana_abilities) == 1
     assert p.mana_abilities[0].cost.tap is True
     assert p.mana_abilities[0].produces == [["any"]]
+    assert p.role_features.is_mana_rock
+    assert not p.role_features.is_other
+
+
+def test_vanilla_enchantment_falls_back_to_is_other() -> None:
+    # Static "Players can't gain life." style enchantment: parses cleanly
+    # (the _is_likely_static_or_triggered tolerance accepts it), no role
+    # flag fires, so the universal catchall sets is_other=True.
+    card = _scryfall(
+        name="Lifeless Realm",
+        type_line="Enchantment",
+        oracle_text="Players can't gain life.",
+        mana_cost="{2}{B}",
+    )
+    p = parse_card(card)
+    # The exact status doesn't matter — what matters is that no role flag
+    # ends up empty. The catchall should ensure is_other=True regardless.
+    assert p.role_features.is_other
+    # And no positive role flags should have spuriously fired.
+    assert not p.role_features.is_creature
+    assert not p.role_features.is_land
+    assert not p.role_features.is_mana_rock
 
 
 def test_creature_with_cycling_emits_extra_mode() -> None:
@@ -1162,7 +1237,36 @@ def test_counter_target_spell_auto() -> None:
     )
     p = parse_card(card)
     assert p.status is ParseStatus.AUTO
-    assert p.role_features.is_other is True
+    assert p.role_features.is_counterspell is True
+    assert p.role_features.is_other is False
+
+
+def test_counter_target_creature_spell_auto() -> None:
+    card = _scryfall(
+        name="Essence Scatter",
+        type_line="Instant",
+        oracle_text="Counter target creature spell.",
+        mana_cost="{1}{U}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_counterspell is True
+    assert p.role_features.is_other is False
+
+
+def test_counter_target_spell_with_clause_auto() -> None:
+    """Counterspells with trailing clauses ('unless …', 'with mana value …')
+    still match — the regex anchors on the leading 'counter target spell'
+    and ``\\b`` allows arbitrary continuation."""
+    card = _scryfall(
+        name="Mana Leak",
+        type_line="Instant",
+        oracle_text="Counter target spell unless its controller pays {3}.",
+        mana_cost="{1}{U}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.is_counterspell is True
 
 
 def test_counter_pump_on_target_creature_auto() -> None:

@@ -24,9 +24,25 @@ Thumbs.db
 *.swp
 
 # Project-specific (per CLAUDE.md):
-#   data/   — large 17Lands CSVs and processed parquet files; never committed.
+#   data/   — large 17Lands CSVs and processed parquet files; never committed,
+#             except for the parsed_cards/ carve-out below.
 #   models/ — trained XGBoost artifacts; shared via GitHub Releases later.
-data/
+#
+# Carve-out: data/processed/parsed_cards/ IS committed. The JSONs are
+# small (~2 MB total across TMT/ECL/TLA) and contain hand-encoded
+# role_features for the LLM_ENCODED entries that can't be
+# deterministically regenerated. Tracking them prevents accidental
+# data loss (a botched re-run silently destroys the hand-encoded
+# fields) and makes parser-widening PRs show the actual
+# reclassification diff in code review.
+#
+# Pattern: ignore everything under data/, then re-include the carve-out.
+# Note that re-inclusion requires the parent directories to be
+# reachable, hence the /data/processed/ negation in the middle.
+/data/*
+!/data/processed/
+/data/processed/*
+!/data/processed/parsed_cards/
 models/
 
 # DuckDB transient/lock files (the .duckdb file itself lives under data/)

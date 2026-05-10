@@ -37,6 +37,7 @@ dependencies = [
     "mulligan-coach-data-download",
     "mulligan-coach-cards",
     "mulligan-coach-simulation",
+    "mulligan-coach-features",
     # Dev-only utilities (workspace members under utilities/). Listed here
     # so a plain `uv sync` installs them into .venv. Safe to include because
     # this root has `package = false` — nothing is ever built/shipped from
@@ -65,6 +66,7 @@ members = ["packages/*", "utilities/*"]
 mulligan-coach-data-download = { workspace = true }
 mulligan-coach-cards = { workspace = true }
 mulligan-coach-simulation = { workspace = true }
+mulligan-coach-features = { workspace = true }
 card-viewer = { workspace = true }
 simulation-viewer = { workspace = true }
 dev-site = { workspace = true }
@@ -122,6 +124,7 @@ mypy_path = [
     "packages/data-download/src",
     "packages/cards/src",
     "packages/simulation/src",
+    "packages/features/src",
     "utilities/card_viewer/src",
     "utilities/simulation_viewer/src",
     "utilities/dev_site/src",
