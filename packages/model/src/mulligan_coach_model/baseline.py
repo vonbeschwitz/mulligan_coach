@@ -193,9 +193,7 @@ class BaselineModel:
         (``C=1.0`` or below) increase shrinkage. Tune via the
         eval log-loss in PR 4 if needed.
         """
-        paths = (
-            [parquet_paths] if isinstance(parquet_paths, Path) else list(parquet_paths)
-        )
+        paths = [parquet_paths] if isinstance(parquet_paths, Path) else list(parquet_paths)
         if not paths:
             raise ValueError("Need at least one parquet path to fit.")
 
