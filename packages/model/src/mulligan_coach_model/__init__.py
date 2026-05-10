@@ -21,6 +21,14 @@ from .feature_matrix import (
     iter_feature_rows,
     materialize_feature_matrix,
 )
+from .train import (
+    SplitMetrics,
+    TrainingMetadata,
+    TrainResult,
+    load_train_result,
+    save_train_result,
+    train_model,
+)
 from .training_rows import (
     UNKNOWN_BUCKET,
     TrainingRow,
@@ -36,6 +44,9 @@ __all__ = [
     "BaselineModel",
     "CellKey",
     "MaterializationStats",
+    "SplitMetrics",
+    "TrainResult",
+    "TrainingMetadata",
     "TrainingRow",
     "TrainingRowStats",
     "bucket_user_n_games",
@@ -44,5 +55,8 @@ __all__ = [
     "build_row",
     "iter_feature_rows",
     "iter_training_rows",
+    "load_train_result",
     "materialize_feature_matrix",
+    "save_train_result",
+    "train_model",
 ]

@@ -194,9 +194,43 @@ context, so the baseline margin cancels in the comparison. The
 recommendation only reflects the XGBoost-learned delta — exactly
 what we want for a hand-specific decision.
 
+## PR 4 — `train.py`
+
+End-to-end training: load feature parquets, fit the baseline on
+the training split only, compute per-row `base_margin`, fit
+XGBoost with early stopping against the validation split, fit an
+isotonic calibrator on the calibration split, evaluate on the
+test split. Persist the four artifacts (`baseline.json`,
+`xgboost.json`, `calibrator.json`, `metadata.json`) into a single
+output directory.
+
+* `train_model(parquet_paths, output_dir, val_frac, calib_frac,
+  test_frac, n_estimators, max_depth, learning_rate,
+  early_stopping_rounds, baseline_l2_C, seed) -> TrainResult`.
+* Grouped `draft_id` split (default 70/10/10/10) — no draft
+  appears in multiple splits, preventing draft-level leakage
+  (one strong drafter inflates win rate across 8-12 of their
+  games).
+* `_per_row_base_margin` vectorises the baseline margin lookup
+  across the loaded dataframe for speed; correctness is asserted
+  in tests vs. per-call `BaselineModel.margin`.
+* `save_train_result` / `load_train_result` round-trip the
+  bundle. The isotonic calibrator is stored as JSON knots
+  (`X_thresholds_`, `y_thresholds_`) so the file is human-
+  inspectable.
+* XGBoost objective is `binary:logistic`, metric `logloss`,
+  `tree_method="hist"`. Default hyperparameters are the plan's
+  starting point; tune via the validation log-loss.
+
+### Why fit the baseline on the training split only
+
+The baseline is part of the model; it must never see eval rows
+or test log-loss is overstated. The trade-off is slightly noisier
+baseline coefficients (~70% of the rows instead of 100%) — at
+~700k training rows the difference is negligible.
+
 ## What's deferred to later PRs
 
-* **XGBoost + calibration.** PR 4.
 * **Inference + recommendation.** PR 5.
 
 ## Tests
