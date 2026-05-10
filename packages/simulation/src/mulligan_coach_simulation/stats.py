@@ -50,6 +50,29 @@ class CardStats(BaseModel):
     by_mode: list[ModeStats] = Field(default_factory=list)
 
 
+class GameLevelStats(BaseModel):
+    """Game-level Monte Carlo summaries — counters that aren't keyed by
+    card name. Feeds the XGBoost feature stage's "mana availability"
+    family (per ``packages/features/features_list.md``).
+
+    ``p_land_drop_by_turn[T]`` indices: position 0 = P(land drop turn 2),
+    position 1 = T3, position 2 = T4, position 3 = T5. "Made the
+    Nth land drop" = "had at least N lands in play after this turn's
+    land drop, before any spells went off". Turn 5 comes from the
+    simulator's land-drop-only lookahead step.
+
+    ``expected_mana_count_turn[T]`` indices: position 0 = T2,
+    position 1 = T3, position 2 = T4. Each entry is the average number
+    of mana sources (lands + non-creature mana permanents + mana dorks
+    that aren't summoning-sick) available at start of that turn's main
+    phase. Turn 1 is excluded — it's almost always 1, and the
+    information is captured by other features.
+    """
+
+    p_land_drop_by_turn: list[float] = Field(default_factory=lambda: [0.0] * 4)
+    expected_mana_count_turn: list[float] = Field(default_factory=lambda: [0.0] * 3)
+
+
 class AggregateStats(BaseModel):
     """Top-level Monte Carlo output. Indexed by card name."""
 
@@ -57,6 +80,7 @@ class AggregateStats(BaseModel):
     seed: int | None
     on_the_play: bool
     by_card_name: dict[str, CardStats] = Field(default_factory=dict)
+    game_level: GameLevelStats = Field(default_factory=GameLevelStats)
 
 
 def aggregate(
@@ -154,9 +178,68 @@ def aggregate(
         cs.by_mode = per_mode
         by_name[name] = cs
 
+    game_level = aggregate_game_level(games_list)
+
     return AggregateStats(
         n_runs=n_runs,
         seed=seed,
         on_the_play=on_the_play,
         by_card_name=by_name,
+        game_level=game_level,
+    )
+
+
+def aggregate_game_level(games: Iterable[GameTrace]) -> GameLevelStats:
+    """Roll up turn-snapshot counters into game-level averages.
+
+    ``p_land_drop_by_turn[i]`` is the fraction of games where the
+    player had at least N lands in play after turn N's land drop, for
+    N = 2, 3, 4, 5 (i.e. ``i = N - 2``). The turn-5 entry comes from
+    the engine's land-drop-only lookahead step.
+
+    ``expected_mana_count_turn[i]`` is the average mana count at start
+    of turn N's main phase, for N = 2, 3, 4 (``i = N - 2``).
+
+    Games with no snapshot for a given turn (shouldn't happen in
+    normal use, but defensively handled) don't contribute to that
+    turn's numerator or denominator.
+    """
+    games_list = list(games)
+    if not games_list:
+        return GameLevelStats()
+
+    # Index maps: position in the output list → turn number.
+    LAND_DROP_TURNS = (2, 3, 4, 5)
+    MANA_TURNS = (2, 3, 4)
+
+    land_drop_hits = [0] * len(LAND_DROP_TURNS)
+    land_drop_total = [0] * len(LAND_DROP_TURNS)
+    mana_sum = [0] * len(MANA_TURNS)
+    mana_total = [0] * len(MANA_TURNS)
+
+    for game in games_list:
+        by_turn = {snap.turn: snap for snap in game.turns}
+        for i, t in enumerate(LAND_DROP_TURNS):
+            snap = by_turn.get(t)
+            if snap is None:
+                continue
+            land_drop_total[i] += 1
+            if snap.lands_in_play_after_drop >= t:
+                land_drop_hits[i] += 1
+        for i, t in enumerate(MANA_TURNS):
+            snap = by_turn.get(t)
+            if snap is None:
+                continue
+            mana_total[i] += 1
+            mana_sum[i] += snap.mana_sources_at_start_of_main
+
+    return GameLevelStats(
+        p_land_drop_by_turn=[
+            (land_drop_hits[i] / land_drop_total[i]) if land_drop_total[i] > 0 else 0.0
+            for i in range(len(LAND_DROP_TURNS))
+        ],
+        expected_mana_count_turn=[
+            (mana_sum[i] / mana_total[i]) if mana_total[i] > 0 else 0.0
+            for i in range(len(MANA_TURNS))
+        ],
     )

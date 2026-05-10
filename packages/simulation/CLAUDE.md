@@ -16,6 +16,28 @@ Aggregate across N runs to compute, for each card in the decklist:
 
 We will use that in a later step to compute statistics such as P(playing creature on turn 2)
 
+### Game-level outputs (`AggregateStats.game_level`)
+
+In addition to per-card castability, the aggregator produces a small
+set of game-level statistics, all sourced from the per-turn snapshot's
+land / mana counts after each turn's land drop:
+
+- `p_land_drop_by_turn[i]` — fraction of games with at least N lands
+  in play after turn N's land drop, for N = 2, 3, 4, 5
+  (positions 0..3). Turn 5 comes from a land-drop-only lookahead step
+  the engine runs after turn 4 — castability and spell-casting are
+  not extended to turn 5 because the `_NEVER = 5` "never castable in
+  window" sentinel would otherwise collide.
+- `expected_mana_count_turn[i]` — average number of mana sources
+  (lands + non-creature mana permanents + mana dorks not summoning-
+  sick) at start of turn N's main phase, for N = 2, 3, 4
+  (positions 0..2). Turn 1 is excluded because it's almost always 1
+  and the information is captured elsewhere. Turn 5 is excluded
+  because the lookahead step doesn't have a main phase.
+
+These feed the XGBoost feature stage's "mana availability" feature
+family — see `packages/features/features_list.md`.
+
 ## Game model
 
 ### Turn structure (simplified)

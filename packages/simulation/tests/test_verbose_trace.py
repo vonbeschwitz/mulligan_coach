@@ -47,8 +47,10 @@ def test_verbose_records_drawn_and_land_drops() -> None:
     )
     assert any(isinstance(ev, DrawEvent) for ev in trace.actions)
     land_drops = [ev for ev in trace.actions if isinstance(ev, LandDropEvent)]
-    # Four turns, all with a Forest in hand → four land drops.
-    assert len(land_drops) == 4
+    # Four full turns + the turn-5 lookahead, all with a Forest in
+    # hand → five land drops.
+    assert len(land_drops) == 5
+    assert [ld.turn for ld in land_drops] == [1, 2, 3, 4, 5]
     for ld in land_drops:
         assert ld.chosen_name == "Forest"
 
