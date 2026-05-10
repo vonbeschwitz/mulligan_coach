@@ -14,12 +14,15 @@ scores, hand-level mana / castability features — lives here instead.
 ```
 src/mulligan_coach_features/
 ├── __init__.py                       # Re-exports the public surface
-└── seventeenlands_shrinkage.py       # PlayRateBins / FormatPriors / ShrunkWinRates
-                                      # + compute_format_priors + shrink_stats
+├── seventeenlands_shrinkage.py       # PlayRateBins / FormatPriors / ShrunkWinRates
+│                                     # + compute_format_priors + shrink_stats
+└── seventeenlands_zscores.py         # FormatWRDistribution / CardZScores
+                                      # + compute_format_wr_distribution + zscore_stats
 scripts/
 └── inspect_shrinkage.py              # Eyeball the shrinkage on real (set, format) data
 tests/
-└── test_seventeenlands_shrinkage.py
+├── test_seventeenlands_shrinkage.py
+└── test_seventeenlands_zscores.py
 ```
 
 ## seventeenlands_shrinkage
@@ -100,13 +103,59 @@ prior by less than one win rate point on TLA, not worth the extra
 complexity. Re-evaluate if a future format shows a much steeper bottom
 tail.
 
+## seventeenlands_zscores
+
+The XGBoost feature stage (per `features_list.md`) buckets each hand
+spell by its OH / GD WR z-score relative to the format — e.g.
+"number of hand spells with OH WR z > 1.3". This module produces
+those z-scores, normalising each card's *shrunk* WR (not raw) against
+the format's distribution.
+
+Standardising the shrunk values is deliberate. Raw 17Lands WRs are
+heavy on noise for low-N cards; the shrinkage pass already pulled
+those toward a play-rate-conditional reference. So z-scoring atop
+the shrunk values means "z > 1.3" cleanly corresponds to a card
+that's genuinely above-average for the format, not one that's seen
+30 games and rolled a few wins.
+
+Formula, applied independently per WR field, per `(set, event_type)`:
+
+```
+mean = mean(shrunk_WR over cards with shrunk_WR is not None)
+std  = std (shrunk_WR over cards with shrunk_WR is not None)      # ddof=0
+z    = (shrunk_WR - mean) / std    if shrunk_WR, mean, std are non-None and std > 0
+     = None                        otherwise
+```
+
+`std` uses `ddof=0` (population std) — we're describing the format
+itself, not estimating a wider distribution from a sample. The
+numerical difference vs. `ddof=1` is ~0.2% at ~250 cards per format,
+but ddof=0 is the correct semantic.
+
+### Edge cases
+
+| Case | Behaviour |
+|---|---|
+| `shrunk_WR is None` for a card | That card's z for the field is `None`. |
+| Every card has `shrunk_WR=None` for some field | The field's `mean` / `std` are `None`; per-card z for the field is `None`. |
+| `std == 0.0` (degenerate test fixtures, every card same WR) | z for the field is `None` — no spread to normalise against, avoids NaN. |
+| Empty input | Raise `ValueError`. |
+
+The module **does not** verify the input shares one `(expansion, event_type)` —
+the upstream :func:`shrink_stats` already enforced that, and the
+shrunk values it produces have no expansion/event_type attached for
+us to re-check. Mixing formats degrades the distribution but doesn't
+error out; it's the caller's bug to avoid.
+
 ## Tests
 
 ```
 uv run pytest packages/features
 ```
 
-Tests construct `SeventeenLandsStats` instances directly; no parquet I/O.
+Tests construct `SeventeenLandsStats` (for the shrinkage chain) or
+`ShrunkWinRates` (for the z-score chain) instances directly; no
+parquet I/O.
 
 ## Scope
 
