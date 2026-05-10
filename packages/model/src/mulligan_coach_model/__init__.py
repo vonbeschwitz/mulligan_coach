@@ -21,6 +21,12 @@ from .feature_matrix import (
     iter_feature_rows,
     materialize_feature_matrix,
 )
+from .inference import (
+    ModelBundle,
+    Recommendation,
+    predict_win_probability,
+    recommend,
+)
 from .train import (
     SplitMetrics,
     TrainingMetadata,
@@ -44,6 +50,8 @@ __all__ = [
     "BaselineModel",
     "CellKey",
     "MaterializationStats",
+    "ModelBundle",
+    "Recommendation",
     "SplitMetrics",
     "TrainResult",
     "TrainingMetadata",
@@ -57,6 +65,8 @@ __all__ = [
     "iter_training_rows",
     "load_train_result",
     "materialize_feature_matrix",
+    "predict_win_probability",
+    "recommend",
     "save_train_result",
     "train_model",
 ]
