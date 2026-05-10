@@ -98,14 +98,58 @@ memory stays bounded; the trade-off is one Python-level scan of
 the row's wide column tuple per game, which is fast enough for
 ~1M rows per format.
 
+## PR 2 — `feature_matrix.py`
+
+Per-row simulation + feature builder + parquet writer.
+
+* `build_row(tr, format_stats, n_sims_per_row)` — runs
+  `simulate(hand, library=deck-hand, on_play, n_runs, seed)` then
+  `build_feature_row(...)`, then layers on the cache schema's
+  extras (label, context columns, the conditional
+  `opp_mulligan_count_if_known` feature). Returns a flat dict
+  ready for parquet.
+* `iter_feature_rows(training_rows, format_stats, n_sims_per_row,
+  on_error)` — streams `build_row` over an iterable of
+  TrainingRows. Per-row simulator / feature-builder errors are
+  classified into `MaterializationStats.rows_failed_simulation`
+  vs `rows_failed_feature_build` and logged; the iterator
+  doesn't abort the shard. `on_error="raise"` is available for
+  tests.
+* `materialize_feature_matrix(set_code, duckdb_path, output_path,
+  ...)` — opens the games view, builds the format stats once,
+  streams rows in batches, and writes a single parquet shard
+  atomically via `os.replace` from a `.tmp-<pid>` neighbour.
+  Refuses to overwrite an existing shard unless `overwrite=True`.
+
+### Slim cache schema
+
+The plan calls for "features + label + context only — no raw
+`AggregateStats` retained." Concretely:
+
+* 200 columns from `build_feature_row`.
+* `opp_mulligan_count_if_known` — `float | None`. NULL when the
+  player was on the play; the opponent's mulligan count when on
+  the draw. This is the *feature*; the baseline reads the always-
+  populated `opp_mulligan_number` instead.
+* Baseline / split context: `user_wr_bucket`,
+  `user_n_games_bucket`, `opp_mulligan_number`,
+  `mulligan_number`, `expansion`, `event_type`, `draft_id`,
+  `game_number`, `won`.
+
+`on_the_play` is intentionally not duplicated — it's already in
+the feature row.
+
+### Per-row seed
+
+Reproducibility comes from a stable
+`sha256(draft_id || \\x00 || game_number)[:4]` digest into the
+simulator's seed. Same row -> bit-identical aggregate -> bit-
+identical feature row. Mid-format simulator changes will break
+this hash equivalence; that's intentional, because the cached
+shard would be stale anyway and should be re-materialised.
+
 ## What's deferred to later PRs
 
-* **Feature materialisation.** PR 2 turns each :class:`TrainingRow`
-  into a feature parquet row by running the Monte Carlo simulator
-  and the 200-column `build_feature_row`. That step caches its
-  output to `data/processed/model_training/<EXPANSION>/<EVENT_TYPE>.parquet`
-  (gitignored) so model experiments can re-fit without re-running
-  the slow simulator.
 * **Baseline + XGBoost + calibration.** PR 3 / 4.
 * **Inference + recommendation.** PR 5.
 
