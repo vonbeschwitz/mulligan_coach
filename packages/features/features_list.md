@@ -9,8 +9,8 @@
   as a castable creature, even when the printed card type is creature.
 - For OH WR, GIH WR, GD WR everywhere below, use the **shrunken**
   versions from `seventeenlands_shrinkage.shrink_stats`. Z-scores are
-  computed by `compute_format_zscores` against those shrunk WRs,
-  per `(set, event_type)`.
+  computed by `seventeenlands_zscores.zscore_stats` against those
+  shrunk WRs, per `(set, event_type)`.
 - "Has an alternative mode" means `len(parsed_card.modes) > 1` —
   i.e. the card encodes cycling, land-cycling, channel, or an alt-cost
   cast (evoke / flashback / etc.). Adventure / MDFC / "choose one"
