@@ -137,6 +137,12 @@ files = ["packages", "utilities"]
 [[tool.mypy.overrides]]
 module = ["duckdb.*", "pyarrow.*", "tqdm.*", "xgboost.*", "sklearn.*"]
 ignore_missing_imports = true
+# These libraries have partial / no type stubs; mypy's strict
+# `no-untyped-call` fires on otherwise-correct calls like
+# `pq.ParquetWriter(...).write_table(...)`. Disable the check for
+# external untyped callables so the model package can use them
+# without sprinkling `# type: ignore[no-untyped-call]` everywhere.
+disable_error_code = ["no-untyped-call"]
 
 # ---------------------------------------------------------------------------
 # Pytest configuration.
