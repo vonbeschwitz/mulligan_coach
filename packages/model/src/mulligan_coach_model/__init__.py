@@ -14,6 +14,7 @@ wired through this module as it lands.
 
 from __future__ import annotations
 
+from .baseline import BaselineModel, CellKey
 from .feature_matrix import (
     MaterializationStats,
     build_row,
@@ -32,6 +33,8 @@ from .training_rows import (
 
 __all__ = [
     "UNKNOWN_BUCKET",
+    "BaselineModel",
+    "CellKey",
     "MaterializationStats",
     "TrainingRow",
     "TrainingRowStats",

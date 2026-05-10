@@ -135,7 +135,7 @@ mypy_path = [
 files = ["packages", "utilities"]
 
 [[tool.mypy.overrides]]
-module = ["duckdb.*", "pyarrow.*", "tqdm.*", "xgboost.*", "sklearn.*"]
+module = ["duckdb.*", "pyarrow.*", "tqdm.*", "xgboost.*", "sklearn.*", "pandas", "pandas.*"]
 ignore_missing_imports = true
 # These libraries have partial / no type stubs; mypy's strict
 # `no-untyped-call` fires on otherwise-correct calls like
