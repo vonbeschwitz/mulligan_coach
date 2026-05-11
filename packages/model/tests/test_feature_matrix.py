@@ -474,3 +474,253 @@ def test_materialize_feature_matrix_refuses_to_overwrite(tmp_path: Path) -> None
             duckdb_path=tmp_path / "missing.duckdb",
             output_path=out_path,
         )
+
+
+def test_materialize_feature_matrix_rejects_bad_n_workers(tmp_path: Path) -> None:
+    """n_workers=0 (or negative) is a config error; the function refuses
+    before opening any files."""
+    with pytest.raises(ValueError, match="n_workers"):
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=tmp_path / "missing.duckdb",
+            output_path=tmp_path / "out.parquet",
+            n_workers=0,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Multiprocessing path: n_workers > 1
+# ---------------------------------------------------------------------------
+#
+# Pool startup on Windows uses the spawn method, which re-imports the
+# module fresh in each worker. We avoid the spawn cost in the test
+# suite by limiting these to one or two compact cases — the heavy
+# wall-clock evidence for the speedup comes from manual benchmarking,
+# not the unit suite.
+
+
+def _build_test_games_db(tmp_path: Path, n_rows: int) -> Path:
+    """Create a small games.duckdb on disk with `n_rows` mono-G rows.
+
+    Persisted to disk because :func:`materialize_feature_matrix`
+    re-opens the file in read-only mode; an in-memory registered
+    relation wouldn't survive the reopen.
+    """
+    db_path = tmp_path / "games.duckdb"
+    con = duckdb.connect(str(db_path))
+    try:
+        _make_games_view(con, n_rows=n_rows)
+        con.execute("CREATE TABLE games_table AS SELECT * FROM games")
+        con.execute("DROP VIEW games")
+        con.execute("CREATE VIEW games AS SELECT * FROM games_table")
+    finally:
+        con.close()
+    return db_path
+
+
+def _patch_for_in_process_materialize() -> tuple[object, object]:
+    """Monkey-patch the format-stats helper + name lookup for tests.
+
+    These patches are applied in the MAIN process; workers inherit
+    the patched values via the Pool initializer's ``initargs``
+    (format_stats) or because :func:`iter_training_rows` runs only
+    on the main process (name_lookup). So multiprocessing's
+    spawn-re-import doesn't undo them.
+
+    Returns the originals so the caller can restore them.
+    """
+    import mulligan_coach_model.feature_matrix as fm
+    import mulligan_coach_model.training_rows as tr
+
+    fm_original = fm._build_format_stats
+    tr_original = tr.build_name_lookup
+    fm._build_format_stats = lambda *_, **__: _FormatStats(shrunk={}, zscores={})
+    tr.build_name_lookup = lambda *_a, **_kw: {
+        "Forest": _forest(),
+        "Bear": _vanilla("Bear"),
+        "Cultivate": _cultivate(),
+    }
+    return fm_original, tr_original
+
+
+def _restore_patches(originals: tuple[object, object]) -> None:
+    import mulligan_coach_model.feature_matrix as fm
+    import mulligan_coach_model.training_rows as tr
+
+    fm._build_format_stats, tr.build_name_lookup = originals  # type: ignore[assignment]
+
+
+def test_materialize_feature_matrix_n_workers_2_matches_single_process(
+    tmp_path: Path,
+) -> None:
+    """Materializing the same shard with n_workers=1 and n_workers=2
+    should yield identical feature values per (draft_id, game_number).
+
+    Row ORDER may differ (imap_unordered) so we sort both sides by the
+    grouping key before comparing.
+    """
+    db_path = _build_test_games_db(tmp_path, n_rows=4)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_serial = tmp_path / "serial.parquet"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_path=out_serial,
+            n_sims_per_row=3,
+            n_workers=1,
+            batch_size=10,
+        )
+        out_parallel = tmp_path / "parallel.parquet"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_path=out_parallel,
+            n_sims_per_row=3,
+            n_workers=2,
+            chunksize=2,
+            batch_size=10,
+        )
+    finally:
+        _restore_patches(originals)
+
+    assert out_serial.exists()
+    assert out_parallel.exists()
+
+    table_serial = pq.read_table(out_serial)  # type: ignore[no-untyped-call]
+    table_parallel = pq.read_table(out_parallel)  # type: ignore[no-untyped-call]
+    assert table_serial.num_rows == table_parallel.num_rows == 4
+
+    # Sort both sides by (draft_id, game_number); compare every column.
+    df_serial = (
+        table_serial.to_pandas().sort_values(["draft_id", "game_number"]).reset_index(drop=True)
+    )
+    df_parallel = (
+        table_parallel.to_pandas().sort_values(["draft_id", "game_number"]).reset_index(drop=True)
+    )
+    # The deterministic seed (sha256(draft_id || game_number)) means the
+    # simulator's aggregate is bit-identical per row regardless of worker.
+    import pandas as pd
+
+    pd.testing.assert_frame_equal(df_serial, df_parallel, check_like=True)
+
+
+def test_materialize_feature_matrix_n_workers_2_records_errors(tmp_path: Path) -> None:
+    """A row with a NEEDS_LLM card in the deck must still bump
+    ``rows_failed_simulation`` when processed through a worker pool."""
+    # Build a games view where one row references a "BrokenCard" that
+    # the name lookup resolves to a NEEDS_LLM ParsedCard — that'll
+    # trip the simulator's deck-encoding check and raise inside the
+    # worker. The other rows resolve to vanilla cards and succeed.
+    db_path = tmp_path / "games.duckdb"
+    con = duckdb.connect(str(db_path))
+    try:
+        import pyarrow as pa
+
+        rows = []
+        for i in range(3):
+            rows.append(
+                {
+                    "expansion": "TLA",
+                    "event_type": "PremierDraft",
+                    "draft_id": f"draft-{i}",
+                    "game_number": i,
+                    "on_play": True,
+                    "num_mulligans": 0,
+                    "opp_num_mulligans": 0,
+                    "won": False,
+                    "user_n_games_bucket": 100,
+                    "user_game_win_rate_bucket": 0.55,
+                    "deck_Forest": 17,
+                    "opening_hand_Forest": 3,
+                    "deck_Bear": 18,
+                    "opening_hand_Bear": 3,
+                    "deck_Cultivate": 5,
+                    "opening_hand_Cultivate": 1,
+                    "deck_BrokenCard": 0,
+                    "opening_hand_BrokenCard": 0,
+                }
+            )
+        # One additional row uses BrokenCard so the worker hits the
+        # deck-encoding error. Hand/deck sums must still match the
+        # 7/40 invariants iter_training_rows enforces (otherwise
+        # the bad row is skipped upstream).
+        rows.append(
+            {
+                "expansion": "TLA",
+                "event_type": "PremierDraft",
+                "draft_id": "draft-bad",
+                "game_number": 99,
+                "on_play": True,
+                "num_mulligans": 0,
+                "opp_num_mulligans": 0,
+                "won": False,
+                "user_n_games_bucket": 100,
+                "user_game_win_rate_bucket": 0.55,
+                "deck_Forest": 17,
+                "opening_hand_Forest": 2,
+                "deck_Bear": 17,
+                "opening_hand_Bear": 3,
+                "deck_Cultivate": 5,
+                "opening_hand_Cultivate": 1,
+                "deck_BrokenCard": 1,
+                "opening_hand_BrokenCard": 1,
+            }
+        )
+        keys = list(rows[0].keys())
+        cols = {k: [r[k] for r in rows] for k in keys}
+        con.register("games_src", pa.table(cols))
+        con.execute("CREATE TABLE games_table AS SELECT * FROM games_src")
+        con.execute("CREATE VIEW games AS SELECT * FROM games_table")
+    finally:
+        con.close()
+
+    # Build a name lookup that includes a BrokenCard with status=NEEDS_LLM
+    # + mana_cost set + empty modes — the simulator's check_deck_encodings
+    # will reject any deck containing it.
+    broken = ParsedCard(
+        name="BrokenCard",
+        set_code="TST",
+        collector_number="bad",
+        oracle_id="broken",
+        rarity="rare",
+        raw_oracle_text="something complex",
+        type_line="Creature",
+        types=["Creature"],
+        mana_cost=parse_mana_cost("{3}"),
+        power="3",
+        toughness="3",
+        modes=[],
+        role_features=RoleFeatures(is_creature=True),
+        status=ParseStatus.NEEDS_LLM,
+    )
+
+    import mulligan_coach_model.feature_matrix as fm
+    import mulligan_coach_model.training_rows as tr
+
+    fm_original = fm._build_format_stats
+    tr_original = tr.build_name_lookup
+    fm._build_format_stats = lambda *_, **__: _FormatStats(shrunk={}, zscores={})
+    tr.build_name_lookup = lambda *_a, **_kw: {
+        "Forest": _forest(),
+        "Bear": _vanilla("Bear"),
+        "Cultivate": _cultivate(),
+        "BrokenCard": broken,
+    }
+    try:
+        out_path = tmp_path / "shard.parquet"
+        stats = materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_path=out_path,
+            n_sims_per_row=3,
+            n_workers=2,
+            chunksize=1,
+        )
+    finally:
+        fm._build_format_stats = fm_original
+        tr.build_name_lookup = tr_original
+
+    # 3 good rows + 1 row that fails simulation.
+    assert stats.rows_written == 3
+    assert stats.rows_failed_simulation == 1
