@@ -115,17 +115,24 @@ Per-row simulation + feature builder + parquet writer.
   vs `rows_failed_feature_build` and logged; the iterator
   doesn't abort the shard. `on_error="raise"` is available for
   tests.
-* `materialize_feature_matrix(set_code, duckdb_path, output_path,
-  ..., n_workers=1, chunksize=32)` — opens the games view, builds
-  the format stats once, streams rows in batches, and writes a
-  single parquet shard atomically via `os.replace` from a
-  `.tmp-<pid>` neighbour. When `n_workers > 1`, per-row work
-  fans out across a `multiprocessing.Pool` (spawn-based, Windows-
-  safe). Row order in the output parquet is NOT preserved with
-  `n_workers > 1` (`imap_unordered`), but the model + baseline
-  are order-invariant so this is fine for training. Real-world
-  speedup at 8 workers is ~6-7x on million-row jobs; smaller
-  jobs see less due to Pool spawn cost.
+* `materialize_feature_matrix(set_code, duckdb_path, output_dir,
+  ..., n_workers=1, chunksize=32, chunk_rows=5000, resume=True)`
+  opens the games view, builds the format stats once, streams rows
+  to workers, and writes a **directory** of
+  `chunk_NNNNNNNN.parquet` files. Each chunk is written atomically
+  (`.chunk_*.tmp-<pid>` + rename), and a crashed run can resume by
+  scanning surviving chunks for the
+  `(draft_id, match_number, game_number)` skip-set. When
+  `n_workers > 1`, per-row work fans out across a
+  `multiprocessing.Pool` (spawn-based, Windows-safe). Real-world
+  speedup at 8 workers is ~6-7x on million-row jobs; smaller jobs
+  see less due to Pool spawn cost. Row order in the output is not
+  preserved (`imap_unordered`); the model + baseline are
+  order-invariant.
+* `feature_parquet_paths(output_dir)` returns the sorted list of
+  chunk paths — downstream callers
+  (`BaselineModel.fit`, `train_model`) accept the resulting list
+  directly.
   Refuses to overwrite an existing shard unless `overwrite=True`.
 
 ### Slim cache schema
@@ -278,7 +285,7 @@ routes it according to the trained tree splits.
 
 After all five PRs merge, the full pipeline runs as:
 
-1. `materialize_feature_matrix(set_code="TLA", ...)` — build the
+1. `materialize_feature_matrix(set_code="TLA", output_dir=..., ...)` — build the
    slim feature parquet for TLA Premier Draft.
 2. `train_model(parquet_paths=[...], output_dir="models/v1")` —
    fit baseline + XGBoost + isotonic; save the four artifacts.

@@ -31,6 +31,7 @@ from mulligan_coach_model import (
     MaterializationStats,
     TrainingRow,
     build_row,
+    feature_parquet_paths,
     iter_feature_rows,
     materialize_feature_matrix,
 )
@@ -146,6 +147,7 @@ def _training_row(
     user_wr_bucket: str = "55-60%",
     user_n_games_bucket: str = "100-499",
     draft_id: str = "draft-1",
+    match_number: int = 1,
     game_number: int = 1,
 ) -> TrainingRow:
     hand, deck = _hand_and_deck()
@@ -161,6 +163,7 @@ def _training_row(
         event_type="PremierDraft",
         won=won,
         draft_id=draft_id,
+        match_number=match_number,
         game_number=game_number,
     )
 
@@ -194,13 +197,15 @@ def test_library_from_deck_handles_full_deck_minus_full_hand() -> None:
 
 
 def test_row_seed_is_deterministic_per_row() -> None:
-    s1 = _row_seed("draft-1", 1)
-    s2 = _row_seed("draft-1", 1)
-    s3 = _row_seed("draft-2", 1)
-    s4 = _row_seed("draft-1", 2)
+    s1 = _row_seed("draft-1", 1, 1)
+    s2 = _row_seed("draft-1", 1, 1)
+    s3 = _row_seed("draft-2", 1, 1)
+    s4 = _row_seed("draft-1", 1, 2)
+    s5 = _row_seed("draft-1", 2, 1)  # different match -> different seed
     assert s1 == s2
     assert s1 != s3
     assert s1 != s4
+    assert s1 != s5
     assert 0 <= s1 < 2**32
 
 
@@ -292,6 +297,7 @@ def _broken_training_row() -> TrainingRow:
         event_type="PremierDraft",
         won=False,
         draft_id="draft-broken",
+        match_number=1,
         game_number=1,
     )
 
@@ -366,6 +372,7 @@ def _make_games_view(con: duckdb.DuckDBPyConnection, n_rows: int) -> None:
             "expansion": "TLA",
             "event_type": "PremierDraft",
             "draft_id": f"draft-{i}",
+            "match_number": 1,
             "game_number": i,
             "on_play": (i % 2 == 0),
             "num_mulligans": 0,
@@ -428,23 +435,26 @@ def test_materialize_feature_matrix_writes_parquet(tmp_path: Path) -> None:
         }
         tr.build_name_lookup = lambda *_args, **_kwargs: lookup
 
-        out_path = tmp_path / "TLA" / "PremierDraft.parquet"
+        out_dir = tmp_path / "TLA" / "PremierDraft"
         stats = materialize_feature_matrix(
             set_code="TLA",
             duckdb_path=db_path,
-            output_path=out_path,
+            output_dir=out_dir,
             n_sims_per_row=3,
-            batch_size=2,
+            chunk_rows=2,
         )
     finally:
         fm._build_format_stats = original
         tr.build_name_lookup = original_build_lookup
 
-    assert out_path.exists()
+    # Output dir should exist with chunk files.
+    chunks = feature_parquet_paths(out_dir)
+    assert len(chunks) == 2  # 4 rows / chunk_rows=2 = 2 chunks
     assert stats.rows_written == 4
+    assert stats.chunks_written == 2
 
-    # Inspect the written parquet.
-    table = pq.read_table(out_path)  # type: ignore[no-untyped-call]
+    # Inspect the written parquet (read all chunks together).
+    table = pq.read_table(chunks)  # type: ignore[no-untyped-call]
     assert table.num_rows == 4
     cols = set(table.column_names)
     # Feature columns
@@ -466,13 +476,17 @@ def test_materialize_feature_matrix_writes_parquet(tmp_path: Path) -> None:
 
 
 def test_materialize_feature_matrix_refuses_to_overwrite(tmp_path: Path) -> None:
-    out_path = tmp_path / "shard.parquet"
-    out_path.write_bytes(b"existing")
+    """When chunks exist and both overwrite=False and resume=False,
+    the function refuses rather than risk losing or duplicating work."""
+    out_dir = tmp_path / "shard_dir"
+    out_dir.mkdir()
+    (out_dir / "chunk_00000000.parquet").write_bytes(b"existing")
     with pytest.raises(FileExistsError):
         materialize_feature_matrix(
             set_code="TLA",
             duckdb_path=tmp_path / "missing.duckdb",
-            output_path=out_path,
+            output_dir=out_dir,
+            resume=False,
         )
 
 
@@ -483,8 +497,18 @@ def test_materialize_feature_matrix_rejects_bad_n_workers(tmp_path: Path) -> Non
         materialize_feature_matrix(
             set_code="TLA",
             duckdb_path=tmp_path / "missing.duckdb",
-            output_path=tmp_path / "out.parquet",
+            output_dir=tmp_path / "out_dir",
             n_workers=0,
+        )
+
+
+def test_materialize_feature_matrix_rejects_bad_chunk_rows(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="chunk_rows"):
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=tmp_path / "missing.duckdb",
+            output_dir=tmp_path / "out_dir",
+            chunk_rows=0,
         )
 
 
@@ -562,33 +586,35 @@ def test_materialize_feature_matrix_n_workers_2_matches_single_process(
     db_path = _build_test_games_db(tmp_path, n_rows=4)
     originals = _patch_for_in_process_materialize()
     try:
-        out_serial = tmp_path / "serial.parquet"
+        out_serial = tmp_path / "serial"
         materialize_feature_matrix(
             set_code="TLA",
             duckdb_path=db_path,
-            output_path=out_serial,
+            output_dir=out_serial,
             n_sims_per_row=3,
             n_workers=1,
-            batch_size=10,
+            chunk_rows=10,
         )
-        out_parallel = tmp_path / "parallel.parquet"
+        out_parallel = tmp_path / "parallel"
         materialize_feature_matrix(
             set_code="TLA",
             duckdb_path=db_path,
-            output_path=out_parallel,
+            output_dir=out_parallel,
             n_sims_per_row=3,
             n_workers=2,
             chunksize=2,
-            batch_size=10,
+            chunk_rows=10,
         )
     finally:
         _restore_patches(originals)
 
-    assert out_serial.exists()
-    assert out_parallel.exists()
+    chunks_serial = feature_parquet_paths(out_serial)
+    chunks_parallel = feature_parquet_paths(out_parallel)
+    assert len(chunks_serial) >= 1
+    assert len(chunks_parallel) >= 1
 
-    table_serial = pq.read_table(out_serial)  # type: ignore[no-untyped-call]
-    table_parallel = pq.read_table(out_parallel)  # type: ignore[no-untyped-call]
+    table_serial = pq.read_table(chunks_serial)  # type: ignore[no-untyped-call]
+    table_parallel = pq.read_table(chunks_parallel)  # type: ignore[no-untyped-call]
     assert table_serial.num_rows == table_parallel.num_rows == 4
 
     # Sort both sides by (draft_id, game_number); compare every column.
@@ -624,6 +650,7 @@ def test_materialize_feature_matrix_n_workers_2_records_errors(tmp_path: Path) -
                     "expansion": "TLA",
                     "event_type": "PremierDraft",
                     "draft_id": f"draft-{i}",
+                    "match_number": 1,
                     "game_number": i,
                     "on_play": True,
                     "num_mulligans": 0,
@@ -650,6 +677,7 @@ def test_materialize_feature_matrix_n_workers_2_records_errors(tmp_path: Path) -
                 "expansion": "TLA",
                 "event_type": "PremierDraft",
                 "draft_id": "draft-bad",
+                "match_number": 1,
                 "game_number": 99,
                 "on_play": True,
                 "num_mulligans": 0,
@@ -708,11 +736,11 @@ def test_materialize_feature_matrix_n_workers_2_records_errors(tmp_path: Path) -
         "BrokenCard": broken,
     }
     try:
-        out_path = tmp_path / "shard.parquet"
+        out_dir = tmp_path / "shard_dir"
         stats = materialize_feature_matrix(
             set_code="TLA",
             duckdb_path=db_path,
-            output_path=out_path,
+            output_dir=out_dir,
             n_sims_per_row=3,
             n_workers=2,
             chunksize=1,
@@ -724,3 +752,152 @@ def test_materialize_feature_matrix_n_workers_2_records_errors(tmp_path: Path) -
     # 3 good rows + 1 row that fails simulation.
     assert stats.rows_written == 3
     assert stats.rows_failed_simulation == 1
+
+
+# ---------------------------------------------------------------------------
+# Resume / chunked-output tests
+# ---------------------------------------------------------------------------
+
+
+def test_materialize_feature_matrix_resumes_from_existing_chunks(tmp_path: Path) -> None:
+    """Simulate a crash: run materialize to produce chunks, delete one
+    chunk to leave a gap, run again with resume=True (default) and
+    confirm only the missing rows are re-materialised."""
+    db_path = _build_test_games_db(tmp_path, n_rows=6)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        stats_initial = materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+        # 6 rows / chunk_rows=2 = 3 chunks expected.
+        chunks = feature_parquet_paths(out_dir)
+        assert len(chunks) == 3
+        assert stats_initial.rows_written == 6
+        assert stats_initial.chunks_written == 3
+        assert stats_initial.rows_skipped_resume == 0
+
+        # Delete one of the chunks to simulate a partial-run state.
+        chunks[1].unlink()
+        assert len(feature_parquet_paths(out_dir)) == 2
+
+        # Re-run; resume=True is the default. Should skip the rows from
+        # the two surviving chunks and re-materialise the 2 missing rows.
+        stats_resume = materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+    finally:
+        _restore_patches(originals)
+
+    # 4 surviving rows skipped + 2 new rows materialised.
+    assert stats_resume.rows_skipped_resume == 4
+    assert stats_resume.rows_written == 2
+    assert stats_resume.chunks_written == 1
+
+    # Total rows on disk should now equal the original 6, with no duplicates.
+    final_chunks = feature_parquet_paths(out_dir)
+    table = pq.read_table(final_chunks)  # type: ignore[no-untyped-call]
+    df = table.to_pandas()
+    assert len(df) == 6
+    # No (draft_id, match_number, game_number) duplicates.
+    assert df.duplicated(subset=["draft_id", "match_number", "game_number"]).sum() == 0
+
+
+def test_materialize_feature_matrix_overwrite_clears_existing(tmp_path: Path) -> None:
+    """overwrite=True deletes existing chunks and starts fresh at chunk 0."""
+    db_path = _build_test_games_db(tmp_path, n_rows=4)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+        initial_chunks = feature_parquet_paths(out_dir)
+        assert len(initial_chunks) == 2
+
+        # Capture initial mtimes so we can detect that the chunks were rewritten.
+        initial_mtimes = {p.name: p.stat().st_mtime_ns for p in initial_chunks}
+
+        # Sleep briefly to ensure mtimes differ.
+        import time
+
+        time.sleep(0.05)
+
+        stats_overwrite = materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+            overwrite=True,
+        )
+    finally:
+        _restore_patches(originals)
+
+    # Fresh start: all 4 rows re-materialised, no resume-skip.
+    assert stats_overwrite.rows_skipped_resume == 0
+    assert stats_overwrite.rows_written == 4
+    final_chunks = feature_parquet_paths(out_dir)
+    assert len(final_chunks) == 2
+    # mtimes should be strictly newer than the originals.
+    for p in final_chunks:
+        assert p.stat().st_mtime_ns > initial_mtimes[p.name]
+
+
+def test_materialize_feature_matrix_sweeps_stale_tmp_files(tmp_path: Path) -> None:
+    """Orphan ``.chunk_*.tmp-*`` files (from a crashed prior run) are
+    deleted at the start of a new run so they don't accumulate."""
+    out_dir = tmp_path / "shard"
+    out_dir.mkdir()
+    stale_tmp = out_dir / ".chunk_00000000.parquet.tmp-99999"
+    stale_tmp.write_bytes(b"orphan")
+    assert stale_tmp.exists()
+
+    db_path = _build_test_games_db(tmp_path, n_rows=2)
+    originals = _patch_for_in_process_materialize()
+    try:
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+    finally:
+        _restore_patches(originals)
+
+    # The stale tmp file is gone; only the real chunk remains.
+    assert not stale_tmp.exists()
+    assert len(feature_parquet_paths(out_dir)) == 1
+
+
+def test_feature_parquet_paths_returns_sorted_chunks(tmp_path: Path) -> None:
+    out_dir = tmp_path / "shard"
+    out_dir.mkdir()
+    # Write chunks in non-alphabetical order; glob+sort should still
+    # return them ordered.
+    (out_dir / "chunk_00000002.parquet").write_bytes(b"")
+    (out_dir / "chunk_00000000.parquet").write_bytes(b"")
+    (out_dir / "chunk_00000001.parquet").write_bytes(b"")
+    paths = feature_parquet_paths(out_dir)
+    assert [p.name for p in paths] == [
+        "chunk_00000000.parquet",
+        "chunk_00000001.parquet",
+        "chunk_00000002.parquet",
+    ]
+
+
+def test_feature_parquet_paths_returns_empty_for_missing_dir(tmp_path: Path) -> None:
+    assert feature_parquet_paths(tmp_path / "does_not_exist") == []

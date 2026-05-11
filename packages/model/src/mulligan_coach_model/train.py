@@ -59,6 +59,7 @@ _NON_FEATURE_COLUMNS = frozenset(
         "expansion",
         "event_type",
         "draft_id",
+        "match_number",
         "game_number",
         "won",
     }
