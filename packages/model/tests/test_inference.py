@@ -144,6 +144,7 @@ def _make_games_view(con: duckdb.DuckDBPyConnection, n_rows: int) -> None:
             "expansion": "TLA",
             "event_type": "PremierDraft",
             "draft_id": f"draft-{i // 4}",
+            "match_number": 1,
             "game_number": i % 4,
             "on_play": (i % 2 == 0),
             "num_mulligans": 0,
@@ -192,19 +193,21 @@ def _train_tiny_model(tmp_path: Path) -> tuple[ModelBundle, list[ParsedCard], li
     tr.build_name_lookup = lambda *_a, **_kw: name_lookup
 
     try:
-        # 3. Materialise feature parquet.
-        parquet_path = tmp_path / "features.parquet"
+        # 3. Materialise feature parquet (directory of chunks).
+        from mulligan_coach_model import feature_parquet_paths
+
+        parquet_dir = tmp_path / "features"
         materialize_feature_matrix(
             set_code="TLA",
             duckdb_path=db_path,
-            output_path=parquet_path,
+            output_dir=parquet_dir,
             n_sims_per_row=3,
-            batch_size=20,
+            chunk_rows=20,
         )
 
         # 4. Train a tiny XGBoost on it.
         result = train_model(
-            parquet_paths=parquet_path,
+            parquet_paths=feature_parquet_paths(parquet_dir),
             output_dir=None,
             n_estimators=10,
             max_depth=3,

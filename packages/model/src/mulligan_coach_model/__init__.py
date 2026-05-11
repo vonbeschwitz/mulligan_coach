@@ -18,6 +18,7 @@ from .baseline import BaselineModel, CellKey
 from .feature_matrix import (
     MaterializationStats,
     build_row,
+    feature_parquet_paths,
     iter_feature_rows,
     materialize_feature_matrix,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "bucket_user_wr",
     "build_name_lookup",
     "build_row",
+    "feature_parquet_paths",
     "iter_feature_rows",
     "iter_training_rows",
     "load_train_result",

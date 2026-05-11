@@ -81,6 +81,7 @@ def _synthetic_features_dataframe(
                 "expansion": "TLA",
                 "event_type": "PremierDraft",
                 "draft_id": f"draft-{d}",
+                "match_number": 1,
                 "game_number": g,
                 "won": won,
             }
@@ -109,6 +110,7 @@ def test_feature_columns_strips_context_and_label() -> None:
         "expansion",
         "event_type",
         "draft_id",
+        "match_number",
         "game_number",
         "won",
     ]

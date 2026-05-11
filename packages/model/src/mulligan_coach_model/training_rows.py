@@ -116,10 +116,15 @@ class TrainingRow:
     event_type: str
     won: bool
     draft_id: str
+    match_number: int
+    """Match index within the draft (1, 2, ... in best-of-N matches).
+    Required to uniquely identify a game: ``(draft_id, game_number)``
+    alone is NOT unique because each draft plays multiple matches."""
+
     game_number: int
-    """Game index within a draft / event; combined with
-    ``draft_id`` it identifies the row uniquely. Useful for
-    deterministic per-row seeding in the feature-matrix step."""
+    """Game index within the *match* (1..3 typically). Together with
+    ``draft_id`` and ``match_number`` this identifies the row uniquely
+    and seeds the simulator deterministically."""
 
 
 @dataclass
@@ -293,6 +298,7 @@ _REQUIRED_CONTEXT_COLS: Final[tuple[str, ...]] = (
     "num_mulligans",
     "opp_num_mulligans",
     "won",
+    "match_number",
     "game_number",
 )
 
@@ -519,6 +525,7 @@ def _row_to_training_row(
         num_mulligans = row[context_idx["num_mulligans"]]
         opp_num_mulligans = row[context_idx["opp_num_mulligans"]]
         won = row[context_idx["won"]]
+        match_number = row[context_idx["match_number"]]
         game_number = row[context_idx["game_number"]]
     except (KeyError, IndexError):  # pragma: no cover — guarded by missing-col check above.
         stats.skipped_missing_context += 1
@@ -532,6 +539,7 @@ def _row_to_training_row(
         or num_mulligans is None
         or opp_num_mulligans is None
         or won is None
+        or match_number is None
         or game_number is None
     ):
         stats.skipped_missing_context += 1
@@ -587,5 +595,6 @@ def _row_to_training_row(
         event_type=str(event_type),
         won=bool(won),
         draft_id=str(draft_id),
+        match_number=int(match_number),
         game_number=int(game_number),
     )
