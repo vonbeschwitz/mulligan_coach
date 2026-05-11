@@ -116,9 +116,16 @@ Per-row simulation + feature builder + parquet writer.
   doesn't abort the shard. `on_error="raise"` is available for
   tests.
 * `materialize_feature_matrix(set_code, duckdb_path, output_path,
-  ...)` — opens the games view, builds the format stats once,
-  streams rows in batches, and writes a single parquet shard
-  atomically via `os.replace` from a `.tmp-<pid>` neighbour.
+  ..., n_workers=1, chunksize=32)` — opens the games view, builds
+  the format stats once, streams rows in batches, and writes a
+  single parquet shard atomically via `os.replace` from a
+  `.tmp-<pid>` neighbour. When `n_workers > 1`, per-row work
+  fans out across a `multiprocessing.Pool` (spawn-based, Windows-
+  safe). Row order in the output parquet is NOT preserved with
+  `n_workers > 1` (`imap_unordered`), but the model + baseline
+  are order-invariant so this is fine for training. Real-world
+  speedup at 8 workers is ~6-7x on million-row jobs; smaller
+  jobs see less due to Pool spawn cost.
   Refuses to overwrite an existing shard unless `overwrite=True`.
 
 ### Slim cache schema

@@ -43,6 +43,7 @@ when done, so partial files never appear at the canonical path.
 from __future__ import annotations
 
 import logging
+import multiprocessing
 import os
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
@@ -235,6 +236,145 @@ def build_row(
     return row_out
 
 
+# ---------------------------------------------------------------------------
+# Multiprocessing worker primitives
+# ---------------------------------------------------------------------------
+#
+# Two-process layout: the main process drives DuckDB + parquet writing; a
+# Pool of worker processes runs the simulator + feature builder for each
+# TrainingRow. ``format_stats`` and ``n_sims_per_row`` are set once per
+# worker via the Pool initializer; rows ship as pickled TrainingRow
+# instances (a few KB each — fast enough to amortise across a chunksize
+# of dozens of rows per task).
+#
+# Workers never raise out — they classify any exception into a
+# ``_WorkerResult(success=False, ...)`` so the main loop can bump the
+# right counter on :class:`MaterializationStats` without aborting the
+# whole shard. (A worker-process crash, e.g. segfault, still bubbles up;
+# we want those visible.)
+
+_WORKER_FORMAT_STATS: _FormatStats | None = None
+"""Per-worker format-stats cache. Set by :func:`_worker_init`; lives as a
+module-level global so subsequent tasks reuse it without re-pickling."""
+
+_WORKER_N_SIMS: int = 200
+"""Per-worker Monte Carlo replicate count. Set by :func:`_worker_init`."""
+
+
+@dataclass(frozen=True)
+class _WorkerResult:
+    """Result of one worker task: either a successful feature row or a
+    classified error.
+
+    The dataclass is picklable; ``multiprocessing.Pool`` serialises it
+    back to the main process across the imap_unordered channel. We
+    carry ``draft_id`` / ``game_number`` on the failure path so the
+    main process can log which row blew up.
+    """
+
+    success: bool
+    row: dict[str, Any] | None
+    error_kind: str | None  # "simulation" or "feature_build" when success=False
+    error_repr: str | None
+    draft_id: str
+    game_number: int
+
+
+def _worker_init(format_stats: _FormatStats, n_sims_per_row: int) -> None:
+    """Pool initializer: stash the per-worker constants once.
+
+    Avoids pickling ``format_stats`` (~hundreds of KB of WRs + zscores)
+    on every task. The main process passes them via ``initargs``;
+    every subsequent task reuses the same in-process copy.
+    """
+    global _WORKER_FORMAT_STATS, _WORKER_N_SIMS
+    _WORKER_FORMAT_STATS = format_stats
+    _WORKER_N_SIMS = n_sims_per_row
+
+
+def _worker_build(tr: TrainingRow) -> _WorkerResult:
+    """Run :func:`build_row` for one training row inside a worker process.
+
+    Never raises out — classifies exceptions into a ``_WorkerResult``
+    so the main loop's accounting matches the single-threaded path.
+    The classification logic mirrors :func:`iter_feature_rows`:
+    :class:`DeckEncodingError` -> simulation; everything else ->
+    feature_build.
+    """
+    if _WORKER_FORMAT_STATS is None:  # pragma: no cover — set by initializer
+        raise RuntimeError("_worker_init was not called; worker state missing.")
+    try:
+        row = build_row(
+            tr,
+            format_stats=_WORKER_FORMAT_STATS,
+            n_sims_per_row=_WORKER_N_SIMS,
+        )
+        return _WorkerResult(
+            success=True,
+            row=row,
+            error_kind=None,
+            error_repr=None,
+            draft_id=tr.draft_id,
+            game_number=tr.game_number,
+        )
+    except Exception as exc:
+        from mulligan_coach_simulation import DeckEncodingError
+
+        kind = "simulation" if isinstance(exc, DeckEncodingError) else "feature_build"
+        return _WorkerResult(
+            success=False,
+            row=None,
+            error_kind=kind,
+            error_repr=repr(exc),
+            draft_id=tr.draft_id,
+            game_number=tr.game_number,
+        )
+
+
+def _iter_feature_rows_parallel(
+    training_rows: Iterable[TrainingRow],
+    *,
+    format_stats: _FormatStats,
+    n_sims_per_row: int,
+    n_workers: int,
+    chunksize: int,
+    stats: MaterializationStats,
+) -> Iterator[dict[str, Any]]:
+    """Multi-process counterpart to :func:`iter_feature_rows`.
+
+    Order is **not preserved** — uses ``imap_unordered`` so a slow
+    row doesn't stall the whole shard. The model is order-invariant
+    and per-row determinism is preserved by :func:`_row_seed`, so this
+    is fine for training. Tests that compare parallel vs serial output
+    sort by ``(draft_id, game_number)`` first.
+    """
+    ctx = multiprocessing.get_context("spawn")
+    with ctx.Pool(
+        processes=n_workers,
+        initializer=_worker_init,
+        initargs=(format_stats, n_sims_per_row),
+    ) as pool:
+        for result in pool.imap_unordered(
+            _worker_build,
+            training_rows,
+            chunksize=chunksize,
+        ):
+            if result.success:
+                assert result.row is not None  # narrowed by success
+                yield result.row
+            else:
+                if result.error_kind == "simulation":
+                    stats.rows_failed_simulation += 1
+                else:
+                    stats.rows_failed_feature_build += 1
+                log.warning(
+                    "feature row build failed for draft_id=%s game_number=%s: %s",
+                    result.draft_id,
+                    result.game_number,
+                    result.error_repr,
+                )
+
+
 def iter_feature_rows(
     training_rows: Iterable[TrainingRow],
     *,
@@ -297,6 +437,8 @@ def materialize_feature_matrix(
     output_path: Path,
     event_type: str = "PremierDraft",
     n_sims_per_row: int = 200,
+    n_workers: int = 1,
+    chunksize: int = 32,
     limit: int | None = None,
     overwrite: bool = False,
     data_root: Path | None = None,
@@ -339,6 +481,22 @@ def materialize_feature_matrix(
         balance between simulator wall-clock and aggregate variance;
         higher values reduce per-row noise but at linear runtime
         cost. Tune after looking at a first training pass.
+    n_workers:
+        When ``> 1``, fan per-row work out across a
+        :class:`multiprocessing.Pool` of this many worker processes.
+        Default ``1`` keeps the existing single-threaded path. The
+        per-row simulator is mostly Python-level so multiprocessing
+        gives roughly an N-x speedup with N cores. With
+        ``n_workers > 1`` the parquet row order is **not stable** —
+        :func:`pool.imap_unordered` yields rows as workers complete
+        them. The model and the baseline are order-invariant so this
+        doesn't affect training; only relevant if a downstream
+        consumer depends on the row order in the parquet shard.
+    chunksize:
+        ``multiprocessing.Pool.imap_unordered`` chunksize. 32 is a
+        reasonable default for ~700ms-per-row tasks: small enough
+        that a slow row doesn't stall, large enough to amortise IPC.
+        Ignored when ``n_workers == 1``.
     limit:
         Optional cap on rows pulled from the SQL view (passes
         through to :func:`iter_training_rows`). Useful for smoke
@@ -366,6 +524,8 @@ def materialize_feature_matrix(
     """
     if output_path.exists() and not overwrite:
         raise FileExistsError(f"{output_path} already exists; pass overwrite=True to replace.")
+    if n_workers < 1:
+        raise ValueError(f"n_workers must be >= 1; got {n_workers}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = output_path.with_name(f".{output_path.name}.tmp-{os.getpid()}")
@@ -392,12 +552,36 @@ def materialize_feature_matrix(
             data_root=data_root,
             stats=materialization_stats.training_row_stats,
         )
-        feature_iter = iter_feature_rows(
-            row_iter,
-            format_stats=format_stats,
-            n_sims_per_row=n_sims_per_row,
-            stats=materialization_stats,
-        )
+        feature_iter: Iterator[dict[str, Any]]
+        if n_workers > 1:
+            # Materialise the training rows up front so the DuckDB
+            # cursor isn't held open during the Pool's lifetime. ~1M
+            # TrainingRow instances at ~a few KB each is ~hundreds of
+            # MB — acceptable for the duration of a single shard
+            # materialisation, and far smaller than the parquet output
+            # we're about to write.
+            row_list = list(row_iter)
+            log.info(
+                "materialize_feature_matrix(%s): fanning %d rows across %d workers",
+                set_code,
+                len(row_list),
+                n_workers,
+            )
+            feature_iter = _iter_feature_rows_parallel(
+                row_list,
+                format_stats=format_stats,
+                n_sims_per_row=n_sims_per_row,
+                n_workers=n_workers,
+                chunksize=chunksize,
+                stats=materialization_stats,
+            )
+        else:
+            feature_iter = iter_feature_rows(
+                row_iter,
+                format_stats=format_stats,
+                n_sims_per_row=n_sims_per_row,
+                stats=materialization_stats,
+            )
 
         writer: pq.ParquetWriter | None = None
         batch: list[dict[str, Any]] = []
