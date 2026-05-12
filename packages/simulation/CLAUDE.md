@@ -168,6 +168,96 @@ Make sure to account for how much mana is available. E.g. with 2 mana, only 1 sp
 **Everything else: do not cast.** Mark as castable in the snapshot, but don't actually cast. This includes creatures (other than mana dorks), removal, combat tricks, etc.
 
 
+## Mulligan-from-deck pipeline
+
+The base :func:`simulate(hand, library, ...)` answers "given this
+fixed hand, how does the game play out?". Three additional modules
+extend the simulator to answer "given this deck, what does mulliganing
+look like?":
+
+### `smoother.py` — Arena BO1 hand smoother
+
+`draw_smoothed_hand(deck, rng, num_candidates=3, temperature=-0.015,
+hand_size=7)` returns `(hand, library)` from a softmax over
+`num_candidates` independent shuffles, weighted by
+`exp(land_diff² / temperature)` where `land_diff` is the absolute
+difference between hand-land fraction and deck-land fraction.
+
+The formula and parameters were reverse-engineered against 700k+
+FIN Premier-Draft games (see
+`\\wsl$\Ubuntu\home\basti\hand_smoother`). Reproduces Arena's observed
+~79% rate of 2-3-land opening hands, vs the hypergeometric ~57%
+on a 17/40 deck. The smoothing applies to every candidate hand
+regardless of mulligan number — Arena does not adjust the smoother
+weights with mulligan count.
+
+### `bottoming.py` — London-mulligan bottoming heuristic
+
+`bottom_card(hand, deck, oh_wr=...)` returns the `Card` to put on
+the bottom for a mulligan-to-(N-1). The heuristic is spelled out in
+`packages/model/bottoming_heuristics.md`; in summary:
+
+1. **Land vs spell.** Bottom a land if hand has 5+ lands; bottom a
+   spell if 0-3 lands; with 4 lands, bottom a land iff there's a
+   castable ≤3-CMC creature/removal/counter/bounce.
+2. **Which land.** Prefer to keep duals; bottom lands not needed
+   for color requirements in hand; bottom the most over-represented
+   color; tiebreak by deck-color support.
+3. **Which spell.** Bottom fully-uncastable spells (mana count AND
+   colors); among uncastable prefer those whose colors aren't met
+   (a mana-short spell becomes castable with any draw, a color-short
+   one needs a specific land); higher CMC; lower shrunk OH WR.
+
+`OhWrLookup` is a `Callable[[Card], float | None]` — callers pass
+the **shrunk** OH WR (from `mulligan_coach_features.seventeenlands_shrinkage`),
+not the raw 17Lands value. Cards where the lookup returns `None`
+are unrankable and skip rule S4.
+
+Validation against brute-force-all-7-bottoms on 200 real TLA hands
+(model-scored at n_sims=1000 per candidate): top-1 rate 41.5%,
+top-3 76.5%, median P(win) gap 0.0, mean -1.3pp, 68.5% within 0.01
+P(win) of optimal. The heuristic isn't perfect — worst-case gap is
+-14pp — but is materially above random (top-1 ~14% / top-3 ~43%
+by chance) and serves the OVERLAY use case (real-time post-bottom
+hand simulation). See `models/tla_v2/bottoming_validation.log`.
+
+### `mulligan.py` — deck-level Monte Carlo wrapper
+
+`simulate_mulligan_from_deck(deck, target_hand_size=6, n_runs, seed,
+oh_wr=..., ...) -> AggregateStats` runs the full pipeline per Monte
+Carlo run:
+
+1. Shuffle deck into `Card` wrappers (unique `instance_id`).
+2. Draw smoothed 7-card hand via `draw_smoothed_hand`.
+3. Iteratively bottom `7 - target_hand_size` cards via
+   `bottom_card`, appending each to the library (true bottom of deck,
+   unreachable in the 4-turn window).
+4. Call `simulate_one_game(hand, library, ...)`.
+
+Returns the same `AggregateStats` shape as `simulate()`, so downstream
+feature / model pipelines don't need to distinguish the two paths.
+
+`post_mulligan_hand(deck, rng, target_hand_size, oh_wr) ->
+(hand, library)` is exposed for callers (e.g., the brute-force
+bottoming validation script) that need the post-mulligan
+hand/library pair without running the full game simulation.
+
+### When to use which entry point
+
+* `simulate(hand, library, ...)` — the user has a specific hand
+  in front of them (overlay reads Arena's log; website user has
+  pasted a hand). Predicts what THIS hand does.
+* `simulate_mulligan_from_deck(deck, target_hand_size=N, ...)` —
+  the OVERLAY's "what would I get if I mulled?" prediction. The
+  user hasn't drawn the mulligan hand yet — we simulate a typical
+  outcome.
+* For the OFFLINE per-deck mulligan benchmark used in the model
+  package (`scripts/mulligan_analysis_per_deck.py`), use the
+  smoother directly with `target_hand_size=7` and pass
+  `mulligan_number=N+1` to the model. The bottoming heuristic is
+  NOT used there because the model treats the hand as 7-card
+  pre-bottom (matches training distribution).
+
 ## Logging
 
 `verbose=True` flag. When set, log per turn:
