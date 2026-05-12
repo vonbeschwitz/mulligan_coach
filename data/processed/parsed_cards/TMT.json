@@ -26486,5 +26486,2520 @@
       "land taps for C/any",
       "non-mana activated abilities: 1"
     ]
+  },
+  {
+    "name": "Conqueror's Flail",
+    "set_code": "TMT",
+    "collector_number": "bonus-2x2-302",
+    "oracle_id": "9aace0d3-89e6-4254-b96f-ee3a878f2f91",
+    "arena_id": 100677,
+    "rarity": "rare",
+    "raw_oracle_text": "Equipped creature gets +1/+1 for each color among permanents you control.\nAs long as this Equipment is attached to a creature, your opponents can't cast spells during your turn.\nEquip {2}",
+    "type_line": "Artifact \u2014 Equipment",
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{2}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 2
+        }
+      ],
+      "cmc": 2,
+      "color_pips": {},
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": true,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "equipment"
+    ]
+  },
+  {
+    "name": "Teleportation Circle",
+    "set_code": "TMT",
+    "collector_number": "bonus-afr-39",
+    "oracle_id": "c786a0aa-d86f-42c3-a7ea-5cb6ab72b5ec",
+    "arena_id": 100664,
+    "rarity": "rare",
+    "raw_oracle_text": "At the beginning of your end step, exile up to one target artifact or creature you control, then return that card to the battlefield under its owner's control.",
+    "type_line": "Enchantment",
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{3}{W}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 3
+        },
+        {
+          "kind": "color",
+          "color": "W",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 4,
+      "color_pips": {
+        "W": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "W"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{3}{W}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 3
+              },
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 4,
+            "color_pips": {
+              "W": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": true,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "enchantment"
+    ]
+  },
+  {
+    "name": "Umezawa's Jitte",
+    "set_code": "TMT",
+    "collector_number": "bonus-bok-163",
+    "oracle_id": "1da10d5c-36a8-473f-a5d4-782ad61d8057",
+    "arena_id": 100681,
+    "rarity": "rare",
+    "raw_oracle_text": "Whenever equipped creature deals combat damage, put two charge counters on Umezawa's Jitte.\nRemove a charge counter from Umezawa's Jitte: Choose one \u2014\n\u2022 Equipped creature gets +2/+2 until end of turn.\n\u2022 Target creature gets -1/-1 until end of turn.\n\u2022 You gain 2 life.\nEquip {2}",
+    "type_line": "Legendary Artifact \u2014 Equipment",
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "supertypes": [
+      "Legendary"
+    ],
+    "mana_cost": {
+      "raw": "{2}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 2
+        }
+      ],
+      "cmc": 2,
+      "color_pips": {},
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": true,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "needs_llm",
+    "reasons": [
+      "equipment: unrecognised line: '\u2022 Equipped creature gets +2/+2 until end of turn.'",
+      "equipment: unrecognised line: '\u2022 Target creature gets -1/-1 until end of turn.'",
+      "equipment: unrecognised line: '\u2022 You gain 2 life.'"
+    ]
+  },
+  {
+    "name": "Cytoplast Manipulator",
+    "set_code": "TMT",
+    "collector_number": "bonus-dis-23",
+    "oracle_id": "026ef98e-4f0a-4a6d-b74f-d17ac8b10e37",
+    "arena_id": 100667,
+    "rarity": "rare",
+    "raw_oracle_text": "Graft 2 (This creature enters with two +1/+1 counters on it. Whenever another creature enters, you may move a +1/+1 counter from this creature onto it.)\n{U}, {T}: Gain control of target creature with a +1/+1 counter on it for as long as this creature remains on the battlefield.",
+    "type_line": "Creature \u2014 Human Wizard Mutant",
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Human",
+      "Wizard",
+      "Mutant"
+    ],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{2}{U}{U}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 2
+        },
+        {
+          "kind": "color",
+          "color": "U",
+          "colors": null,
+          "amount": null
+        },
+        {
+          "kind": "color",
+          "color": "U",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 4,
+      "color_pips": {
+        "U": 2
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "U"
+    ],
+    "power": "0",
+    "toughness": "0",
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{2}{U}{U}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 4,
+            "color_pips": {
+              "U": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{U}",
+            "pips": [
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 1,
+            "color_pips": {
+              "U": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": true,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": true,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "creature stats parsed",
+      "unrecognised line: 'Graft 2'",
+      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+    ]
+  },
+  {
+    "name": "Brainstorm",
+    "set_code": "TMT",
+    "collector_number": "bonus-dsc-113",
+    "oracle_id": "36cd2364-d113-47d1-b2c4-b088d9eb88dd",
+    "arena_id": 100666,
+    "rarity": "common",
+    "raw_oracle_text": "Draw three cards, then put two cards from your hand on top of your library in any order.",
+    "type_line": "Instant",
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{U}",
+      "pips": [
+        {
+          "kind": "color",
+          "color": "U",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 1,
+      "color_pips": {
+        "U": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "U"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{U}",
+            "pips": [
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 1,
+            "color_pips": {
+              "U": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "draw_cards",
+            "n": 3
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 3,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "effects: draw_cards x3"
+    ]
+  },
+  {
+    "name": "Waves of Aggression",
+    "set_code": "TMT",
+    "collector_number": "bonus-eve-148",
+    "oracle_id": "10991b1a-7dd3-4fbf-a4c8-200dc62fc605",
+    "arena_id": 100675,
+    "rarity": "rare",
+    "raw_oracle_text": "Untap all creatures that attacked this turn. After this main phase, there is an additional combat phase followed by an additional main phase.\nRetrace (You may cast this card from your graveyard by discarding a land card in addition to paying its other costs.)",
+    "type_line": "Sorcery",
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{3}{R/W}{R/W}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 3
+        },
+        {
+          "kind": "hybrid",
+          "color": null,
+          "colors": [
+            "R",
+            "W"
+          ],
+          "amount": null
+        },
+        {
+          "kind": "hybrid",
+          "color": null,
+          "colors": [
+            "R",
+            "W"
+          ],
+          "amount": null
+        }
+      ],
+      "cmc": 5,
+      "color_pips": {},
+      "has_x": false,
+      "has_hybrid": true,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "R",
+      "W"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{3}{R/W}{R/W}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 3
+              },
+              {
+                "kind": "hybrid",
+                "color": null,
+                "colors": [
+                  "R",
+                  "W"
+                ],
+                "amount": null
+              },
+              {
+                "kind": "hybrid",
+                "color": null,
+                "colors": [
+                  "R",
+                  "W"
+                ],
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": true,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "default_cast_unencoded_effects"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": true,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "needs_llm",
+    "reasons": [
+      "alternative-cost keyword(s) present: retrace"
+    ]
+  },
+  {
+    "name": "Doubling Season",
+    "set_code": "TMT",
+    "collector_number": "bonus-fdn-216",
+    "oracle_id": "01546b7d-a233-4176-8843-d732074dc5b6",
+    "arena_id": 100673,
+    "rarity": "mythic",
+    "raw_oracle_text": "If an effect would create one or more tokens under your control, it creates twice that many of those tokens instead.\nIf an effect would put one or more counters on a permanent you control, it puts twice that many of those counters on that permanent instead.",
+    "type_line": "Enchantment",
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{4}{G}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 4
+        },
+        {
+          "kind": "color",
+          "color": "G",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 5,
+      "color_pips": {
+        "G": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "G"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{4}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": true,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "enchantment"
+    ]
+  },
+  {
+    "name": "Metallic Mimic",
+    "set_code": "TMT",
+    "collector_number": "bonus-inr-268",
+    "oracle_id": "1f91297a-ec2b-4ea8-9198-aa1daac20ff8",
+    "arena_id": 100678,
+    "rarity": "rare",
+    "raw_oracle_text": "As this creature enters, choose a creature type.\nThis creature is the chosen type in addition to its other types.\nEach other creature you control of the chosen type enters with an additional +1/+1 counter on it.",
+    "type_line": "Artifact Creature \u2014 Shapeshifter",
+    "types": [
+      "Artifact",
+      "Creature"
+    ],
+    "subtypes": [
+      "Shapeshifter"
+    ],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{2}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 2
+        }
+      ],
+      "cmc": 2,
+      "color_pips": {},
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [],
+    "power": "2",
+    "toughness": "1",
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": true,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "needs_llm",
+    "reasons": [
+      "creature stats parsed",
+      "unrecognised line: 'Each other creature you control of the chosen type enters with an additional +1/+1 counter on it.'"
+    ]
+  },
+  {
+    "name": "Ashcoat of the Shadow Swarm",
+    "set_code": "TMT",
+    "collector_number": "bonus-j22-19",
+    "oracle_id": "9cc69ea5-42a2-4306-ac6d-cff5adb20bcb",
+    "arena_id": 100668,
+    "rarity": "mythic",
+    "raw_oracle_text": "Whenever Ashcoat attacks or blocks, other Rats you control get +X/+X until end of turn, where X is the number of Rats you control.\nAt the beginning of your end step, you may mill four cards. If you do, return up to two Rat creature cards from your graveyard to your hand. (To mill a card, put the top card of your library into your graveyard.)",
+    "type_line": "Legendary Creature \u2014 Rat Warlock",
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Rat",
+      "Warlock"
+    ],
+    "supertypes": [
+      "Legendary"
+    ],
+    "mana_cost": {
+      "raw": "{3}{B}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 3
+        },
+        {
+          "kind": "color",
+          "color": "B",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 4,
+      "color_pips": {
+        "B": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "B"
+    ],
+    "power": "3",
+    "toughness": "4",
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{3}{B}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 3
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 4,
+            "color_pips": {
+              "B": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": true,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "creature stats parsed"
+    ]
+  },
+  {
+    "name": "Sword of Sinew and Steel",
+    "set_code": "TMT",
+    "collector_number": "bonus-mh1-228",
+    "oracle_id": "ccab4509-f189-4610-9597-547e7f6b0775",
+    "arena_id": 100680,
+    "rarity": "mythic",
+    "raw_oracle_text": "Equipped creature gets +2/+2 and has protection from black and from red.\nWhenever equipped creature deals combat damage to a player, destroy up to one target planeswalker and up to one target artifact.\nEquip {2}",
+    "type_line": "Artifact \u2014 Equipment",
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{3}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 3
+        }
+      ],
+      "cmc": 3,
+      "color_pips": {},
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{3}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 3
+              }
+            ],
+            "cmc": 3,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": true,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "equipment"
+    ]
+  },
+  {
+    "name": "Trouble in Pairs",
+    "set_code": "TMT",
+    "collector_number": "bonus-mkc-15",
+    "oracle_id": "f349f58b-8cc8-45e4-9565-2b46fdf976c9",
+    "arena_id": 100665,
+    "rarity": "rare",
+    "raw_oracle_text": "If an opponent would begin an extra turn, that player skips that turn instead.\nWhenever an opponent attacks you with two or more creatures, draws their second card each turn, or casts their second spell each turn, you draw a card.",
+    "type_line": "Enchantment",
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{2}{W}{W}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 2
+        },
+        {
+          "kind": "color",
+          "color": "W",
+          "colors": null,
+          "amount": null
+        },
+        {
+          "kind": "color",
+          "color": "W",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 4,
+      "color_pips": {
+        "W": 2
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "W"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{2}{W}{W}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              },
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 4,
+            "color_pips": {
+              "W": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 1,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "enchantment"
+    ]
+  },
+  {
+    "name": "Undercity Sewers",
+    "set_code": "TMT",
+    "collector_number": "bonus-mkm-270",
+    "oracle_id": "08d80efc-9542-4ba2-824c-c8615d8d07f2",
+    "arena_id": 100682,
+    "rarity": "rare",
+    "raw_oracle_text": "({T}: Add {U} or {B}.)\nThis land enters tapped.\nWhen this land enters, surveil 1. (Look at the top card of your library. You may put it into your graveyard.)",
+    "type_line": "Land \u2014 Island Swamp",
+    "types": [
+      "Land"
+    ],
+    "subtypes": [
+      "Island",
+      "Swamp"
+    ],
+    "supertypes": [],
+    "mana_cost": null,
+    "colors": [],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [],
+    "mana_abilities": [
+      {
+        "cost": {
+          "mana": {
+            "raw": "",
+            "pips": [],
+            "cmc": 0,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": true,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "produces": [
+          [
+            "U"
+          ],
+          [
+            "B"
+          ]
+        ],
+        "condition": null
+      }
+    ],
+    "enter_condition": {
+      "kind": "always",
+      "n": null,
+      "color": null,
+      "basic_type": null
+    },
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": true,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "typed dual land \u2014 produces {U} / {B}",
+      "land taps for U/B (always tapped)"
+    ]
+  },
+  {
+    "name": "Arcbound Ravager",
+    "set_code": "TMT",
+    "collector_number": "bonus-mma-198",
+    "oracle_id": "62e7e7b1-9887-4d15-b0e5-a8ddc711bd88",
+    "arena_id": 100676,
+    "rarity": "rare",
+    "raw_oracle_text": "Sacrifice an artifact: Put a +1/+1 counter on this creature.\nModular 1 (This creature enters with a +1/+1 counter on it. When it dies, you may put its +1/+1 counters on target artifact creature.)",
+    "type_line": "Artifact Creature \u2014 Beast",
+    "types": [
+      "Artifact",
+      "Creature"
+    ],
+    "subtypes": [
+      "Beast"
+    ],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{2}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 2
+        }
+      ],
+      "cmc": 2,
+      "color_pips": {},
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [],
+    "power": "0",
+    "toughness": "0",
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "",
+            "pips": [],
+            "cmc": 0,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": {
+            "target": "artifact"
+          },
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": true,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "needs_llm",
+    "reasons": [
+      "creature stats parsed",
+      "unrecognised line: 'Modular 1'"
+    ]
+  },
+  {
+    "name": "All Will Be One",
+    "set_code": "TMT",
+    "collector_number": "bonus-one-118",
+    "oracle_id": "477374dc-042c-48f7-9ebe-99c15d8ae04f",
+    "arena_id": 100670,
+    "rarity": "mythic",
+    "raw_oracle_text": "Whenever you put one or more counters on a permanent or player, this enchantment deals that much damage to target opponent, creature an opponent controls, or planeswalker an opponent controls.",
+    "type_line": "Enchantment",
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{3}{R}{R}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 3
+        },
+        {
+          "kind": "color",
+          "color": "R",
+          "colors": null,
+          "amount": null
+        },
+        {
+          "kind": "color",
+          "color": "R",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 5,
+      "color_pips": {
+        "R": 2
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "R"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{3}{R}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 3
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "R": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": true,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "enchantment"
+    ]
+  },
+  {
+    "name": "Silverclad Ferocidons",
+    "set_code": "TMT",
+    "collector_number": "bonus-rix-115",
+    "oracle_id": "b3aa5889-0d98-4a8c-a8b1-ada1e9b169e1",
+    "arena_id": 100671,
+    "rarity": "rare",
+    "raw_oracle_text": "Enrage \u2014 Whenever this creature is dealt damage, each opponent sacrifices a permanent of their choice.",
+    "type_line": "Creature \u2014 Dinosaur",
+    "types": [
+      "Creature"
+    ],
+    "subtypes": [
+      "Dinosaur"
+    ],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{5}{R}{R}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 5
+        },
+        {
+          "kind": "color",
+          "color": "R",
+          "colors": null,
+          "amount": null
+        },
+        {
+          "kind": "color",
+          "color": "R",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 7,
+      "color_pips": {
+        "R": 2
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "R"
+    ],
+    "power": "8",
+    "toughness": "5",
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{5}{R}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {
+              "R": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": true,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "creature stats parsed",
+      "unrecognised line: 'Enrage \u2014 Whenever this creature is dealt damage, each opponent sacrifices a permanent of their choice.'",
+      "MV>=7 fast-path: card unlikely to affect mulligan-relevant turns"
+    ]
+  },
+  {
+    "name": "Rhythm of the Wild",
+    "set_code": "TMT",
+    "collector_number": "bonus-rvr-217",
+    "oracle_id": "acfa77fd-3610-4f12-9c3c-bd860ce91700",
+    "arena_id": 100674,
+    "rarity": "uncommon",
+    "raw_oracle_text": "Creature spells you control can't be countered.\nNontoken creatures you control have riot. (They enter with your choice of a +1/+1 counter or haste.)",
+    "type_line": "Enchantment",
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{1}{R}{G}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 1
+        },
+        {
+          "kind": "color",
+          "color": "R",
+          "colors": null,
+          "amount": null
+        },
+        {
+          "kind": "color",
+          "color": "G",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 3,
+      "color_pips": {
+        "R": 1,
+        "G": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "G",
+      "R"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{1}{R}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 1
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 3,
+            "color_pips": {
+              "R": 1,
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": true,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "needs_llm",
+    "reasons": [
+      "enchantment: unrecognised line: 'Nontoken creatures you control have riot.'"
+    ]
+  },
+  {
+    "name": "Plague of Vermin",
+    "set_code": "TMT",
+    "collector_number": "bonus-shm-73",
+    "oracle_id": "efc12acf-ffef-40a6-b2ce-fe93e89ad840",
+    "arena_id": 100669,
+    "rarity": "rare",
+    "raw_oracle_text": "Starting with you, each player may pay any amount of life. Repeat this process until no one pays life. Each player creates a 1/1 black Rat creature token for each 1 life they paid this way.",
+    "type_line": "Sorcery",
+    "types": [
+      "Sorcery"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{6}{B}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 6
+        },
+        {
+          "kind": "color",
+          "color": "B",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 7,
+      "color_pips": {
+        "B": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "B"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{6}{B}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 6
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {
+              "B": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": []
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": true,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "unrecognised line: 'Starting with you, each player may pay any amount of life. Repeat this process until no one pays life. Each player creates a 1/1 black Rat creature token for each 1 life they paid this way.'",
+      "MV>=7 fast-path: card unlikely to affect mulligan-relevant turns"
+    ]
+  },
+  {
+    "name": "Path to Exile",
+    "set_code": "TMT",
+    "collector_number": "bonus-soc-159",
+    "oracle_id": "d683d985-9888-4d21-8b5f-69e69ce4a03b",
+    "arena_id": 100663,
+    "rarity": "uncommon",
+    "raw_oracle_text": "Exile target creature. Its controller may search their library for a basic land card, put that card onto the battlefield tapped, then shuffle.",
+    "type_line": "Instant",
+    "types": [
+      "Instant"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{W}",
+      "pips": [
+        {
+          "kind": "color",
+          "color": "W",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 1,
+      "color_pips": {
+        "W": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "W"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{W}",
+            "pips": [
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 1,
+            "color_pips": {
+              "W": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "removal_exile"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": true,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "effects: noop (removal_exile)"
+    ]
+  },
+  {
+    "name": "Underworld Breach",
+    "set_code": "TMT",
+    "collector_number": "bonus-thb-161",
+    "oracle_id": "27e0948b-9916-473b-8d8c-a51bdfbc7457",
+    "arena_id": 100672,
+    "rarity": "rare",
+    "raw_oracle_text": "Each nonland card in your graveyard has escape. The escape cost is equal to the card's mana cost plus exile three other cards from your graveyard. (You may cast cards from your graveyard for their escape cost.)\nAt the beginning of the end step, sacrifice this enchantment.",
+    "type_line": "Enchantment",
+    "types": [
+      "Enchantment"
+    ],
+    "subtypes": [],
+    "supertypes": [],
+    "mana_cost": {
+      "raw": "{1}{R}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 1
+        },
+        {
+          "kind": "color",
+          "color": "R",
+          "colors": null,
+          "amount": null
+        }
+      ],
+      "cmc": 2,
+      "color_pips": {
+        "R": 1
+      },
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [
+      "R"
+    ],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{1}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 1
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {
+              "R": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": false,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": true,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "needs_llm",
+    "reasons": [
+      "enchantment: unrecognised line: \"Each nonland card in your graveyard has escape. The escape cost is equal to the card's mana cost plus exile three other cards from your graveyard.\""
+    ]
+  },
+  {
+    "name": "Shadowspear",
+    "set_code": "TMT",
+    "collector_number": "bonus-thb-236",
+    "oracle_id": "8b27326f-e7b8-4a4d-b589-df459246d19a",
+    "arena_id": 100679,
+    "rarity": "rare",
+    "raw_oracle_text": "Equipped creature gets +1/+1 and has trample and lifelink.\n{1}: Permanents your opponents control lose hexproof and indestructible until end of turn.\nEquip {2}",
+    "type_line": "Legendary Artifact \u2014 Equipment",
+    "types": [
+      "Artifact"
+    ],
+    "subtypes": [
+      "Equipment"
+    ],
+    "supertypes": [
+      "Legendary"
+    ],
+    "mana_cost": {
+      "raw": "{1}",
+      "pips": [
+        {
+          "kind": "generic",
+          "color": null,
+          "colors": null,
+          "amount": 1
+        }
+      ],
+      "cmc": 1,
+      "color_pips": {},
+      "has_x": false,
+      "has_hybrid": false,
+      "has_phyrexian": false,
+      "has_colorless": false,
+      "has_snow": false
+    },
+    "colors": [],
+    "power": null,
+    "toughness": null,
+    "evergreen_keywords": [],
+    "modes": [
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{1}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 1
+              }
+            ],
+            "cmc": 1,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "enters_battlefield"
+          }
+        ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{1}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 1
+              }
+            ],
+            "cmc": 1,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
+      }
+    ],
+    "mana_abilities": [],
+    "enter_condition": null,
+    "role_features": {
+      "is_creature": false,
+      "is_planeswalker": false,
+      "is_equipment": true,
+      "is_vehicle": false,
+      "is_land": false,
+      "is_mana_rock": false,
+      "is_saga": false,
+      "is_class": false,
+      "is_punch_fight": false,
+      "is_other": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": false,
+      "removal_burn_damage": null,
+      "is_counterspell": false,
+      "is_bounce": false,
+      "is_top_library": false,
+      "combat_trick_power": null,
+      "combat_trick_toughness": null,
+      "combat_trick_granted_keywords": [],
+      "is_removal_aura": false,
+      "is_pump_aura": false,
+      "aura_pump_power": null,
+      "aura_pump_toughness": null,
+      "aura_pump_granted_keywords": [],
+      "cards_drawn": 0,
+      "cards_manipulated": 0
+    },
+    "status": "auto",
+    "reasons": [
+      "equipment"
+    ]
   }
 ]

@@ -278,10 +278,20 @@ def build_name_lookup(
 # Constants used in row-level validation. Centralised so PR 2 / 4 can
 # reuse them if they ever need to mirror the same filters.
 EXPECTED_HAND_SIZE: Final[int] = 7
-EXPECTED_DECK_SIZE: Final[int] = 40
+MIN_DECK_SIZE: Final[int] = 40
+MAX_DECK_SIZE: Final[int] = 42
 """17Lands records the pre-bottom 7-card draw regardless of
-``num_mulligans`` (London mulligan); decks are always 40 cards in
-Premier Draft / Sealed."""
+``num_mulligans`` (London mulligan). Limited decks are at least 40
+cards; many players run 41 or 42 when they're torn between two
+strong cards. We accept up to 42 — beyond that the deck is unusual
+enough to suggest data corruption or an off-meta strategy not worth
+training on."""
+
+# Back-compat alias: the original constant.  Existing call sites used
+# ``EXPECTED_DECK_SIZE == 40`` as the canonical "minimum legal deck"
+# value; the variable name now refers to the lower bound of the
+# accepted range. Kept for use by tests and downstream consumers.
+EXPECTED_DECK_SIZE: Final[int] = MIN_DECK_SIZE
 
 MAX_MULLIGAN_NUMBER: Final[int] = 6
 """Cap on plausible mulligan counts. Premier Draft hands ``> 6``
@@ -559,7 +569,7 @@ def _row_to_training_row(
     if hand_size != EXPECTED_HAND_SIZE:
         stats.skipped_bad_hand_size += 1
         return None
-    if deck_size != EXPECTED_DECK_SIZE:
+    if deck_size < MIN_DECK_SIZE or deck_size > MAX_DECK_SIZE:
         stats.skipped_bad_deck_size += 1
         return None
 

@@ -22,6 +22,7 @@ import typer
 from .loader import filter_cards, load_all_cards, load_arena_id_index
 from .models import ParsedCard, ParseStatus
 from .parser import parse_card
+from .seventeenlands_stats import load_premier_draft_stats
 from .store import (
     load_parsed_cards,
     merge_detector_run,
@@ -288,6 +289,85 @@ def _parse_set_list(sets: str) -> list[str]:
     return seen
 
 
+def _bonus_sheet_scryfall_entries(
+    set_code: str,
+    primary_pool: list[dict[str, Any]],
+    scryfall_by_name: dict[str, dict[str, Any]],
+    *,
+    data_root: Path | None,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """For a set whose 17Lands Premier-Draft ratings parquet exists,
+    return the Scryfall entries for any cards in the format that
+    aren't in the primary set pool.
+
+    Modern Limited formats often include a "bonus sheet" of reprints
+    from older sets (TLA's Special Guests, TMT's Through the Omenpaths
+    bonus slot, etc.). Those cards exist in Scryfall under their
+    original set's code, not the current set's, so a naive
+    ``set=<code>`` filter misses them. The 17Lands ratings parquet
+    is the right source of truth for *which* cards are in the format
+    — it lists every card a Premier-Draft player can encounter.
+
+    Returns ``(extras, mtga_ids_by_name)`` where:
+
+    * ``extras`` are Scryfall dicts ready to be parsed, with the
+      ``set`` field overridden to *set_code* so each resulting
+      ParsedCard reports the target set as its origin.
+    * ``mtga_ids_by_name`` is a name → Arena card ID map sourced
+      from the 17Lands parquet. The caller patches ``arena_id`` on
+      the parsed bonus-sheet cards from this map, because MTGJSON's
+      ``(oracle_id, set_code)`` index typically doesn't carry the
+      *reprint's* mtga_id under the current set code.
+
+    If the ratings parquet for *set_code* doesn't exist (e.g., a
+    set whose download step hasn't run yet), returns empty.
+    """
+    try:
+        stats = load_premier_draft_stats(set_code, data_root=data_root)
+    except FileNotFoundError:
+        return [], {}
+    # Names covered by the primary pool, including DFC front-face fallback.
+    primary_names: set[str] = set()
+    for c in primary_pool:
+        n = c.get("name")
+        if n is None:
+            continue
+        primary_names.add(str(n))
+        if " // " in str(n):
+            primary_names.add(str(n).split(" // ", 1)[0])
+    extras: list[dict[str, Any]] = []
+    arena_ids: dict[str, int] = {}
+    missed: list[str] = []
+    for name, stats_row in stats.by_name.items():
+        if name in primary_names:
+            continue
+        match = scryfall_by_name.get(name)
+        if match is None:
+            missed.append(name)
+            continue
+        # Clone the source dict and rewrite identifying fields so the
+        # parsed ParsedCard's ``set_code`` reports the current format
+        # and the ``collector_number`` is unique within the per-set
+        # JSON (a bonus-sheet card's source-set collector number can
+        # collide with a primary card's, breaking the
+        # collector_number-keyed `mark` and apply-patches flows).
+        extra = dict(match)
+        source_set = str(match.get("set", "?")).lower()
+        source_cn = str(match.get("collector_number", "?"))
+        extra["set"] = set_code.lower()
+        extra["collector_number"] = f"bonus-{source_set}-{source_cn}"
+        extras.append(extra)
+        arena_ids[name] = stats_row.mtga_id
+    if missed:
+        log.warning(
+            "[%s] %d card name(s) from 17Lands ratings not in Scryfall: %s",
+            set_code,
+            len(missed),
+            sorted(missed)[:10],
+        )
+    return extras, arena_ids
+
+
 @app.command("run-detector")
 def run_detector(
     sets: SetsOption = "TMT,ECL,TLA",
@@ -300,6 +380,17 @@ def run_detector(
     Cards in the existing per-set file with status ``llm_encoded`` or
     ``needs_human`` are preserved; everything else is rewritten with the
     fresh parse. Pass ``--force`` to overwrite even those.
+
+    The pool for each set is the union of:
+
+    * Scryfall cards with ``set=<code>`` (the primary set), and
+    * "Bonus sheet" reprints — cards listed in the 17Lands Premier-Draft
+      ratings parquet for the format but not in the primary Scryfall
+      set. Each reprint's Scryfall dict is rewritten to claim ``set=<code>``
+      before parsing, so the resulting ``ParsedCard.set_code`` reports
+      the current format. arena_id for bonus-sheet cards is sourced
+      from 17Lands' ``mtga_id`` (MTGJSON's index keys on the original
+      set's printing and would return None here).
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     log.info("Loading Scryfall snapshot…")
@@ -309,6 +400,19 @@ def run_detector(
     # be silly. Build once, reuse across every parse_card call below.
     arena_id_index = load_arena_id_index(data_root)
     log.info("MTGJSON arena_id index covers %d printings.", len(arena_id_index))
+
+    # Name → Scryfall dict over all normal-layout entries; used by the
+    # bonus-sheet fallback to find the canonical printing of each
+    # reprint by name.  Built once.
+    scryfall_by_name: dict[str, dict[str, Any]] = {}
+    for card in all_cards:
+        if str(card.get("layout", "normal")) != "normal":
+            continue
+        n = card.get("name")
+        if n is None:
+            continue
+        scryfall_by_name.setdefault(str(n), card)
+
     set_codes = _parse_set_list(sets)
     if not set_codes:
         typer.echo("No set codes provided. Aborting.")
@@ -324,7 +428,25 @@ def run_detector(
         if not pool:
             typer.echo(f"\n[{code}] no cards found in Scryfall snapshot — skipping.")
             continue
+        bonus_extras, bonus_arena_ids = _bonus_sheet_scryfall_entries(
+            code, pool, scryfall_by_name, data_root=data_root
+        )
+        if bonus_extras:
+            log.info(
+                "[%s] Including %d bonus-sheet card(s) from 17Lands ratings.",
+                code,
+                len(bonus_extras),
+            )
+            pool.extend(bonus_extras)
         freshly_parsed = [parse_card(card, arena_id_index=arena_id_index) for card in pool]
+        # Backfill arena_id for bonus-sheet cards from 17Lands' mtga_id —
+        # MTGJSON's (oracle_id, set_code) index is keyed on the
+        # original printing and returns None for the reprint under the
+        # current format's set code.
+        if bonus_arena_ids:
+            for parsed in freshly_parsed:
+                if parsed.arena_id is None and parsed.name in bonus_arena_ids:
+                    parsed.arena_id = bonus_arena_ids[parsed.name]
         merged, n_preserved, n_rewritten = merge_detector_run(
             code,
             freshly_parsed,
