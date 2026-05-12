@@ -957,6 +957,14 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
     produces no simulator-relevant effects (pure removal spells become
     [NoopEffect(role_tag="…")]).
     """
+    # Land-fetch — "Search your library for a basic land card, put it
+    # onto the battlefield tapped, then shuffle." (Evolving Wilds-style).
+    # Tried first so the activated-ability path on sac-fetch lands
+    # produces a real FetchLandEffect rather than falling through to
+    # the noop placeholder.
+    if fetch := _match_fetch_land_effects(chunk):
+        return list(fetch)
+
     # Loot — "Draw N, then discard N". Try this BEFORE plain draw so
     # the loot pattern wins over the leading "Draw a card" partial match.
     if m := _LOOT_RE.match(chunk):
@@ -1664,6 +1672,23 @@ def _parse_land(
         )
 
     if not mana_abilities:
+        # Lands with no tap-for-mana ability but at least one
+        # recognised activated mode (Evolving Wilds-style sac-fetches,
+        # or other utility-only lands) still auto-classify. The
+        # simulator only needs the activated mode's structure to
+        # evaluate castability / playability; it doesn't require
+        # a mana ability to exist.
+        if extra_modes:
+            reasons.append(f"no tap-for-mana ability; {len(extra_modes)} activated ability(ies)")
+            return ParsedCard(
+                status=ParseStatus.AUTO,
+                modes=extra_modes,
+                mana_abilities=[],
+                enter_condition=enter_condition,
+                role_features=role_features,
+                reasons=reasons,
+                **base,
+            )
         return ParsedCard(
             status=ParseStatus.NEEDS_LLM,
             modes=extra_modes,

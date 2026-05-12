@@ -126,9 +126,11 @@ def test_deathcap_style_conditional_etb_tapped_auto() -> None:
     assert p.mana_abilities[0].produces == [["B"], ["G"]]
 
 
-def test_fetch_land_needs_llm() -> None:
-    # Sac-fetches still bail in v1 — they live on the activated-cost path
-    # which the land parser doesn't yet recognise.
+def test_sac_fetch_land_auto() -> None:
+    """A land whose only ability is sac-to-fetch (Evolving Wilds) now
+    auto-classifies as a utility land with an activated mode and no
+    mana ability. The activated mode carries a ``FetchLandEffect`` so
+    the simulator can evaluate playability."""
     card = _scryfall(
         name="Evolving Wilds",
         type_line="Land",
@@ -136,6 +138,35 @@ def test_fetch_land_needs_llm() -> None:
             "{T}, Sacrifice this land: Search your library for a basic land card, "
             "put it onto the battlefield tapped, then shuffle."
         ),
+        mana_cost="",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert "Land" in p.types
+    assert p.role_features.is_land
+    # No tap-for-mana — only the sac-fetch activation.
+    assert p.mana_abilities == []
+    assert len(p.modes) == 1
+    activated = p.modes[0]
+    assert activated.kind == "activated"
+    assert activated.cost.tap is True
+    assert activated.cost.sacrifice is not None
+    assert activated.cost.sacrifice.target == "self"
+    assert len(activated.effects) == 1
+    fetch = activated.effects[0]
+    assert fetch.kind == "fetch_land"
+    assert fetch.target_filter == "basic"
+    assert fetch.destination == "battlefield_tapped"
+
+
+def test_land_with_no_abilities_at_all_needs_llm() -> None:
+    """A land with neither a mana ability nor an activated ability is
+    something weird — still NEEDS_LLM. Lands at minimum should do
+    *something*, so the bail is meaningful."""
+    card = _scryfall(
+        name="Inert Plot",
+        type_line="Land",
+        oracle_text="",
         mana_cost="",
     )
     p = parse_card(card)
