@@ -43833,9 +43833,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "auto",
     "reasons": [
-      "land doesn't have a recognised mana ability"
+      "no tap-for-mana ability; 1 activated ability(ies)"
     ]
   },
   {
@@ -45466,8 +45466,11 @@
         },
         "effects": [
           {
-            "kind": "noop",
-            "role_tag": "activated_unknown"
+            "kind": "fetch_land",
+            "target_filter": "basic",
+            "subtype": null,
+            "destination": "battlefield_tapped",
+            "count": 1
           }
         ]
       }
@@ -45502,9 +45505,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "auto",
     "reasons": [
-      "land doesn't have a recognised mana ability"
+      "no tap-for-mana ability; 1 activated ability(ies)"
     ]
   },
   {
