@@ -297,6 +297,79 @@ The `tests/test_inference.py::test_recommend_produces_valid_recommendation`
 integration test exercises 1-4 end-to-end on synthetic data; it's
 the canonical proof that the pipeline composes correctly.
 
+## scripts/
+
+Standalone analysis scripts that run against a trained model
+directory plus the source data. Not part of the package's public
+import surface — invoke via the workspace's `python.exe`
+(`.venv/Scripts/python.exe packages/model/scripts/<name>.py`).
+
+### `validate_bottoming.py`
+
+Empirical validation of the bottoming heuristic in
+`mulligan_coach_simulation.bottoming`. For each of N sampled real
+TLA hands:
+
+1. Asks the heuristic which of the 7 cards to bottom.
+2. Brute-forces all 7 candidates: for each, simulates the resulting
+   6-card hand + 33-card library through the model and predicts
+   P(win) at `mulligan_number=1`.
+3. Reports the heuristic pick's rank (1=optimal) and P(win) gap
+   from the best candidate.
+
+The model is fed a 6-card hand at `mulligan_number=1`, slightly
+out-of-distribution from training (which used 7-card pre-bottom
+hands), so absolute P(win) values are noisier than usual but
+*rankings* among candidates are meaningful. Log written to
+`<model_dir>/bottoming_validation.log`.
+
+### `mulligan_analysis_per_deck.py`
+
+Per-deck mulligan benchmark — replaces the unconditional `0.4295`
+flat baseline that `mulligan_analysis.log` originally used. For
+each of N sampled kept-7 test rows:
+
+1. Predicts `P(win | keep)` on the actual recorded hand.
+2. Estimates `P(win | mull this deck to 6)` by averaging predictions
+   over `N_MULLIGAN_SAMPLES` smoother-aware 7-card draws from the
+   deck (with `mulligan_number=1`).
+3. Flags rows where `p_keep < p_mull_per_deck` and compares to the
+   unconditional `p_keep < 0.4295` flagging.
+
+Key insight: the per-deck mull WR has std ~0.06 across decks (p10
+0.37, p90 0.54) — meaningful real variance the flat baseline was
+hiding. The per-deck rule is materially more conservative because
+weak decks have mull-to-6 WRs *below* 0.4295, so the unconditional
+rule over-flags them as "should have mulled" when actually mulling
+wouldn't help.
+
+The bottoming heuristic is NOT used by this script because the
+model treats the hand as 7-card pre-bottom (matches training
+distribution); only the smoother is needed. Log written to
+`<model_dir>/mulligan_analysis_per_deck.log`.
+
+### A note on feature bias on mulligan rows
+
+The 17Lands London-mulligan convention: every recorded
+`opening_hand_*` sums to 7 cards (the pre-bottom draw), regardless
+of `mulligan_number`. Hand-level features and the simulator
+playability stats are computed on those 7 cards, even when the
+player actually played with fewer. The model treats `mulligan_number`
+as context and has learned to deflate predictions accordingly.
+
+Empirical calibration on test rows (from a quick ad-hoc check):
+
+| mulligan_number | n | mean predicted | actual WR | gap |
+|---|---|---|---|---|
+| 0 | 45,245 | 0.578 | 0.580 | -0.003 |
+| 1 | 5,146 | 0.430 | 0.430 | +0.001 |
+| 2 | 230 | 0.283 | 0.239 | +0.044 |
+
+Mulligan-to-6 is well-calibrated globally and within deciles of
+predicted P(win). Mulligan-to-5 (n=230) over-predicts by 4.4pp —
+could be sampling noise (~1.6σ) or genuine miscalibration on a
+low-data subset.
+
 ## Tests
 
 ```

@@ -10,6 +10,7 @@ from __future__ import annotations
 import random
 
 import pytest
+from mulligan_coach_cards import ParsedCard
 from mulligan_coach_simulation import (
     AggregateStats,
     post_mulligan_hand,
@@ -20,10 +21,10 @@ from mulligan_coach_simulation.runtime import Card
 from . import _factories as f
 
 
-def _build_synthetic_deck() -> list:
+def _build_synthetic_deck() -> list[ParsedCard]:
     """Build a synthetic 40-card mono-green deck: 17 forests, 11 Bears
     (G), 8 cantrips ({2}{G}), 4 expensive creatures ({4}{G}{G})."""
-    deck = []
+    deck: list[ParsedCard] = []
     deck.extend([f.forest() for _ in range(17)])
     deck.extend([f.vanilla_creature(f"Bear-{i}", "{G}", 2, 2) for i in range(11)])
     deck.extend([f.cantrip(f"Brainstorm-{i}", "{2}{G}") for i in range(8)])
