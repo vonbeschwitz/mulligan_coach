@@ -338,16 +338,26 @@ def test_iter_training_rows_skips_bad_hand_size() -> None:
 
 
 def test_iter_training_rows_skips_bad_deck_size() -> None:
+    """Deck-size filter accepts 40-42 (legitimate Limited deck sizes:
+    the 40-card minimum, plus the +1/+2 lists players sometimes run
+    when torn between strong cards). Decks smaller than 40 or larger
+    than 42 are dropped — likely data corruption or off-meta extras."""
     lookup = _basic_card_lookup(["Bear"])
     rows = [
         _make_row(hand={"Forest": 7}, deck={"Forest": 25, "Bear": 14}),  # 39 = bad
         _make_row(hand={"Forest": 7}, deck={"Forest": 25, "Bear": 15}),  # 40 = good
+        _make_row(hand={"Forest": 7}, deck={"Forest": 25, "Bear": 16}),  # 41 = good
+        _make_row(hand={"Forest": 7}, deck={"Forest": 25, "Bear": 17}),  # 42 = good
+        _make_row(hand={"Forest": 7}, deck={"Forest": 25, "Bear": 18}),  # 43 = bad
     ]
     con = _games_view_from_rows(rows)
     stats = TrainingRowStats()
     out = list(iter_training_rows(connection=con, set_code="TLA", name_lookup=lookup, stats=stats))
-    assert len(out) == 1
-    assert stats.skipped_bad_deck_size == 1
+    assert len(out) == 3
+    assert stats.skipped_bad_deck_size == 2
+    # All emitted rows respect the upper bound.
+    for tr in out:
+        assert 40 <= len(tr.deck) <= 42
 
 
 def test_iter_training_rows_skips_unknown_card() -> None:

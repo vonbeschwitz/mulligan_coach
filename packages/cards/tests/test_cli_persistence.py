@@ -4,20 +4,25 @@ data root so no real on-disk data is touched.
 
 The ``run-detector`` command is tested indirectly via the underlying
 ``merge_detector_run`` in ``test_store.py``; the CLI thin-wrapper here
-just exercises the input plumbing.
+just exercises the input plumbing. The bonus-sheet helper used by
+``run-detector`` is unit-tested below.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
-from mulligan_coach_cards.cli import app
+import pyarrow as pa
+import pyarrow.parquet as pq
+from mulligan_coach_cards.cli import _bonus_sheet_scryfall_entries, app
 from mulligan_coach_cards.models import (
     ParsedCard,
     ParseStatus,
     RoleFeatures,
 )
+from mulligan_coach_cards.seventeenlands_stats import ratings_parquet_path
 from mulligan_coach_cards.store import load_parsed_cards, save_parsed_cards
 from typer.testing import CliRunner
 
@@ -226,3 +231,177 @@ def test_list_needs_llm_respects_limit(tmp_path: Path) -> None:
     assert len(payload) == 3
     # Sorted by collector number numeric order.
     assert [c["collector_number"] for c in payload] == ["1", "2", "3"]
+
+
+# ---------------------------------------------------------------------------
+# _bonus_sheet_scryfall_entries — picking up reprints from 17Lands ratings
+# ---------------------------------------------------------------------------
+
+
+def _ratings_row(
+    *,
+    name: str,
+    mtga_id: int,
+    expansion: str = "TST",
+) -> dict[str, Any]:
+    """Minimal 17Lands ratings row; only the fields the loader requires."""
+    return {
+        "name": name,
+        "mtga_id": mtga_id,
+        "expansion": expansion,
+        "event_type": "PremierDraft",
+        "color": "G",
+        "rarity": "common",
+        "types": ["Creature - Beast"],
+        "layout": "standard",
+        "seen_count": 100,
+        "avg_seen": 5.0,
+        "pick_count": 50,
+        "avg_pick": 7.0,
+        "game_count": 80,
+        "pool_count": 150,
+        "play_rate": 0.6,
+        "win_rate": 0.55,
+        "opening_hand_game_count": 10,
+        "opening_hand_win_rate": 0.54,
+        "drawn_game_count": 20,
+        "drawn_win_rate": 0.56,
+        "ever_drawn_game_count": 30,
+        "ever_drawn_win_rate": 0.555,
+        "never_drawn_game_count": 50,
+        "never_drawn_win_rate": 0.50,
+        "drawn_improvement_win_rate": 0.055,
+    }
+
+
+def _scryfall_card(
+    *,
+    name: str,
+    set_code: str,
+    oracle_id: str,
+    layout: str = "normal",
+) -> dict[str, Any]:
+    """Minimal Scryfall-shaped card dict for testing the bonus-sheet helper."""
+    return {
+        "name": name,
+        "set": set_code,
+        "oracle_id": oracle_id,
+        "collector_number": "1",
+        "rarity": "common",
+        "type_line": "Land",
+        "layout": layout,
+        "lang": "en",
+        "oracle_text": "",
+        "colors": [],
+        "keywords": [],
+    }
+
+
+def _write_ratings(data_root: Path, set_code: str, rows: list[dict[str, Any]]) -> None:
+    path = ratings_parquet_path(set_code, "PremierDraft", data_root=data_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pq.write_table(pa.Table.from_pylist(rows), path)  # type: ignore[no-untyped-call]
+
+
+def test_bonus_sheet_finds_reprints_outside_primary_pool(tmp_path: Path) -> None:
+    """A card in the 17Lands ratings parquet but not in the primary set
+    pool gets pulled in from another set's Scryfall entry, with its
+    ``set`` field rewritten to the target code and its mtga_id mapped
+    out for downstream arena_id backfill."""
+    primary = _scryfall_card(name="Local Card", set_code="tst", oracle_id="oid-local")
+    bonus_source = _scryfall_card(name="Evolving Wilds", set_code="tmc", oracle_id="oid-wilds")
+    scryfall_by_name = {"Local Card": primary, "Evolving Wilds": bonus_source}
+
+    _write_ratings(
+        tmp_path,
+        "TST",
+        [
+            _ratings_row(name="Local Card", mtga_id=1001),
+            _ratings_row(name="Evolving Wilds", mtga_id=98586),
+        ],
+    )
+
+    extras, arena_ids = _bonus_sheet_scryfall_entries(
+        "TST", [primary], scryfall_by_name, data_root=tmp_path
+    )
+    assert len(extras) == 1
+    assert extras[0]["name"] == "Evolving Wilds"
+    # Set was rewritten to the target so the parser will report set_code="TST".
+    assert extras[0]["set"] == "tst"
+    # Collector number rewritten so bonus-sheet entries don't collide
+    # with primary set collector numbers in the resulting JSON.
+    assert extras[0]["collector_number"] == "bonus-tmc-1"
+    assert arena_ids == {"Evolving Wilds": 98586}
+
+
+def test_bonus_sheet_returns_empty_when_no_ratings_parquet(tmp_path: Path) -> None:
+    """If the ratings parquet doesn't exist for the format (e.g., a brand-
+    new set we haven't downloaded 17Lands data for yet), the helper
+    returns empty rather than raising."""
+    primary = _scryfall_card(name="Only Card", set_code="tst", oracle_id="oid-1")
+    extras, arena_ids = _bonus_sheet_scryfall_entries(
+        "TST", [primary], {"Only Card": primary}, data_root=tmp_path
+    )
+    assert extras == []
+    assert arena_ids == {}
+
+
+def test_bonus_sheet_skips_names_already_in_primary_pool(tmp_path: Path) -> None:
+    """A name that appears both in the primary set pool AND the ratings
+    parquet is NOT duplicated — the primary's entry wins."""
+    primary = _scryfall_card(name="Shared Card", set_code="tst", oracle_id="oid-1")
+    scryfall_by_name = {"Shared Card": primary}
+
+    _write_ratings(tmp_path, "TST", [_ratings_row(name="Shared Card", mtga_id=1001)])
+
+    extras, arena_ids = _bonus_sheet_scryfall_entries(
+        "TST", [primary], scryfall_by_name, data_root=tmp_path
+    )
+    assert extras == []
+    assert arena_ids == {}
+
+
+def test_bonus_sheet_warns_on_names_not_in_scryfall(tmp_path: Path, caplog: Any) -> None:
+    """If a 17Lands ratings name has no Scryfall match (rare — Scryfall
+    is essentially exhaustive), the helper logs a warning and continues
+    rather than raising. The valid bonus cards still get returned."""
+    primary = _scryfall_card(name="Local", set_code="tst", oracle_id="oid-1")
+    bonus_known = _scryfall_card(name="Bitterblossom", set_code="2x2", oracle_id="oid-bb")
+    scryfall_by_name = {"Local": primary, "Bitterblossom": bonus_known}
+    _write_ratings(
+        tmp_path,
+        "TST",
+        [
+            _ratings_row(name="Local", mtga_id=1),
+            _ratings_row(name="Bitterblossom", mtga_id=2),
+            _ratings_row(name="Mystery Future Card", mtga_id=3),
+        ],
+    )
+
+    extras, arena_ids = _bonus_sheet_scryfall_entries(
+        "TST", [primary], scryfall_by_name, data_root=tmp_path
+    )
+    assert [e["name"] for e in extras] == ["Bitterblossom"]
+    assert arena_ids == {"Bitterblossom": 2}
+
+
+def test_bonus_sheet_handles_dfc_front_face_in_primary_pool(tmp_path: Path) -> None:
+    """The primary pool exposes DFCs by their joint ``Front // Back`` name;
+    17Lands uses the front-face name only. The helper de-duplicates by
+    treating the front face of any DFC in the primary as already-covered."""
+    primary_dfc = _scryfall_card(
+        name="Bursting Sunrise // Day's Glow",
+        set_code="tst",
+        oracle_id="oid-dfc",
+    )
+    # 17Lands lists the card under its front-face name.
+    _write_ratings(tmp_path, "TST", [_ratings_row(name="Bursting Sunrise", mtga_id=42)])
+
+    extras, arena_ids = _bonus_sheet_scryfall_entries(
+        "TST",
+        [primary_dfc],
+        {"Bursting Sunrise // Day's Glow": primary_dfc},
+        data_root=tmp_path,
+    )
+    assert extras == []
+    assert arena_ids == {}
