@@ -8,8 +8,10 @@ are load-bearing (creature / removal / counter detection).
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
-from mulligan_coach_cards import RoleFeatures
+from mulligan_coach_cards import ParsedCard, RoleFeatures
 from mulligan_coach_simulation.bottoming import bottom_card
 from mulligan_coach_simulation.runtime import Card
 
@@ -20,7 +22,7 @@ from . import _factories as f
 # ---------------------------------------------------------------------------
 
 
-def _card(parsed, iid: int) -> Card:
+def _card(parsed: ParsedCard, iid: int) -> Card:
     """Wrap a ParsedCard as a Card with the given instance_id."""
     return Card(instance_id=iid, parsed=parsed)
 
@@ -51,7 +53,7 @@ def _spell(name: str, mana: str) -> Card:
     return _card(f.cantrip(name, mana), iid=hash(name) & 0xFFFF)
 
 
-def _land(parsed_factory, iid: int) -> Card:
+def _land(parsed_factory: Callable[[], ParsedCard], iid: int) -> Card:
     return _card(parsed_factory(), iid=iid)
 
 

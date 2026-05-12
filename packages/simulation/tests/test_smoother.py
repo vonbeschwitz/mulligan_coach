@@ -26,7 +26,7 @@ def _build_deck(num_lands: int, deck_size: int = 40) -> list[Card]:
     return cards
 
 
-def test_smoother_returns_hand_and_remaining_library():
+def test_smoother_returns_hand_and_remaining_library() -> None:
     deck = _build_deck(num_lands=17, deck_size=40)
     rng = random.Random(0)
     hand, library = draw_smoothed_hand(deck, rng)
@@ -39,7 +39,7 @@ def test_smoother_returns_hand_and_remaining_library():
     assert ids_hand | ids_lib == {c.instance_id for c in deck}
 
 
-def test_smoother_land_distribution_matches_arena_observations():
+def test_smoother_land_distribution_matches_arena_observations() -> None:
     """With a 17/40 deck and 3 candidates at temperature -0.015, the
     distribution should closely match the README's simulation result:
     ~79% 2-3 lands, near-zero rates of 0 or 6+ lands.
@@ -69,7 +69,7 @@ def test_smoother_land_distribution_matches_arena_observations():
     assert six_plus < 0.002, f"6+ lands {six_plus:.4f} too frequent"
 
 
-def test_smoother_with_one_candidate_is_unsmoothed():
+def test_smoother_with_one_candidate_is_unsmoothed() -> None:
     """``num_candidates=1`` short-circuits the smoothing — every draw
     is whatever the shuffle gave. Distribution should approach the
     hypergeometric expectation: P(2 lands)=0.245, P(3 lands)=0.323,
@@ -88,7 +88,7 @@ def test_smoother_with_one_candidate_is_unsmoothed():
     assert 0.54 < rate < 0.60, f"unsmoothed 2-3 rate {rate:.3f} out of band"
 
 
-def test_smoother_rejects_invalid_temperature():
+def test_smoother_rejects_invalid_temperature() -> None:
     deck = _build_deck(num_lands=17)
     rng = random.Random(0)
     with pytest.raises(ValueError, match="temperature must be negative"):
@@ -97,21 +97,21 @@ def test_smoother_rejects_invalid_temperature():
         draw_smoothed_hand(deck, rng, temperature=0.5)
 
 
-def test_smoother_rejects_invalid_candidate_count():
+def test_smoother_rejects_invalid_candidate_count() -> None:
     deck = _build_deck(num_lands=17)
     rng = random.Random(0)
     with pytest.raises(ValueError, match="num_candidates must be >= 1"):
         draw_smoothed_hand(deck, rng, num_candidates=0)
 
 
-def test_smoother_rejects_hand_larger_than_deck():
+def test_smoother_rejects_hand_larger_than_deck() -> None:
     deck = _build_deck(num_lands=2, deck_size=5)
     rng = random.Random(0)
     with pytest.raises(ValueError, match="hand_size 7 > deck size 5"):
         draw_smoothed_hand(deck, rng)
 
 
-def test_smoother_is_deterministic_under_same_seed():
+def test_smoother_is_deterministic_under_same_seed() -> None:
     deck = _build_deck(num_lands=17, deck_size=40)
     rng_a = random.Random(99)
     rng_b = random.Random(99)

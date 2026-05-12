@@ -57,6 +57,7 @@ from mulligan_coach_model import ModelBundle
 from mulligan_coach_model.feature_matrix import _library_from_deck
 from mulligan_coach_model.inference import _predict_proba
 from mulligan_coach_model.training_rows import (
+    TrainingRow,
     TrainingRowStats,
     build_name_lookup,
     iter_training_rows,
@@ -106,7 +107,9 @@ def load_test_keys(log: logging.Logger) -> set[tuple[str, int, int]]:
     rows_meta: list[pd.DataFrame] = []
     chunks = sorted(PARQUET_DIR.glob("chunk_*.parquet"))
     for chunk in chunks:
-        df = pq.read_table(chunk, columns=["draft_id", "match_number", "game_number"]).to_pandas()
+        df = pq.read_table(  # type: ignore[no-untyped-call]
+            chunk, columns=["draft_id", "match_number", "game_number"]
+        ).to_pandas()
         rows_meta.append(df)
     meta = pd.concat(rows_meta, ignore_index=True)
     log.info(f"  loaded {len(meta):,} rows across {len(chunks)} chunks")
@@ -160,7 +163,7 @@ def main() -> None:
     t0 = time.time()
     name_lookup = build_name_lookup("TLA")
     rng = random.Random(SEED)
-    sample: list = []
+    sample: list[TrainingRow] = []
     seen = 0
     con = duckdb.connect(str(DUCKDB_PATH), read_only=True)
     try:
@@ -197,7 +200,7 @@ def main() -> None:
         f"n_sims={N_SIMS_PER_PREDICT})..."
     )
     t0 = time.time()
-    rows_out: list[dict] = []
+    rows_out: list[dict[str, object]] = []
     for i, tr in enumerate(sample):
         if i % 25 == 0 and i > 0:
             elapsed = time.time() - t0

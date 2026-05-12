@@ -47,6 +47,7 @@ from mulligan_coach_model import ModelBundle
 from mulligan_coach_model.feature_matrix import _library_from_deck
 from mulligan_coach_model.inference import _predict_proba
 from mulligan_coach_model.training_rows import (
+    TrainingRow,
     TrainingRowStats,
     build_name_lookup,
     iter_training_rows,
@@ -114,7 +115,7 @@ def main() -> None:
     rng = random.Random(SEED)
     # Reservoir-sample N hands while streaming through duckdb. Faster
     # than loading everything first.
-    sample: list = []
+    sample: list[TrainingRow] = []
     con = duckdb.connect(str(DUCKDB_PATH), read_only=True)
     try:
         tr_stats = TrainingRowStats()
