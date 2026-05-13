@@ -95,16 +95,34 @@ def filter_l1(candidates: list[Card], state: GameState) -> list[Card]:
 
 def _castable_spells_next_turn(cand: Card, state: GameState) -> list[Card]:
     """Hypothetically play *cand*, advance to start of next turn, count
-    castable hand cards. Pure: snapshots and restores."""
-    snap = state.snapshot()
+    castable hand cards. Pure: applies a manual undo on the way out.
+
+    Manual undo instead of full ``state.snapshot()/restore()``: this
+    function is called once per L1 candidate per land-drop turn (so
+    ~3-7 times per land drop in a mana-base-heavy opener), and the
+    snapshot's six list-copies + two frozenset constructions were
+    among the hottest allocations in the simulator. We only mutate
+    four pieces of state — hand / battlefield_lands / tapped /
+    summoning_sick (plus the land_drop_used flag) — so a hand-tuned
+    save+restore is much cheaper.
+    """
+    orig_hand_idx = next(
+        i for i, c in enumerate(state.hand) if c.instance_id == cand.instance_id
+    )
+    # ``play_land`` may add ``cand.instance_id`` to ``tapped``;
+    # ``untap_all`` then clears the entire set in-place. We snapshot
+    # the pre-call sets so the inner ``tapped``/``summoning_sick``
+    # mutations can be reversed by wholesale rebind at the end.
+    orig_tapped = state.tapped.copy()
+    orig_summoning_sick = state.summoning_sick.copy()
+    state.play_land(cand)
+    # Start of next turn: untap, summoning-sickness clears. We do
+    # NOT simulate a draw step (per the locked-in plan: "without
+    # considering the card drawn") and we do NOT cast spells (the
+    # locked-in "lands-only" L1 lookahead).
+    state.untap_all()
+    state.summoning_sick.clear()
     try:
-        state.play_land(cand)
-        # Start of next turn: untap, summoning-sickness clears. We do
-        # NOT simulate a draw step (per the locked-in plan: "without
-        # considering the card drawn") and we do NOT cast spells (the
-        # locked-in "lands-only" L1 lookahead).
-        state.untap_all()
-        state.summoning_sick.clear()
         out: list[Card] = []
         for card in state.hand:
             if card.is_land:
@@ -113,7 +131,15 @@ def _castable_spells_next_turn(cand: Card, state: GameState) -> list[Card]:
                 out.append(card)
         return out
     finally:
-        state.restore(snap)
+        # Reverse the four mutations. battlefield_lands.pop() works
+        # because play_land appends; restoring hand at its original
+        # index keeps the lowest-index tiebreaker stable for L1
+        # callers above.
+        state.battlefield_lands.pop()
+        state.hand.insert(orig_hand_idx, cand)
+        state.tapped = orig_tapped
+        state.summoning_sick = orig_summoning_sick
+        state.land_drop_used = False
 
 
 def _best_spell_quality(spells: Iterable[Card]) -> tuple[int, int]:

@@ -49,8 +49,8 @@ def test_mana_pool_basics() -> None:
     pool.add("any", 1)
     assert pool.total() == 3
     snapshot = pool.copy()
-    pool.counts["G"] = 0
-    assert snapshot.counts["G"] == 2  # copy is independent
+    pool["G"] = 0
+    assert snapshot["G"] == 2  # copy is independent
 
 
 def test_basic_land_pays_single_color() -> None:

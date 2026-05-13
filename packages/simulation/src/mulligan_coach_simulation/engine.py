@@ -26,6 +26,7 @@ from __future__ import annotations
 import random
 
 from .castability import castability_snapshot
+from .mana import reset_per_game_caches
 from .policy_land import choose_land
 from .policy_spells import cast_main_phase
 from .runtime import Card, GameState
@@ -64,6 +65,10 @@ def simulate_one_game(
     (the caller already seeded *rng*).
     """
     state = GameState.initial(hand=hand, library=library, on_the_play=on_the_play, rng=rng)
+    # Per-game mana CSP cache: the same (cost, abilities) shape recurs
+    # many times within one game but ability ``instance_id``s reset
+    # across games, so the cache must be reset at the boundary.
+    reset_per_game_caches()
 
     # Per-instance bookkeeping. We pre-populate with first_in_hand=0
     # for opening-hand cards and 5 (never) for everything in the
