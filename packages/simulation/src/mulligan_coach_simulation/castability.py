@@ -132,19 +132,41 @@ def castability_snapshot(state: GameState) -> tuple[list[CastabilityRecord], dic
             castable = False
             witness_id: int | None = None
             for cand in candidates:
-                snap = state.snapshot()
+                # Manual undo of ``play_land`` instead of full
+                # snapshot/restore: ``play_land`` only touches four
+                # fields (hand, battlefield_lands, tapped,
+                # land_drop_used), and the snapshot's six list-copies
+                # + two frozenset constructions are the hottest
+                # allocation in the simulator's inner loop.
+                if cand is not None:
+                    orig_hand_idx = next(
+                        i
+                        for i, c in enumerate(state.hand)
+                        if c.instance_id == cand.instance_id
+                    )
+                    state.play_land(cand)
+                    was_tapped_added = cand.instance_id in state.tapped
+                else:
+                    orig_hand_idx = -1
+                    was_tapped_added = False
                 try:
-                    if cand is not None:
-                        # Make sure the candidate is still in the live hand
-                        # (snapshot/restore round-trip preserves it).
-                        state.play_land(cand)
                     abilities = available_mana_abilities(state)
                     if can_pay_cost(mode.cost.mana, abilities, state) is not None:
                         castable = True
                         witness_id = cand.instance_id if cand is not None else None
                         break
                 finally:
-                    state.restore(snap)
+                    if cand is not None:
+                        # Reverse ``play_land``: pop the just-appended
+                        # land, put it back at its original hand
+                        # position so policy tiebreakers stay stable,
+                        # drop the tapped-set entry if play_land added
+                        # one, clear the land-drop flag.
+                        state.battlefield_lands.pop()
+                        state.hand.insert(orig_hand_idx, cand)
+                        if was_tapped_added:
+                            state.tapped.discard(cand.instance_id)
+                        state.land_drop_used = False
             records.append(
                 CastabilityRecord(
                     card_instance_id=card.instance_id,

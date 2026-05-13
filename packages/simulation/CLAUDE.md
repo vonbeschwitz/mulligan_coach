@@ -355,3 +355,28 @@ Before trusting Monte Carlo results, validate by:
 1. Running  test cases  and confirming expected first-castable-turn.
 2. Sampling individual game logs (verbose mode) and hand-checking 5–10 of them.
 3. Comparing aggregate statistics on a known deck (e.g., a mono-color deck with all 1-drops should have ~100% turn-1 castability) against intuition.
+
+### Equivalence harness for performance work
+
+`packages/simulation/scripts/equivalence_harness.py` replays a
+sample of real 17Lands rows (pulled via the same path the
+feature-materialiser uses) through :func:`simulate` and pickles
+both the full :class:`AggregateStats` and a SHA-256 of every
+:class:`GameTrace`. The intended workflow for any perf-tuning PR
+is:
+
+1. On the pre-change code, run `--save baseline.json`. Default
+   corpus is 50 real rows × 20 sims = 1,000 games; bump
+   `--n-rows` / `--n-sims-per-row` for a stronger check.
+2. Apply the change.
+3. Run `--check baseline.json`. The script asserts every
+   aggregate field and every trace hash matches bit-for-bit, and
+   reports the new wall-clock so the speedup is visible from the
+   same invocation.
+
+Because the per-row seed comes from the materialiser's
+`_row_seed(draft_id, match_number, game_number)`, the harness
+exercises the exact (deck, hand, seed) triples the production
+pipeline uses — anything that flips a single trace under load
+will surface immediately. The baseline JSONs are gitignored; each
+contributor regenerates locally.

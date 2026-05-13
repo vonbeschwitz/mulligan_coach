@@ -23,7 +23,14 @@ Design choices fixed in the plan:
 
 Performance: the CSP is small (<= ~7 sources, <= ~6 pips in Limited).
 A plain DFS with a good ordering is fine; the first valid payment is
-returned without enumerating all of them.
+returned without enumerating all of them. The same ``(cost,
+available-abilities)`` shape recurs many times per game (the
+castability snapshot walks every card × every mode × every candidate
+land), so :func:`can_pay_cost` is memoised on
+``(id(cost), abilities_signature)`` for the lifetime of a single
+``simulate_one_game`` call — see :func:`reset_per_game_caches`. The
+per-cost ``_expand_cost`` lookup is memoised for the whole session
+(``ManaCost`` objects outlive any single game).
 """
 
 from __future__ import annotations
@@ -40,33 +47,58 @@ from .runtime import Card, GameState
 # tests stable. ``"any"`` is a wildcard added by filter outputs;
 # ``"C"`` is the dedicated colorless from sources that produce {C}.
 _BUCKETS: Final[tuple[str, ...]] = ("W", "U", "B", "R", "G", "C", "any")
+_BUCKET_IDX: Final[dict[str, int]] = {c: i for i, c in enumerate(_BUCKETS)}
+_ANY_IDX: Final[int] = _BUCKET_IDX["any"]
+_N_BUCKETS: Final[int] = len(_BUCKETS)
+# Drain order for ``_take_generic``: pull from ``any`` first (wasted on
+# generic anyway), then ``C``, then WUBRG. Precomputed as indices so
+# the hot loop avoids a per-iteration dict lookup.
+_GENERIC_DRAIN: Final[tuple[int, ...]] = tuple(
+    _BUCKET_IDX[c] for c in ("any", "C", "W", "U", "B", "R", "G")
+)
 
 
 @dataclass(slots=True)
 class ManaPool:
     """Live mana available during cost payment.
 
-    Counts are non-negative integers per bucket. Adding an output with
-    color ``"any"`` increments the ``any`` bucket (a wildcard usable
-    for any later pip). Generic pips drain from any bucket.
+    Counts are non-negative integers stored in a fixed 7-element list
+    keyed by ``_BUCKET_IDX``. The list representation is meaningfully
+    faster than a ``dict[str, int]``: ``list.copy()`` on a 7-element
+    list is a tight C-level memcpy, and the inner ``pool.counts[idx]``
+    is an O(1) index-by-int instead of a hashed lookup.
+
+    Adding an output with color ``"any"`` increments the wildcard
+    bucket. Generic pips drain from every bucket in ``_GENERIC_DRAIN``
+    order.
     """
 
-    counts: dict[str, int] = field(default_factory=lambda: dict.fromkeys(_BUCKETS, 0))
+    counts: list[int] = field(default_factory=lambda: [0] * _N_BUCKETS)
 
     @classmethod
     def empty(cls) -> ManaPool:
-        return cls(counts=dict.fromkeys(_BUCKETS, 0))
+        return cls(counts=[0] * _N_BUCKETS)
 
     def add(self, color: str, n: int = 1) -> None:
-        if color not in self.counts:
+        idx = _BUCKET_IDX.get(color)
+        if idx is None:
             raise ValueError(f"unknown mana color {color!r}")
-        self.counts[color] += n
+        self.counts[idx] += n
 
     def total(self) -> int:
-        return sum(self.counts.values())
+        return sum(self.counts)
 
     def copy(self) -> ManaPool:
         return ManaPool(counts=self.counts.copy())
+
+    def __getitem__(self, color: str) -> int:
+        """Read a bucket by color name. Used outside the hot path
+        (tests, debugging); inside the solver we use ``counts[idx]``
+        with a precomputed index."""
+        return self.counts[_BUCKET_IDX[color]]
+
+    def __setitem__(self, color: str, value: int) -> None:
+        self.counts[_BUCKET_IDX[color]] = value
 
 
 # An ``AbilityRef`` ties one ``ManaAbility`` back to the permanent that
@@ -156,6 +188,45 @@ class _Requirement:
     amount: int = 1
 
 
+# Memoise the pip-expansion of every ``ManaCost`` we see. Costs live on
+# immutable ``ParsedCard`` objects loaded once at startup, so the same
+# ``ManaCost`` instance recurs across every castability check and every
+# search branch — caching pays off enormously. The dict is keyed by
+# ``id(cost)`` and the stored cost is checked with ``is`` so that if
+# Python reuses an id after garbage collection we don't return a stale
+# expansion. The cache is never explicitly cleared; entries naturally
+# stay valid as long as the originating ``ManaCost`` object lives.
+_EXPAND_COST_CACHE: dict[int, tuple[ManaCost, list[_Requirement]]] = {}
+
+# Per-game memoisation of :func:`can_pay_cost`. Same ``(cost, set of
+# available abilities)`` repeats many times within a single game (the
+# castability snapshot walks every card × every land × every mode, the
+# L1 lookahead repeats the same next-turn check for every candidate
+# land, …). The key is ``(id(cost), abilities_signature)`` where the
+# signature is a sorted tuple of ``(id(ability), source.instance_id)``
+# pairs — stable within a single ``simulate_one_game`` call but not
+# across calls (instance_ids reflect each game's specific shuffle), so
+# :func:`reset_per_game_caches` must be called at the top of every
+# game. The cached value is the :class:`ManaPayment` itself, including
+# its :class:`AbilityRef`s — those AbilityRefs reference ``Card`` and
+# ``ManaAbility`` objects that remain valid for the duration of the
+# game, so ``state.cast`` can tap them correctly when consuming a
+# cached payment.
+_CSP_CACHE: dict[tuple[int, tuple[tuple[int, int], ...]], "ManaPayment | None"] = {}
+
+
+def reset_per_game_caches() -> None:
+    """Clear caches whose validity is bounded by a single game.
+
+    Called from :func:`engine.simulate_one_game` before any per-turn
+    work begins. The expand-cost cache is deliberately NOT cleared
+    here: ``ManaCost`` objects outlive any individual game and
+    re-expanding their pips on every game wastes the per-session
+    work.
+    """
+    _CSP_CACHE.clear()
+
+
 def _expand_cost(cost: ManaCost) -> list[_Requirement]:
     """Turn a parsed ``ManaCost`` into a flat list of payment requirements,
     applying our v1 simplifications:
@@ -166,9 +237,13 @@ def _expand_cost(cost: ManaCost) -> list[_Requirement]:
     * ``{C}`` raises ``NotImplementedError`` — colorless requirements
       need a real card to motivate the work.
     """
+    cached = _EXPAND_COST_CACHE.get(id(cost))
+    if cached is not None and cached[0] is cost:
+        return cached[1]
     reqs: list[_Requirement] = []
     for pip in cost.pips:
         reqs.extend(_expand_pip(pip))
+    _EXPAND_COST_CACHE[id(cost)] = (cost, reqs)
     return reqs
 
 
@@ -258,32 +333,38 @@ def _pay_requirement(pool: ManaPool, req: _Requirement) -> bool:
 
 def _take_color(pool: ManaPool, color: str | None) -> bool:
     assert color is not None
-    if pool.counts.get(color, 0) > 0:
-        pool.counts[color] -= 1
+    counts = pool.counts
+    idx = _BUCKET_IDX[color]
+    if counts[idx] > 0:
+        counts[idx] -= 1
         return True
-    if pool.counts["any"] > 0:
-        pool.counts["any"] -= 1
+    if counts[_ANY_IDX] > 0:
+        counts[_ANY_IDX] -= 1
         return True
     return False
 
 
 def _take_hybrid(pool: ManaPool, colors: tuple[str, ...]) -> bool:
+    counts = pool.counts
     for c in colors:
-        if pool.counts.get(c, 0) > 0:
-            pool.counts[c] -= 1
+        idx = _BUCKET_IDX[c]
+        if counts[idx] > 0:
+            counts[idx] -= 1
             return True
-    if pool.counts["any"] > 0:
-        pool.counts["any"] -= 1
+    if counts[_ANY_IDX] > 0:
+        counts[_ANY_IDX] -= 1
         return True
     return False
 
 
 def _take_colorless(pool: ManaPool) -> bool:
-    if pool.counts.get("C", 0) > 0:
-        pool.counts["C"] -= 1
+    counts = pool.counts
+    c_idx = _BUCKET_IDX["C"]
+    if counts[c_idx] > 0:
+        counts[c_idx] -= 1
         return True
-    if pool.counts["any"] > 0:
-        pool.counts["any"] -= 1
+    if counts[_ANY_IDX] > 0:
+        counts[_ANY_IDX] -= 1
         return True
     return False
 
@@ -300,11 +381,15 @@ def _take_generic(pool: ManaPool, amount: int) -> bool:
     nearby states).
     """
     remaining = amount
-    for c in ("any", "C", "W", "U", "B", "R", "G"):
+    counts = pool.counts
+    for idx in _GENERIC_DRAIN:
         if remaining == 0:
             break
-        take = min(pool.counts.get(c, 0), remaining)
-        pool.counts[c] -= take
+        avail = counts[idx]
+        if avail == 0:
+            continue
+        take = avail if avail < remaining else remaining
+        counts[idx] -= take
         remaining -= take
     return remaining == 0
 
@@ -337,12 +422,25 @@ def can_pay_cost(
     if not reqs:
         # Free spells / abilities — payable trivially.
         return []
+    # Per-game memoisation: skip the DFS if we've already solved this
+    # exact (cost, available-abilities) shape this game. The signature
+    # uses ``id(ab.ability)`` for the ability (immutable, lives on the
+    # ParsedCard) and ``ab.source.instance_id`` for the source (stable
+    # within a game) — together they uniquely identify the search input.
+    abilities_sig = tuple(
+        sorted((id(ab.ability), ab.source.instance_id) for ab in abilities)
+    )
+    key = (id(cost), abilities_sig)
+    if key in _CSP_CACHE:
+        return _CSP_CACHE[key]
     # Sort abilities so producers (no self-cost) come before filters.
     # The DFS branches "skip vs. activate", and a filter activated too
     # early would fail its own cost check; the producers-first order
     # ensures the pool is fed before filters consider activation.
     sorted_abilities = sorted(abilities, key=lambda r: r.ability.cost.mana.cmc)
-    return _search(reqs, sorted_abilities, 0, ManaPool.empty(), [])
+    result = _search(reqs, sorted_abilities, 0, ManaPool.empty(), [])
+    _CSP_CACHE[key] = result
+    return result
 
 
 def _search(
