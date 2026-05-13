@@ -73,6 +73,15 @@ def test_search_class_role_flag_filter(client: TestClient) -> None:
     assert r.status_code == 200
 
 
+@pytest.mark.parametrize(
+    "flag",
+    ["is_land", "is_mana_rock", "is_counterspell", "combat_trick", "is_other"],
+)
+def test_search_role_flag_filter_new_flags(client: TestClient, flag: str) -> None:
+    r = client.get("/search", params={"role_flags": flag})
+    assert r.status_code == 200
+
+
 def test_card_detail_renders(client: TestClient) -> None:
     """Pull the first loaded entry from the store and fetch its detail page."""
     from card_viewer.app import app

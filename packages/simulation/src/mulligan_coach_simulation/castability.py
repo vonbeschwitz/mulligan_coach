@@ -140,9 +140,7 @@ def castability_snapshot(state: GameState) -> tuple[list[CastabilityRecord], dic
                 # allocation in the simulator's inner loop.
                 if cand is not None:
                     orig_hand_idx = next(
-                        i
-                        for i, c in enumerate(state.hand)
-                        if c.instance_id == cand.instance_id
+                        i for i, c in enumerate(state.hand) if c.instance_id == cand.instance_id
                     )
                     state.play_land(cand)
                     was_tapped_added = cand.instance_id in state.tapped

@@ -40,6 +40,7 @@ import json
 import time
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import duckdb
 from mulligan_coach_cards import ParsedCard
@@ -55,7 +56,7 @@ from mulligan_coach_simulation import AggregateStats, iter_traces, simulate
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_DUCKDB = REPO_ROOT / "data" / "processed" / "games.duckdb"
 
-# Corpus shape. 50 real rows × 20 sims/row = 1,000 games — meets the
+# Corpus shape. 50 real rows x 20 sims/row = 1,000 games — meets the
 # user's "at least 1000" bar with a healthy spread of real decks.
 DEFAULT_N_ROWS = 50
 DEFAULT_N_SIMS_PER_ROW = 20
@@ -118,9 +119,7 @@ def _collect_rows(
     return rows
 
 
-def _run_corpus(
-    rows: list[TrainingRow], n_sims_per_row: int
-) -> dict[str, object]:
+def _run_corpus(rows: list[TrainingRow], n_sims_per_row: int) -> dict[str, object]:
     """Run every row through :func:`simulate` (for AggregateStats) and
     :func:`iter_traces` (for trace-hash equivalence).
 
@@ -181,12 +180,12 @@ def _diff_blobs(baseline: dict[str, object], current: dict[str, object]) -> list
     field per row to keep debugging tractable.
     """
     problems: list[str] = []
-    base_rows: list[dict] = baseline["rows"]  # type: ignore[assignment]
-    curr_rows: list[dict] = current["rows"]  # type: ignore[assignment]
+    base_rows: list[dict[str, Any]] = baseline["rows"]  # type: ignore[assignment]
+    curr_rows: list[dict[str, Any]] = current["rows"]  # type: ignore[assignment]
     if len(base_rows) != len(curr_rows):
         problems.append(f"row count differs: {len(base_rows)} vs {len(curr_rows)}")
         return problems
-    for i, (b, c) in enumerate(zip(base_rows, curr_rows)):
+    for i, (b, c) in enumerate(zip(base_rows, curr_rows, strict=True)):
         # Identity check: same source row?
         if (b["draft_id"], b["match_number"], b["game_number"]) != (
             c["draft_id"],
@@ -217,7 +216,8 @@ def _diff_blobs(baseline: dict[str, object], current: dict[str, object]) -> list
                         problems.append(f"        current:  {ca[k]}")
         if b["trace_hashes"] != c["trace_hashes"]:
             differs = [
-                j for j in range(len(b["trace_hashes"]))
+                j
+                for j in range(len(b["trace_hashes"]))
                 if b["trace_hashes"][j] != c["trace_hashes"][j]
             ]
             problems.append(
@@ -240,12 +240,17 @@ def main() -> int:
         default=DEFAULT_DUCKDB,
         help=f"Games duckdb path (default: {DEFAULT_DUCKDB})",
     )
-    parser.add_argument("--set", dest="set_code", default=DEFAULT_SET, help="Set code (default TLA)")
+    parser.add_argument(
+        "--set", dest="set_code", default=DEFAULT_SET, help="Set code (default TLA)"
+    )
     parser.add_argument(
         "--event-type", default=DEFAULT_EVENT_TYPE, help="Event type (default PremierDraft)"
     )
     parser.add_argument(
-        "--n-rows", type=int, default=DEFAULT_N_ROWS, help=f"Real rows to sample (default {DEFAULT_N_ROWS})"
+        "--n-rows",
+        type=int,
+        default=DEFAULT_N_ROWS,
+        help=f"Real rows to sample (default {DEFAULT_N_ROWS})",
     )
     parser.add_argument(
         "--n-sims-per-row",
@@ -263,7 +268,7 @@ def main() -> int:
     print(f"  {len(rows)} rows; first row draft_id={rows[0].draft_id} game={rows[0].game_number}")
 
     total_games = args.n_rows * args.n_sims_per_row
-    print(f"Running {args.n_rows} rows × {args.n_sims_per_row} sims = {total_games} games...")
+    print(f"Running {args.n_rows} rows x {args.n_sims_per_row} sims = {total_games} games...")
     t0 = time.time()
     blob = _run_corpus(rows, args.n_sims_per_row)
     elapsed = time.time() - t0

@@ -33,18 +33,23 @@ ROLE_FLAG_KEYS: list[str] = [
     "is_planeswalker",
     "is_equipment",
     "is_vehicle",
+    "is_land",
+    "is_mana_rock",
     "is_saga",
     "is_class",
     "is_punch_fight",
     "is_pump_aura",
     "is_removal_aura",
+    "combat_trick",
     "is_bounce",
     "is_top_library",
     "removal_destroy_or_exile",
+    "is_counterspell",
     "removal_burn_damage_gt0",
     "cards_drawn_gt0",
     "cards_manipulated_gt0",
     "creates_creatures",
+    "is_other",
 ]
 
 # Each role-flag key is satisfied by a one-line predicate over RoleFeatures.
@@ -56,18 +61,30 @@ ROLE_FLAG_PREDICATES: dict[str, Callable[[RoleFeatures], bool]] = {
     "is_planeswalker": lambda r: r.is_planeswalker,
     "is_equipment": lambda r: r.is_equipment,
     "is_vehicle": lambda r: r.is_vehicle,
+    "is_land": lambda r: r.is_land,
+    "is_mana_rock": lambda r: r.is_mana_rock,
     "is_saga": lambda r: r.is_saga,
     "is_class": lambda r: r.is_class,
     "is_punch_fight": lambda r: r.is_punch_fight,
     "is_pump_aura": lambda r: r.is_pump_aura,
     "is_removal_aura": lambda r: r.is_removal_aura,
+    # combat_trick has no top-level bool — it's implied by any of the
+    # three combat_trick_* fields being populated. Instants only per
+    # the RoleFeatures schema.
+    "combat_trick": lambda r: (
+        r.combat_trick_power is not None
+        or r.combat_trick_toughness is not None
+        or bool(r.combat_trick_granted_keywords)
+    ),
     "is_bounce": lambda r: r.is_bounce,
     "is_top_library": lambda r: r.is_top_library,
     "removal_destroy_or_exile": lambda r: r.removal_destroy_or_exile,
+    "is_counterspell": lambda r: r.is_counterspell,
     "removal_burn_damage_gt0": lambda r: (r.removal_burn_damage or 0) > 0,
     "cards_drawn_gt0": lambda r: r.cards_drawn > 0,
     "cards_manipulated_gt0": lambda r: r.cards_manipulated > 0,
     "creates_creatures": lambda r: bool(r.creates_creatures),
+    "is_other": lambda r: r.is_other,
 }
 
 # Primary types we expose in the dropdown. Lands and Planeswalker are
@@ -230,6 +247,9 @@ def display_role_flag(flag: str) -> str:
         "cards_manipulated_gt0": "scry/loot",
         "creates_creatures": "creates tokens",
         "removal_destroy_or_exile": "removal",
+        "is_counterspell": "counterspell",
+        "is_mana_rock": "mana rock",
+        "combat_trick": "combat trick",
     }
     if flag in pretty:
         return pretty[flag]

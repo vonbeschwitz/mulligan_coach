@@ -25,7 +25,7 @@ Performance: the CSP is small (<= ~7 sources, <= ~6 pips in Limited).
 A plain DFS with a good ordering is fine; the first valid payment is
 returned without enumerating all of them. The same ``(cost,
 available-abilities)`` shape recurs many times per game (the
-castability snapshot walks every card × every mode × every candidate
+castability snapshot walks every card x every mode x every candidate
 land), so :func:`can_pay_cost` is memoised on
 ``(id(cost), abilities_signature)`` for the lifetime of a single
 ``simulate_one_game`` call — see :func:`reset_per_game_caches`. The
@@ -200,7 +200,7 @@ _EXPAND_COST_CACHE: dict[int, tuple[ManaCost, list[_Requirement]]] = {}
 
 # Per-game memoisation of :func:`can_pay_cost`. Same ``(cost, set of
 # available abilities)`` repeats many times within a single game (the
-# castability snapshot walks every card × every land × every mode, the
+# castability snapshot walks every card x every land x every mode, the
 # L1 lookahead repeats the same next-turn check for every candidate
 # land, …). The key is ``(id(cost), abilities_signature)`` where the
 # signature is a sorted tuple of ``(id(ability), source.instance_id)``
@@ -212,7 +212,7 @@ _EXPAND_COST_CACHE: dict[int, tuple[ManaCost, list[_Requirement]]] = {}
 # ``ManaAbility`` objects that remain valid for the duration of the
 # game, so ``state.cast`` can tap them correctly when consuming a
 # cached payment.
-_CSP_CACHE: dict[tuple[int, tuple[tuple[int, int], ...]], "ManaPayment | None"] = {}
+_CSP_CACHE: dict[tuple[int, tuple[tuple[int, int], ...]], ManaPayment | None] = {}
 
 
 def reset_per_game_caches() -> None:
@@ -427,9 +427,7 @@ def can_pay_cost(
     # uses ``id(ab.ability)`` for the ability (immutable, lives on the
     # ParsedCard) and ``ab.source.instance_id`` for the source (stable
     # within a game) — together they uniquely identify the search input.
-    abilities_sig = tuple(
-        sorted((id(ab.ability), ab.source.instance_id) for ab in abilities)
-    )
+    abilities_sig = tuple(sorted((id(ab.ability), ab.source.instance_id) for ab in abilities))
     key = (id(cost), abilities_sig)
     if key in _CSP_CACHE:
         return _CSP_CACHE[key]

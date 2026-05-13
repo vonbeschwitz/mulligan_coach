@@ -106,9 +106,7 @@ def _castable_spells_next_turn(cand: Card, state: GameState) -> list[Card]:
     summoning_sick (plus the land_drop_used flag) — so a hand-tuned
     save+restore is much cheaper.
     """
-    orig_hand_idx = next(
-        i for i, c in enumerate(state.hand) if c.instance_id == cand.instance_id
-    )
+    orig_hand_idx = next(i for i, c in enumerate(state.hand) if c.instance_id == cand.instance_id)
     # ``play_land`` may add ``cand.instance_id`` to ``tapped``;
     # ``untap_all`` then clears the entire set in-place. We snapshot
     # the pre-call sets so the inner ``tapped``/``summoning_sick``
