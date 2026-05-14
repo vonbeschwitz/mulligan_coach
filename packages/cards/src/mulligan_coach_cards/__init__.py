@@ -23,6 +23,7 @@ from .mana import ManaCost, Pip, parse_mana_cost
 from .models import (
     Cost,
     CreatureBody,
+    DiscardCardEffect,
     DrawCardsEffect,
     Effect,
     EntersBattlefieldEffect,
@@ -59,6 +60,7 @@ from .store import (
 __all__ = [
     "Cost",
     "CreatureBody",
+    "DiscardCardEffect",
     "DrawCardsEffect",
     "Effect",
     "EntersBattlefieldEffect",

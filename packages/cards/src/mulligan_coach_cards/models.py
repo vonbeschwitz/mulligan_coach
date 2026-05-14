@@ -290,6 +290,20 @@ class DrawCardsEffect(BaseModel):
     n: int = Field(ge=1)
 
 
+class DiscardCardEffect(BaseModel):
+    """Discard ``n`` cards from your own hand on resolution.
+
+    Used in combination with :class:`DrawCardsEffect` to model "loot"
+    effects (draw N, then discard N). The simulator picks which card to
+    discard via a simple heuristic (excess lands first, otherwise the
+    highest-CMC uncastable card). Net effect on hand size is the
+    parent mode's combined draws minus discards.
+    """
+
+    kind: Literal["discard_card"] = "discard_card"
+    n: int = Field(default=1, ge=1)
+
+
 class ScryEffect(BaseModel):
     """Scry N — look at the top N cards and reorder / bottom them."""
 
@@ -330,6 +344,7 @@ Effect = Annotated[
     | FetchLandEffect
     | LookAtTopEffect
     | DrawCardsEffect
+    | DiscardCardEffect
     | ScryEffect
     | EntersBattlefieldEffect
     | NoopEffect,
@@ -490,6 +505,15 @@ class RoleFeatures(BaseModel):
         default=False,
         description="Creature-targeted destroy or exile (grouped together per design decision).",
     )
+    is_mass_removal: bool = Field(
+        default=False,
+        description=(
+            "Card destroys / exiles / -N/-Ns ALL creatures (or all opp permanents) — "
+            "Wrath of God, Languish, Plague Wind. Set in addition to "
+            "removal_destroy_or_exile (a sweeper is still creature removal). Also set "
+            "on Sagas whose chapter I is a board sweeper (Last Ronin, Rise of Sozin)."
+        ),
+    )
     removal_burn_damage: int | None = Field(
         default=None,
         description=(
@@ -569,6 +593,7 @@ class RoleFeatures(BaseModel):
             or self.is_class
             or self.is_punch_fight
             or self.removal_destroy_or_exile
+            or self.is_mass_removal
             or self.removal_burn_damage is not None
             or self.is_counterspell
             or self.is_bounce

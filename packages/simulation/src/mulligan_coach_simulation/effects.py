@@ -33,6 +33,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from mulligan_coach_cards import (
+    DiscardCardEffect,
+    DrawCardsEffect,
     Effect,
     FetchLandEffect,
     LookAtTopEffect,
@@ -162,11 +164,28 @@ def apply_mode_effects(state: GameState, effects: list[Effect]) -> None:
     cast (rare in Limited), but v1 doesn't model the live mana pool
     persistently across cast actions, so the floated mana evaporates.
     """
+    # Loot — DrawCardsEffect paired with DiscardCardEffect — is resolved
+    # eagerly here so the sim actually draws and discards (matching the
+    # cards-package emission for "draw N, then discard M" patterns). For
+    # the plain draw / scry-then-draw shape (cantrips), DrawCardsEffect
+    # is still deferred — the spell-casting policy applies scry's
+    # heuristic between cast resolution and the player's "next draw step",
+    # so resolving draw eagerly here would put scry's just-bottomed cards
+    # on top of the drawn card. Once the policy gains a unified "resolve
+    # cast effects in order" pathway, this special case goes away.
+    is_loot = any(isinstance(fx, DiscardCardEffect) for fx in effects) and any(
+        isinstance(fx, DrawCardsEffect) for fx in effects
+    )
     for fx in effects:
         if isinstance(fx, FetchLandEffect):
             resolve_fetch(state, fx)
         elif isinstance(fx, LookAtTopEffect):
             resolve_look_at_top(state, fx)
+        elif isinstance(fx, DrawCardsEffect):
+            if is_loot:
+                state.draw(fx.n)
+        elif isinstance(fx, DiscardCardEffect):
+            resolve_discard(state, fx)
         # Other effects: deliberately ignored at this layer in v1.
 
 
@@ -222,6 +241,46 @@ def _put_fetched_card(state: GameState, card: Card, destination: str) -> None:
         state.tapped.add(card.instance_id)
     elif destination != "battlefield_untapped":
         raise AssertionError(f"unknown fetch destination {destination!r}")
+
+
+def resolve_discard(state: GameState, fx: DiscardCardEffect) -> None:
+    """Discard up to ``fx.n`` cards from hand.
+
+    Heuristic — Magic doesn't choose a discard for you; the simulator
+    picks the card with the *least* near-term value:
+
+    1. Extra lands when the hand already has 3+ lands (lands beyond the
+       fourth aren't useful in a four-turn window).
+    2. The highest-CMC non-land card otherwise (least likely to be
+       cast in the remaining mulligan-relevant turns).
+    3. Final tiebreak: hand-end index (LIFO).
+
+    Library shorter than the discard count is fine — we discard what
+    we can. The chosen card moves from hand to graveyard.
+    """
+    for _ in range(fx.n):
+        if not state.hand:
+            return
+        n_lands_in_hand = sum(1 for c in state.hand if c.is_land)
+        choice: Card | None = None
+        if n_lands_in_hand >= 3:
+            for card in reversed(state.hand):
+                if card.is_land:
+                    choice = card
+                    break
+        if choice is None:
+            non_lands = [c for c in state.hand if not c.is_land]
+            if non_lands:
+
+                def _cmc(card: Card) -> int:
+                    cost = card.parsed.mana_cost
+                    return cost.cmc if cost is not None else 0
+
+                choice = max(non_lands, key=_cmc)
+        if choice is None:
+            choice = state.hand[-1]
+        state.hand.remove(choice)
+        state.graveyard.append(choice)
 
 
 def resolve_look_at_top(state: GameState, fx: LookAtTopEffect) -> None:

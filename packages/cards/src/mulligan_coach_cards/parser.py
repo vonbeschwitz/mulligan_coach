@@ -45,6 +45,7 @@ from .mana import ManaCost, Pip, parse_mana_cost
 from .models import (
     Cost,
     CreatureBody,
+    DiscardCardEffect,
     DrawCardsEffect,
     Effect,
     EntersBattlefieldEffect,
@@ -281,6 +282,12 @@ def _parse_cost_string(cost_str: str) -> Cost | None:
 
 _DRAW_RE = re.compile(r"^Draw (\w+) cards?\b", re.IGNORECASE)
 _SCRY_RE = re.compile(r"^Scry (\w+)\b", re.IGNORECASE)
+# Surveil — "Surveil N" (with optional period). Treated as scry for
+# mulligan-relevance: the player sees the top N and bottoms anything
+# they don't want. The graveyard-vs-bottom distinction doesn't affect
+# turns 1-4 castability, so the simulator handles surveil via ScryEffect.
+# Per schema, surveil populates `cards_manipulated`.
+_SURVEIL_RE = re.compile(r"^Surveil (\w+)\b", re.IGNORECASE)
 # Loot: "Draw N cards, then discard N cards." Net draw is zero, but
 # the player sees and manipulates new cards. role_features.cards_manipulated
 # is the right home for this.
@@ -294,24 +301,37 @@ _LOOT_RE = re.compile(
 # A trailing qualifier ("with mana value 3 or greater", "you don't control",
 # "an opponent controls") is allowed before the period.
 # Optional descriptor that can appear between "target" and the target
-# word ("attacking", "blocking", "tapped", "untapped", etc.).
+# word ("attacking", "blocking", "tapped", "untapped", "other",
+# "another", etc.). "other"/"another" are common on ETB triggers
+# referring to "another target creature" (Koh, Koya, Noxious Gearhulk).
 _TARGET_PRE_DESC = (
     r"(?:(?:attacking|blocking|attacking or blocking|tapped|untapped|"
-    r"nonblack|nonwhite|nonblue|nonred|nongreen|nontoken|colorless)\s+)*"
+    r"nonblack|nonwhite|nonblue|nonred|nongreen|nontoken|colorless|"
+    r"other|another)\s+)*"
 )
+# An optional "up to one|two|three|N other" qualifier between the head
+# verb (Destroy / Exile) and "target X". Folded into the destroy/exile
+# regexes below.
+_UP_TO_QUALIFIER = r"(?:\s+up to (?:one|two|three|\d+)(?:\s+other)?)?"
 _DESTROY_TARGET_RE = re.compile(
-    r"^Destroy(?:\s+up to (?:one|two|three|\d+))?\s+target\s+"
+    r"^Destroy"
+    + _UP_TO_QUALIFIER
+    + r"\s+target\s+"
     + _TARGET_PRE_DESC
     + r"(?P<target>creature|nonland permanent|permanent|artifact|enchantment|"
-    r"land|artifact or enchantment)"
+    r"land|artifact or enchantment|artifact or creature|creature or artifact|"
+    r"creature or planeswalker|creatures?)"
     r"(?:\s+[^.]*?)?(?:\.|$)",
     re.IGNORECASE,
 )
 _EXILE_TARGET_RE = re.compile(
-    r"^Exile(?:\s+up to (?:one|two|three|\d+))?\s+target\s+"
+    r"^Exile"
+    + _UP_TO_QUALIFIER
+    + r"\s+target\s+"
     + _TARGET_PRE_DESC
     + r"(?P<target>creature|nonland permanent|permanent|artifact|enchantment|"
-    r"land|artifact or enchantment)"
+    r"land|artifact or enchantment|artifact or creature|creature or artifact|"
+    r"creature or planeswalker|creatures?)"
     r"(?:\s+[^.]*?)?(?:\.|$)",
     re.IGNORECASE,
 )
@@ -322,7 +342,21 @@ _DAMAGE_CREATURE_RE = re.compile(
     re.IGNORECASE,
 )
 _DAMAGE_ANY_RE = re.compile(
-    r"^.+?\s+deals\s+(\d+)\s+damage to (any target|target creature or player)\.?$",
+    r"^.+?\s+deals\s+(\d+)\s+damage to (any target|target creature or player)\b.*",
+    re.IGNORECASE,
+)
+# Damage to a color-restricted creature ("deals N damage to target white or
+# blue creature"). Still creature-targeted, so counts as
+# removal_burn_damage.
+_DAMAGE_COLOR_CREATURE_RE = re.compile(
+    r"^.+?\s+deals\s+(\d+)\s+damage to target "
+    r"(?:non[a-z]+\s+|(?:white|blue|black|red|green)(?:\s+or\s+(?:white|blue|black|red|green))*\s+)+"
+    r"creature\.?",
+    re.IGNORECASE,
+)
+# Mass burn — "X deals N damage to each creature" / "to all creatures".
+_DAMAGE_EACH_CREATURE_RE = re.compile(
+    r"^.+?\s+deals\s+(\d+)\s+damage to (?:each|all|every) creatures?\b",
     re.IGNORECASE,
 )
 # Variable-amount damage: "<this> deals damage equal to ... to <target>".
@@ -340,10 +374,13 @@ _LIFE_LOSS_RE = re.compile(
 # Bounce — return target creature / nonland permanent / permanent to hand.
 # Trailing conditional text (e.g. "If you controlled that permanent, draw a
 # card.") is allowed after the period — the bounce is the primary effect.
+# Also accepts "up to one other target", "another target", and plural
+# target words (used by mass-bounce one-sided cards like Sunderflock).
 _BOUNCE_RE = re.compile(
-    r"^Return\s+(?:up to (?:one|two|three|\d+)\s+)?target\s+"
-    r"(?P<target>creature|nonland permanent|permanent)"
-    r"\s+to (?:its owner's|your) hand\.",
+    r"^Return\s+(?:up to (?:one|two|three|\d+)(?:\s+other)?\s+)?(?:another\s+)?target\s+"
+    r"(?:other\s+|another\s+)?"
+    r"(?P<target>creatures?|nonland permanents?|permanents?)"
+    r"\s+to (?:its owner's|their owners'|your) hands?\.",
     re.IGNORECASE,
 )
 # Tuck — put target creature / permanent on top of its owner's library.
@@ -417,6 +454,57 @@ _EXILE_UNTIL_LEAVES_RE = re.compile(
     r"artifact or creature|artifact or enchantment)"
     r".*?until\s+(?:this|that|it)\s+\w*?\s*leaves",
     re.IGNORECASE | re.DOTALL,
+)
+
+# Mass creature removal — "Destroy all creatures.", "Exile all creatures.",
+# "Destroy each creature with mana value 4 or less." etc. Sets both
+# removal_destroy_or_exile and is_mass_removal so downstream consumers
+# can distinguish single-target removal from board wipes.
+_MASS_REMOVAL_RE = re.compile(
+    r"^(?:Destroy|Exile)\s+(?:all|each)\s+(?:other\s+)?"
+    r"(?:nonland|nontoken|nonbasic)?\s*"
+    r"(?:creatures?|non(?:land|token)\s+permanents?|permanents?)\b",
+    re.IGNORECASE,
+)
+# Mass -N/-N — "Put N -A/-B counters on each creature" (kills small/medium
+# creatures). Total toughness reduction = count x magnitude; we treat
+# anything that knocks 2+ toughness off every creature as
+# removal_destroy_or_exile, since that wipes the common 1- and 2-toughness
+# bodies. X-shape ("Put X -1/-1 counters on each creature.", Black Sun's
+# Zenith) is treated as X=2 — the v1 X-cost simplifier already assumes
+# X=1 for casting, but for "kills creatures with toughness X" the
+# threshold the user actually pays is typically 2-3, so X=2 is the
+# realistic floor.
+_NEG_COUNTER_COUNT_WORDS: dict[str, int] = {
+    "a": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+}
+
+
+def _neg_counter_count(token: str) -> int:
+    """Turn the count token from a mass -N/-N regex into an int.
+
+    Recognises numeric digits, English words a/one through seven, and
+    the literal "X" (treated as 2 per the comment above).
+    """
+    t = token.strip().lower()
+    if t == "x":
+        return 2
+    if t.isdigit():
+        return int(t)
+    return _NEG_COUNTER_COUNT_WORDS.get(t, 1)
+
+
+_MASS_NEG_COUNTER_RE = re.compile(
+    r"^Put\s+(?P<count>a|one|two|three|four|five|six|seven|\d+|X)\s+"
+    r"-(?P<amount>\d+)/-\d+ counters?\s+on\s+each\s+creature",
+    re.IGNORECASE,
 )
 
 # Spell counter: "Counter target spell" — the counterspell role.
@@ -575,6 +663,34 @@ _INNER_DRAW_RE = re.compile(
     r"\b(?:you (?:may )?)?draw (a|an|one|two|three|four|five|six|seven|\d+) cards?\b",
     re.IGNORECASE,
 )
+# Inner loot — "discard a card. (if you do, )draw a card" — captured inside a
+# trigger so ETB / attack-trigger loot (Yuyan Archers, Gran-Gran, Sokka,
+# Teo, Flaring Cinder, etc.) fires cards_manipulated rather than the
+# inner-draw matcher's cards_drawn.
+_INNER_LOOT_RE = re.compile(
+    r"discard\s+(?P<discard>a|an|one|two|three|four|five|\d+)\s+cards?"
+    r"\.?\s*(?:If you do,?\s*)?\s*"
+    r"draw\s+(?P<draw>a|an|one|two|three|four|five|\d+)\s+cards?",
+    re.IGNORECASE | re.DOTALL,
+)
+# Inner reverse-loot — "draw N cards, then discard N cards" — used by
+# triggers that loot by drawing first then discarding.
+_INNER_LOOT_DRAW_FIRST_RE = re.compile(
+    r"draw\s+(?P<draw>a|an|one|two|three|four|five|\d+)\s+cards?"
+    r"\.?\s*(?:,?\s*then\s+|\s*and\s+)?\s*"
+    r"discard\s+(?P<discard>a|an|one|two|three|four|five|\d+)\s+cards?",
+    re.IGNORECASE | re.DOTALL,
+)
+# Inner surveil — "surveil N" anywhere inside a trigger.
+_INNER_SURVEIL_RE = re.compile(
+    r"\bsurveil\s+(\d+|a|an|one|two|three|four|five|six|seven|\d+)\b",
+    re.IGNORECASE,
+)
+# Inner scry — "scry N" anywhere inside a trigger.
+_INNER_SCRY_RE = re.compile(
+    r"\bscry\s+(\d+|a|an|one|two|three|four|five|six|seven|\d+)\b",
+    re.IGNORECASE,
+)
 # Inner mana production inside a triggered/static line: "add {G}", "add {C}{C}".
 _INNER_ADD_MANA_RE = re.compile(
     r"\badd ((?:\{[WUBRGC]\})+)",
@@ -610,11 +726,58 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
     (e.g. "When this enters, airbend up to one target nonland permanent."
     sets `rf.is_bounce`; "When this dies, earthbend 2." appends to
     `rf.creates_creatures`).
+
+    Loot patterns nested in a trigger ("you may discard a card. If you do,
+    draw a card.", "draw N cards, then discard N cards") populate
+    cards_manipulated rather than cards_drawn — the net cards gained is
+    zero (or the gross-vs-net delta for asymmetric shapes) per design.
+    Surveil triggers populate cards_manipulated.
     """
+    # Loot patterns take precedence over the plain draw matcher — both
+    # orders ("discard then draw" and "draw then discard") count as
+    # manipulated cards rather than as new draws.
+    handled_draws = 0
+    handled_discards = 0
+    for m in _INNER_LOOT_RE.finditer(chunk):
+        n_draw = _to_int(m.group("draw"))
+        n_discard = _to_int(m.group("discard"))
+        if n_draw is None or n_discard is None:
+            continue
+        rf.cards_manipulated += n_draw
+        net = max(0, n_draw - n_discard)
+        rf.cards_drawn += net
+        handled_draws += n_draw
+        handled_discards += n_discard
+    for m in _INNER_LOOT_DRAW_FIRST_RE.finditer(chunk):
+        n_draw = _to_int(m.group("draw"))
+        n_discard = _to_int(m.group("discard"))
+        if n_draw is None or n_discard is None:
+            continue
+        rf.cards_manipulated += n_draw
+        net = max(0, n_draw - n_discard)
+        rf.cards_drawn += net
+        handled_draws += n_draw
+        handled_discards += n_discard
+    # Plain "draw N cards" matches — only count any draws beyond the
+    # ones we already attributed to loot. Sum up all draw mentions and
+    # subtract the ones the loot matchers already consumed.
+    total_inner_draws = 0
     for m in _INNER_DRAW_RE.finditer(chunk):
         n = _to_int(m.group(1))
         if n is not None:
-            rf.cards_drawn += n
+            total_inner_draws += n
+    remaining_draws = max(0, total_inner_draws - handled_draws)
+    if remaining_draws:
+        rf.cards_drawn += remaining_draws
+    # Surveil / scry inside a trigger.
+    for m in _INNER_SURVEIL_RE.finditer(chunk):
+        n = _to_int(m.group(1))
+        if n is not None:
+            rf.cards_manipulated += n
+    for m in _INNER_SCRY_RE.finditer(chunk):
+        n = _to_int(m.group(1))
+        if n is not None:
+            rf.cards_manipulated += n
     # Mana production breadcrumb only — no role_features field today.
     _ = _INNER_ADD_MANA_RE.search(chunk)
     # Bending mechanics nested inside a triggered ability.
@@ -791,7 +954,9 @@ def _try_build_waterbend_mode(chunk: str, rf: RoleFeatures | None) -> Mode | Non
     if cost is None:
         return None
     cost = _demote_cost_to_generic(cost)
-    effects = _match_spell_effect(effect_str, rf=rf)
+    # Waterbending is an activated ability — not instant-speed, so no
+    # combat-trick role-features fire even if the body pumps a creature.
+    effects = _match_spell_effect(effect_str, rf=rf, allow_combat_trick=False)
     if effects is None:
         effects = [NoopEffect(role_tag="waterbend_unknown")]
     return Mode(kind="activated", cost=cost, effects=effects)
@@ -939,10 +1104,27 @@ def _match_token_creation(text: str) -> list[CreatureBody]:
 # permanent / permanent removal kills creatures incidentally so we count
 # them too. Anything else (artifact / enchantment / land / artifact-or-
 # enchantment) is non-creature removal — bucket into role_features.is_other.
-_CREATURE_TARGETS = frozenset({"creature", "nonland permanent", "permanent"})
+# "creatures" (plural) is included because "destroy up to three target
+# creatures" carries a plural target word.
+_CREATURE_TARGETS = frozenset(
+    {
+        "creature",
+        "creatures",
+        "nonland permanent",
+        "permanent",
+        "artifact or creature",
+        "creature or artifact",
+        "creature or planeswalker",
+    }
+)
 
 
-def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effect] | None:
+def _match_spell_effect(
+    chunk: str,
+    rf: RoleFeatures | None = None,
+    *,
+    allow_combat_trick: bool = True,
+) -> list[Effect] | None:
     """Match a single oracle-text chunk against the recognised spell effects.
 
     When ``rf`` is supplied, side-effect role-features fields that depend
@@ -950,6 +1132,14 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
     top-library flags, removal target type). When ``rf`` is None (e.g.
     when called from inside an activated-ability or cycling Mode where
     role features shouldn't change), only the effect list is returned.
+
+    ``allow_combat_trick`` is False when called from a non-instant context
+    (creature ETB without flash, sorcery, activated ability). The
+    schema's combat_trick_* fields are "instants only" — a creature's
+    ETB pump trigger is not a combat trick because the player can't
+    flash it in. Callers in non-instant contexts pass False to suppress
+    the combat-trick branch but still capture the underlying effect via
+    the noop tag.
 
     Returns a list of Effects (one chunk can imply several — token
     creation + draw, etc.) or ``None`` if the chunk doesn't match any
@@ -967,13 +1157,17 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
 
     # Loot — "Draw N, then discard N". Try this BEFORE plain draw so
     # the loot pattern wins over the leading "Draw a card" partial match.
+    # Emits real DrawCardsEffect + DiscardCardEffect so the simulator
+    # mirrors what the player actually does (draw, then discard the
+    # least valuable card in hand).
     if m := _LOOT_RE.match(chunk):
         n_draw = _to_int(m.group("draw"))
-        if n_draw is None:
+        n_discard = _to_int(m.group("discard"))
+        if n_draw is None or n_discard is None:
             return None
         if rf is not None:
             rf.cards_manipulated += n_draw
-        return [NoopEffect(role_tag="loot")]
+        return [DrawCardsEffect(n=n_draw), DiscardCardEffect(n=n_discard)]
 
     # Card draw.
     if m := _DRAW_RE.match(chunk):
@@ -988,6 +1182,33 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
         if n is None:
             return None
         return [ScryEffect(n=n)]
+
+    # Surveil — treated as scry for mulligan-relevant turns. The
+    # graveyard distinction (cards on bottom vs in yard) doesn't change
+    # what you draw in turns 1-4, so ScryEffect is the right modelling.
+    if m := _SURVEIL_RE.match(chunk):
+        n = _to_int(m.group(1))
+        if n is None:
+            return None
+        return [ScryEffect(n=n)]
+
+    # Mass removal (destroy/exile all creatures, sweep -N/-N).
+    if _MASS_REMOVAL_RE.match(chunk):
+        if rf is not None:
+            rf.removal_destroy_or_exile = True
+            rf.is_mass_removal = True
+        return [NoopEffect(role_tag="mass_removal")]
+    if m := _MASS_NEG_COUNTER_RE.match(chunk):
+        magnitude = _to_int(m.group("amount")) or 0
+        count = _neg_counter_count(m.group("count"))
+        # Total toughness reduction. >= 2 kills the common 1- and
+        # 2-toughness bodies, so we promote to creature removal.
+        total = magnitude * count
+        if rf is not None:
+            rf.is_mass_removal = True
+            if total >= 2:
+                rf.removal_destroy_or_exile = True
+        return [NoopEffect(role_tag="mass_neg_counter")]
 
     # Destroy / exile target X — generalised over creature / permanent /
     # artifact / enchantment / land.
@@ -1069,6 +1290,17 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
         if rf is not None:
             rf.removal_burn_damage = n
         return [NoopEffect(role_tag=f"removal_damage_creature_{n}")]
+    if m := _DAMAGE_COLOR_CREATURE_RE.match(chunk):
+        n = int(m.group(1))
+        if rf is not None:
+            rf.removal_burn_damage = n
+        return [NoopEffect(role_tag=f"removal_damage_creature_{n}")]
+    if m := _DAMAGE_EACH_CREATURE_RE.match(chunk):
+        n = int(m.group(1))
+        if rf is not None:
+            rf.removal_burn_damage = n
+            rf.is_mass_removal = True
+        return [NoopEffect(role_tag=f"removal_damage_mass_{n}")]
     if m := _DAMAGE_ANY_RE.match(chunk):
         n = int(m.group(1))
         if rf is not None:
@@ -1092,11 +1324,16 @@ def _match_spell_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Effe
     # Combat trick: requires "target creature" + (pump or granted keywords)
     # + "until end of turn". The PUMP and GRANT regexes both encode the
     # "until end of turn" gate so static permanents don't false-match.
+    # Combat-trick role-feature fields are only populated when the caller
+    # passed allow_combat_trick=True (i.e. an instant context). A creature
+    # ETB pump or a sorcery pump doesn't qualify as a combat trick, so
+    # we still emit a noop effect to consume the chunk but don't set
+    # the role-feature fields.
     if _TARGETS_CREATURE_RE.search(chunk):
         pump_match = _COMBAT_TRICK_PUMP_RE.search(chunk)
         granted = _extract_granted_keywords(chunk)
         if pump_match is not None or granted:
-            if rf is not None:
+            if rf is not None and allow_combat_trick:
                 if pump_match is not None:
                     rf.combat_trick_power = int(pump_match.group("p"))
                     rf.combat_trick_toughness = int(pump_match.group("t"))
@@ -1536,7 +1773,10 @@ def _build_activated_mode(
                 rf.creates_creatures.append(body)
             _extract_triggered_signal(effect_str, rf)
         return None, None
-    effects = _match_spell_effect(effect_str, rf=rf)
+    # Activated abilities are not instant-speed for our purposes —
+    # they're gated behind tapping / cost, so a pump on activation
+    # doesn't make the parent card a combat trick.
+    effects = _match_spell_effect(effect_str, rf=rf, allow_combat_trick=False)
     if effects is None:
         # Cost parsed cleanly but we don't model the effect. Build a Mode
         # with a placeholder noop — the simulator can still evaluate
@@ -1806,7 +2046,16 @@ def _parse_creature(
         if m := _ETB_RE.match(chunk):
             if _is_self_etb(m.group("subject"), name):
                 inner = m.group("effect").strip()
-                effects = _match_spell_effect(inner, rf=role_features)
+                # Combat-trick fields are "instants only" per schema. A
+                # creature with ETB pump only qualifies if it has flash
+                # — otherwise the player can't flash it in to save a
+                # blocker and it's not functioning as a combat trick.
+                has_flash = "flash" in evergreens
+                effects = _match_spell_effect(
+                    inner,
+                    rf=role_features,
+                    allow_combat_trick=has_flash,
+                )
                 if effects is not None:
                     etb_effects.extend(effects)
                     continue
@@ -1944,6 +2193,11 @@ def _parse_spell(
     spell_effects: list[Effect] = []
     blockers: list[str] = []
 
+    # Combat-trick fields are "instants only" per schema — sorceries that
+    # pump a target creature don't qualify because the player can't cast
+    # them at instant speed to save / win combat.
+    is_instant = "Instant" in base.get("types", [])
+
     # Land-fetch effects can span the whole text (multi-clause Cultivate-style).
     fetch_effects = _match_fetch_land_effects(cleaned)
     spell_effects.extend(fetch_effects)
@@ -1995,7 +2249,7 @@ def _parse_spell(
         ):
             continue
 
-        effects = _match_spell_effect(chunk, rf=role_features)
+        effects = _match_spell_effect(chunk, rf=role_features, allow_combat_trick=is_instant)
         if effects is None:
             # Static / triggered tolerance: silently drop the line if it
             # reads as passive prose or a trigger we don't model. Most
@@ -2429,7 +2683,15 @@ def _populate_role_features_from_effects(rf: RoleFeatures, modes: list[Mode]) ->
     ``cards_manipulated``, ``removal_*`` etc. Idempotent — calling it
     twice doesn't double-count because we set absolute values from the
     cast Mode only (cycling counts as +1 net draw but its discard
-    self-cancels, so we deliberately leave it out)."""
+    self-cancels, so we deliberately leave it out).
+
+    Loot (draw N, then discard N) emits both ``DrawCardsEffect(n=N)``
+    and ``DiscardCardEffect(n=N)`` on the same mode. ``cards_drawn``
+    holds the *net* — gross draws minus discards — so the gross
+    Draw / Discard pair correctly nets out for loot (and contributes
+    +(N - M) for "draw N then discard M" net-positive shapes like
+    Thirst for Identity).
+    """
     for mode in modes:
         # Only the cast Mode contributes to cards_drawn / scry totals;
         # cycling and channel are conditional-use modes whose card-draw
@@ -2438,9 +2700,13 @@ def _populate_role_features_from_effects(rf: RoleFeatures, modes: list[Mode]) ->
         # which is what's on the cast resolution.
         if mode.kind != "cast":
             continue
+        mode_draws = 0
+        mode_discards = 0
         for effect in mode.effects:
             if isinstance(effect, DrawCardsEffect):
-                rf.cards_drawn += effect.n
+                mode_draws += effect.n
+            elif isinstance(effect, DiscardCardEffect):
+                mode_discards += effect.n
             elif isinstance(effect, ScryEffect):
                 rf.cards_manipulated += effect.n
             elif isinstance(effect, NoopEffect):
@@ -2452,6 +2718,10 @@ def _populate_role_features_from_effects(rf: RoleFeatures, modes: list[Mode]) ->
                     parts = tag.rsplit("_", 1)
                     if len(parts) == 2 and parts[1].isdigit():
                         rf.removal_burn_damage = int(parts[1])
+        # Net cards drawn — clamp at zero so a discard-heavy mode (e.g.
+        # rummage: discard 1, draw 1) shows as net 0 rather than -0.
+        net = max(0, mode_draws - mode_discards)
+        rf.cards_drawn += net
 
 
 def _summarize_effect(e: Effect) -> str:
