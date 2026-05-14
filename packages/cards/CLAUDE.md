@@ -451,3 +451,13 @@ encode the chapter-I / level-1 effect.
   must handle that until the classifier lands. `role_features` is
   populated whenever the parser could extract anything, even if
   status is `NEEDS_LLM`.
+
+## Encoding guide for LLM reviewers
+
+When hand-encoding (LLM_ENCODED) or reviewing existing encodings, read
+[`CARD_ENCODING_GUIDE.md`](CARD_ENCODING_GUIDE.md) in this directory.
+It captures the project owner's judgment calls on how specific card
+patterns should be classified — mass removal, combat tricks, token
+counts, loot vs draw, mana rocks with awkward costs, etc. — derived
+from the FLAGGED audit at `scripts/audit/FLAGGED_feedback.md`. Follow
+its rules so encodings stay consistent.

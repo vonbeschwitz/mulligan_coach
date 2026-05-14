@@ -90,6 +90,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -198,6 +199,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -298,9 +300,10 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -316,10 +319,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "unrecognised line: 'Exile target artifact, creature, or enchantment. Its controller creates a Clue token.'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns",
+      "fix: ETB destroy/exile \u2192 removal_destroy_or_exile"
     ]
   },
   {
@@ -437,6 +441,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -564,6 +569,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -687,6 +693,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -813,6 +820,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -943,6 +951,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -1085,6 +1094,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -1243,6 +1253,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -1371,6 +1382,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -1502,6 +1514,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -1629,6 +1642,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -1642,7 +1656,7 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
     "status": "auto",
     "reasons": [
@@ -1780,6 +1794,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -1912,6 +1927,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -2040,6 +2056,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -2157,6 +2174,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -2269,6 +2287,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -2278,7 +2297,8 @@
       "combat_trick_granted_keywords": [
         "flying",
         "first strike",
-        "lifelink"
+        "lifelink",
+        "hexproof"
       ],
       "is_removal_aura": false,
       "is_pump_aura": false,
@@ -2290,7 +2310,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 1-mana combat trick granting flying / first strike / lifelink (+ hexproof, not in our keyword list) + becomes Avatar type"
+      "llm: 1-mana combat trick granting flying / first strike / lifelink (+ hexproof, not in our keyword list) + becomes Avatar type",
+      "fix: combat-trick grants hexproof"
     ]
   },
   {
@@ -2399,6 +2420,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -2504,6 +2526,10 @@
           {
             "kind": "noop",
             "role_tag": "create_token"
+          },
+          {
+            "kind": "scry",
+            "n": 2
           }
         ]
       }
@@ -2535,6 +2561,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -2548,12 +2575,13 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 2
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "unrecognised line: 'Create a 1/1 white Ally creature token for each Plains you control. Scry 2.'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns",
+      "fix: scry 2 captured on ETB"
     ]
   },
   {
@@ -2669,6 +2697,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -2796,6 +2825,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -2927,6 +2957,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3073,6 +3104,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3202,6 +3234,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3345,6 +3378,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3484,7 +3518,8 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": true,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3500,12 +3535,13 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "saga: encoded chapter I only",
       "saga: unrecognised line: 'Starting with you, each player chooses up to one permanent with mana value 3 or greater from among permanents your opponents control. Exile those permanents.'",
       "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns",
-      "transform DFC: parsed front face only (back face has no cast cost)"
+      "transform DFC: parsed front face only (back face has no cast cost)",
+      "fix: chapter-I / sweeper mass removal"
     ]
   },
   {
@@ -3600,6 +3636,13 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "look_at_top",
+            "n": 4,
+            "accepts_land": false,
+            "accepts_nonland": true,
+            "destination": "hand"
           }
         ]
       }
@@ -3619,6 +3662,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3632,12 +3676,13 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 3
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: first strike"
+      "evergreen keywords: first strike",
+      "fix: look-at-top-4 wired into simulator"
     ]
   },
   {
@@ -3739,6 +3784,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3859,6 +3905,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -3996,6 +4043,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -4170,6 +4218,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -4290,6 +4339,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": 4,
       "is_counterspell": false,
       "is_bounce": false,
@@ -4412,16 +4462,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "3",
-          "toughness": "3",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -4439,7 +4482,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: modal \u2014 destroy creature with power 4+ OR earthbend 3 (3/3 token, already captured as creates_creatures). At MV 4 the fast-path was blocked by modal text"
+      "llm: modal \u2014 destroy creature with power 4+ OR earthbend 3 (3/3 token, already captured as creates_creatures). At MV 4 the fast-path was blocked by modal text",
+      "fix: earthbend doesn't create token (sandbenders Storm)"
     ]
   },
   {
@@ -4549,6 +4593,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -4676,6 +4721,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -4829,6 +4875,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -4993,6 +5040,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -5126,9 +5174,22 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
-      "creates_creatures": [],
+      "is_other": false,
+      "creates_creatures": [
+        {
+          "power": "1",
+          "toughness": "1",
+          "colors": [
+            "W"
+          ],
+          "subtypes": [
+            "Ally"
+          ],
+          "keywords": []
+        }
+      ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -5144,9 +5205,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (etb_counter_distribution)"
+      "effects: noop (etb_counter_distribution)",
+      "fix: variable-X token (assume X=1)"
     ]
   },
   {
@@ -5255,6 +5317,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -5382,6 +5445,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -5490,6 +5554,13 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "look_at_top",
+            "n": 4,
+            "accepts_land": false,
+            "accepts_nonland": true,
+            "destination": "hand"
           }
         ]
       }
@@ -5509,6 +5580,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -5522,11 +5594,12 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 3
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 2-mana 2/2 ally with waterbend {5} tutor activation. Waterbend in this card uses {N}: form (no dash); activation cost too high to affect mulligan turns"
+      "llm: 2-mana 2/2 ally with waterbend {5} tutor activation. Waterbend in this card uses {N}: form (no dash); activation cost too high to affect mulligan turns",
+      "fix: look-at-top-4 wired into simulator"
     ]
   },
   {
@@ -5623,6 +5696,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -5754,6 +5828,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -5886,6 +5961,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -6000,6 +6076,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -6119,6 +6196,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -6250,6 +6328,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -6379,6 +6458,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -6542,6 +6622,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -6671,6 +6752,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -6812,8 +6894,12 @@
         },
         "effects": [
           {
-            "kind": "noop",
-            "role_tag": "loot"
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -6833,6 +6919,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -7041,6 +7128,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -7140,6 +7228,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -7159,6 +7255,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -7171,12 +7268,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
-      "cards_manipulated": 0
+      "cards_drawn": 0,
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: loot \u2014 cards_manipulated, sim wired with draw+discard"
     ]
   },
   {
@@ -7272,6 +7370,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -7403,6 +7502,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -7562,9 +7662,10 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
-      "is_bounce": false,
+      "is_bounce": true,
       "is_top_library": false,
       "combat_trick_power": null,
       "combat_trick_toughness": null,
@@ -7577,9 +7678,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "vehicle"
+      "vehicle",
+      "fix: ETB bounce \u2192 is_bounce"
     ]
   },
   {
@@ -7688,6 +7790,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": true,
       "is_bounce": false,
@@ -7850,6 +7953,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -7862,13 +7966,14 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 0,
+      "cards_drawn": 1,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "alternative modes: activated"
+      "alternative modes: activated",
+      "fix: activated draw 1 captured"
     ]
   },
   {
@@ -7979,6 +8084,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -8117,6 +8223,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -8129,15 +8236,16 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_drawn": 1,
+      "cards_manipulated": 2
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "saga: encoded chapter I only",
       "saga: unrecognised line: 'Scry 2, then draw a card.'",
       "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns",
-      "transform DFC: parsed front face only (back face has no cast cost)"
+      "transform DFC: parsed front face only (back face has no cast cost)",
+      "fix: saga chapter I/II \u2014 draw 1 + scry 2"
     ]
   },
   {
@@ -8238,13 +8346,14 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
-      "is_top_library": false,
+      "is_top_library": true,
       "combat_trick_power": null,
       "combat_trick_toughness": null,
       "combat_trick_granted_keywords": [],
@@ -8256,10 +8365,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "unrecognised line: 'The owner of target creature or enchantment puts it into their library second from the top or on the bottom. You create a Clue token.'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns",
+      "fix: tuck-or-deeper for creatures"
     ]
   },
   {
@@ -8373,6 +8483,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -8529,6 +8640,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -8716,6 +8828,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -8831,6 +8944,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -8959,6 +9073,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -9086,6 +9201,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -9231,6 +9347,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -9371,6 +9488,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -9513,6 +9631,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": true,
       "is_bounce": false,
@@ -9641,6 +9760,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -9777,6 +9897,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -9889,6 +10010,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -9908,6 +10037,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -9920,13 +10050,14 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
-      "cards_manipulated": 0
+      "cards_drawn": 0,
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: flying"
+      "evergreen keywords: flying",
+      "fix: loot \u2014 cards_manipulated, sim wired with draw+discard"
     ]
   },
   {
@@ -10025,6 +10156,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -10158,6 +10290,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -10301,6 +10434,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -10447,6 +10581,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -10604,6 +10739,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -10730,6 +10866,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -10742,12 +10879,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 3,
-      "cards_manipulated": 0
+      "cards_drawn": 2,
+      "cards_manipulated": 3
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: draw_cards x3"
+      "effects: draw_cards x3",
+      "fix: net 2 cards_drawn + 3 manipulated"
     ]
   },
   {
@@ -10886,6 +11024,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11032,6 +11171,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11196,6 +11336,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11319,6 +11460,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11447,6 +11589,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11573,6 +11716,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11700,6 +11844,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11828,6 +11973,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -11945,6 +12091,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -12122,6 +12269,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -12256,6 +12404,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -12384,6 +12533,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -12507,17 +12657,10 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -12535,7 +12678,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 2-mana modal \u2014 target opponent discards chosen card OR earthbend 2 (creates_creatures already captured for the earthbend mode)"
+      "llm: 2-mana modal \u2014 target opponent discards chosen card OR earthbend 2 (creates_creatures already captured for the earthbend mode)",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -12649,6 +12793,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -12761,6 +12906,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -12885,6 +13031,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13007,16 +13154,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "4",
-          "toughness": "4",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
-      "removal_destroy_or_exile": false,
+      "creates_creatures": [],
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13032,9 +13172,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (create_token)"
+      "effects: noop (create_token)",
+      "fix: earthbend doesn't create token",
+      "fix: conditional creature removal"
     ]
   },
   {
@@ -13190,7 +13332,8 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13206,9 +13349,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "vehicle"
+      "vehicle",
+      "fix: ETB conditional destroy \u22644 power"
     ]
   },
   {
@@ -13317,6 +13461,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13452,10 +13597,13 @@
           "subtypes": [
             "Construct"
           ],
-          "keywords": []
+          "keywords": [
+            "flying"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13471,10 +13619,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: reach, defender"
+      "evergreen keywords: reach, defender",
+      "fix: token keyword 'flying'"
     ]
   },
   {
@@ -13584,6 +13733,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13715,6 +13865,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13834,6 +13985,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -13993,6 +14145,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -14134,8 +14287,8 @@
         },
         "effects": [
           {
-            "kind": "noop",
-            "role_tag": "activated_unknown"
+            "kind": "scry",
+            "n": 1
           }
         ]
       }
@@ -14155,6 +14308,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -14319,6 +14473,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -14458,7 +14613,8 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -14474,9 +14630,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: ETB destroy/exile \u2192 removal_destroy_or_exile"
     ]
   },
   {
@@ -14587,6 +14744,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -14720,6 +14878,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -14889,6 +15048,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15005,6 +15165,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15128,6 +15289,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15249,6 +15411,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15388,6 +15551,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15516,6 +15680,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15645,6 +15810,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15784,7 +15950,8 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": true,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -15800,12 +15967,13 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "saga: encoded chapter I only",
       "saga: unrecognised line: 'Destroy all creatures.'",
       "MV>=6 fast-path: card unlikely to affect mulligan-relevant turns",
-      "transform DFC: parsed front face only (back face has no cast cost)"
+      "transform DFC: parsed front face only (back face has no cast cost)",
+      "fix: chapter-I / sweeper mass removal"
     ]
   },
   {
@@ -15921,6 +16089,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16045,6 +16214,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16170,6 +16340,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16295,6 +16466,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16423,6 +16595,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16536,6 +16709,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16662,6 +16836,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16786,6 +16961,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -16923,6 +17099,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -17064,6 +17241,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -17187,10 +17365,11 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
-      "removal_burn_damage": null,
+      "is_mass_removal": false,
+      "removal_burn_damage": 2,
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
@@ -17205,9 +17384,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (removal_damage_variable)"
+      "effects: noop (removal_damage_variable)",
+      "fix: variable burn \u2014 encoded as 2 (X=0 Lessons)"
     ]
   },
   {
@@ -17325,21 +17505,13 @@
           "subtypes": [
             "Monk"
           ],
-          "keywords": []
-        },
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "R"
-          ],
-          "subtypes": [
-            "Monk"
-          ],
-          "keywords": []
+          "keywords": [
+            "prowess"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -17355,9 +17527,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment"
+      "enchantment",
+      "fix: dedupe + token keyword 'prowess'"
     ]
   },
   {
@@ -17464,6 +17637,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -17617,6 +17791,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -17767,6 +17942,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -17899,7 +18075,9 @@
           "subtypes": [
             "Soldier"
           ],
-          "keywords": []
+          "keywords": [
+            "firebending 1"
+          ]
         },
         {
           "power": "2",
@@ -17910,10 +18088,13 @@
           "subtypes": [
             "Soldier"
           ],
-          "keywords": []
+          "keywords": [
+            "firebending 1"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -17931,7 +18112,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 5-mana create two 2/2 red Soldier tokens with firebending. Flashback alt-cost present. Creates 2 tokens"
+      "llm: 5-mana create two 2/2 red Soldier tokens with firebending. Flashback alt-cost present. Creates 2 tokens",
+      "fix: two tokens with firebending 1"
     ]
   },
   {
@@ -18061,6 +18243,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -18188,6 +18371,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -18361,6 +18545,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -18493,10 +18678,13 @@
           "subtypes": [
             "Soldier"
           ],
-          "keywords": []
+          "keywords": [
+            "firebending 1"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -18512,9 +18700,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment"
+      "enchantment",
+      "fix: token keyword 'firebending 1'"
     ]
   },
   {
@@ -18611,6 +18800,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": 2,
       "is_counterspell": false,
       "is_bounce": false,
@@ -18739,6 +18929,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -18866,6 +19057,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -18994,6 +19186,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": 4,
       "is_counterspell": false,
       "is_bounce": false,
@@ -19156,6 +19349,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -19269,6 +19463,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -19388,6 +19583,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -19525,6 +19721,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -19652,6 +19849,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": 3,
       "is_counterspell": false,
       "is_bounce": false,
@@ -19815,6 +20013,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -19997,6 +20196,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": 1,
       "is_counterspell": false,
       "is_bounce": false,
@@ -20130,6 +20330,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -20312,6 +20513,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -20423,6 +20625,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -20582,6 +20785,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -20709,6 +20913,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -20845,6 +21050,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -20971,6 +21177,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -21116,6 +21323,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -21245,6 +21453,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -21375,6 +21584,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -21536,6 +21746,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -21665,6 +21876,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -21775,6 +21987,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -21794,6 +22014,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -21806,13 +22027,14 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
-      "cards_manipulated": 0
+      "cards_drawn": 0,
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: reach"
+      "evergreen keywords: reach",
+      "fix: loot \u2014 cards_manipulated, sim wired with draw+discard"
     ]
   },
   {
@@ -21958,6 +22180,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -22119,6 +22342,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -22239,6 +22463,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -22376,6 +22601,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -22504,16 +22730,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -22529,10 +22748,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "ETB effects: noop (create_token)"
+      "ETB effects: noop (create_token)",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -22643,16 +22863,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -22668,10 +22881,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "ETB effects: noop (create_token)"
+      "ETB effects: noop (create_token)",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -22783,6 +22997,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -22912,6 +23127,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23037,6 +23253,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23164,6 +23381,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23311,6 +23529,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23441,16 +23660,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23466,10 +23678,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "ETB effects: noop (create_token)"
+      "ETB effects: noop (create_token)",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -23572,18 +23785,11 @@
       "is_mana_rock": false,
       "is_saga": false,
       "is_class": false,
-      "is_punch_fight": false,
+      "is_punch_fight": true,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23599,9 +23805,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (create_token)"
+      "effects: noop (create_token)",
+      "fix: earthbend doesn't create token",
+      "fix: fight effect added"
     ]
   },
   {
@@ -23704,17 +23912,10 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23730,9 +23931,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment"
+      "enchantment",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -23838,17 +24040,10 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "4",
-          "toughness": "4",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -23864,9 +24059,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (create_token)"
+      "effects: noop (create_token)",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -24031,16 +24227,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "5",
-          "toughness": "5",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -24056,10 +24245,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "alternative modes: activated"
+      "alternative modes: activated",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -24163,6 +24353,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -24308,6 +24499,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -24470,6 +24662,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -24598,6 +24791,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -24725,16 +24919,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -24750,9 +24937,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -24858,6 +25046,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -24985,6 +25174,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25110,6 +25300,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25248,6 +25439,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25377,6 +25569,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25505,6 +25698,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25617,6 +25811,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25771,6 +25966,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25930,16 +26126,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -25955,10 +26144,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "alternative modes: activated"
+      "alternative modes: activated",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -26067,6 +26257,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -26187,10 +26378,11 @@
       "is_mana_rock": false,
       "is_saga": false,
       "is_class": false,
-      "is_punch_fight": false,
-      "is_other": true,
+      "is_punch_fight": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -26206,9 +26398,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (removal_damage_variable)"
+      "effects: noop (removal_damage_variable)",
+      "fix: fight/punch \u2192 is_punch_fight"
     ]
   },
   {
@@ -26367,6 +26560,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -26486,6 +26680,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -26615,6 +26810,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -26769,6 +26965,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -26902,16 +27099,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -26929,7 +27119,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 3-mana */3 with ETB earthbend 2 (creates_creatures already captured) + variable power based on counters on lands"
+      "llm: 3-mana */3 with ETB earthbend 2 (creates_creatures already captured) + variable power based on counters on lands",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -27033,6 +27224,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -27180,6 +27372,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -27307,6 +27500,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -27437,6 +27631,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -27580,6 +27775,13 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "look_at_top",
+            "n": 5,
+            "accepts_land": false,
+            "accepts_nonland": true,
+            "destination": "hand"
           }
         ]
       }
@@ -27599,6 +27801,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -27612,13 +27815,14 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 4
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
       "evergreen keywords: flying",
-      "transform DFC: parsed front face only (back face has no cast cost)"
+      "transform DFC: parsed front face only (back face has no cast cost)",
+      "fix: look-at-top-5 wired into simulator"
     ]
   },
   {
@@ -27787,6 +27991,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": true,
@@ -27915,6 +28120,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -27927,12 +28133,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 2,
-      "cards_manipulated": 0
+      "cards_drawn": 1,
+      "cards_manipulated": 2
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 2-mana hybrid {U/R} loot \u2014 discard a card, draw 2. Net +1 cards_drawn (but parser captured 2)"
+      "llm: 2-mana hybrid {U/R} loot \u2014 discard a card, draw 2. Net +1 cards_drawn (but parser captured 2)",
+      "fix: net 1 cards_drawn + 2 manipulated"
     ]
   },
   {
@@ -28041,6 +28248,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -28205,6 +28413,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -28364,6 +28573,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -28505,6 +28715,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -28674,16 +28885,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "4",
-          "toughness": "4",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -28699,9 +28903,10 @@
       "cards_drawn": 1,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment"
+      "enchantment",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -28832,16 +29037,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "4",
-          "toughness": "4",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -28857,11 +29055,12 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
       "evergreen keywords: trample",
-      "ETB effects: noop (create_token)"
+      "ETB effects: noop (create_token)",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -28975,6 +29174,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -29129,6 +29329,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -29276,23 +29477,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        },
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -29308,10 +29495,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "ETB effects: noop (create_token), noop (create_token)"
+      "ETB effects: noop (create_token), noop (create_token)",
+      "fix: earthbend doesn't create token (x2)"
     ]
   },
   {
@@ -29438,6 +29626,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -29574,6 +29763,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -29712,6 +29902,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -29846,6 +30037,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -29975,16 +30167,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -30000,9 +30185,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -30143,6 +30329,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -30290,6 +30477,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -30444,6 +30632,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -30576,6 +30765,13 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "look_at_top",
+            "n": 5,
+            "accepts_land": true,
+            "accepts_nonland": true,
+            "destination": "hand"
           }
         ]
       }
@@ -30595,6 +30791,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -30608,11 +30805,12 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 4
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: look-at-top-5 wired into simulator"
     ]
   },
   {
@@ -30762,6 +30960,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -30911,6 +31110,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -31093,6 +31293,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -31254,6 +31455,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -31410,6 +31612,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -31582,6 +31785,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -31730,6 +31934,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -31937,6 +32142,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32117,6 +32323,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32266,6 +32473,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32397,6 +32605,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32568,6 +32777,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32701,6 +32911,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32844,6 +33055,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32963,6 +33175,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -32982,6 +33202,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -32994,12 +33215,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
-      "cards_manipulated": 0
+      "cards_drawn": 0,
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: loot \u2014 cards_manipulated, sim wired with draw+discard"
     ]
   },
   {
@@ -33111,6 +33333,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -33224,6 +33447,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 2
+          },
+          {
+            "kind": "discard_card",
+            "n": 2
           }
         ]
       }
@@ -33243,6 +33474,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -33256,11 +33488,12 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 2
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: loot \u2014 cards_manipulated, sim wired with draw+discard"
     ]
   },
   {
@@ -33395,6 +33628,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -33570,6 +33804,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -33733,6 +33968,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -33922,6 +34158,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -34061,6 +34298,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -34203,16 +34441,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -34228,9 +34459,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -34370,16 +34602,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -34395,11 +34620,12 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
       "unrecognised line: 'Nontoken artifacts you control are lands in addition to their other types.'",
-      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -34532,6 +34758,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -34696,6 +34923,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -34828,6 +35056,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -34972,6 +35201,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35122,6 +35352,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35253,6 +35484,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35426,6 +35658,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35557,6 +35790,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35666,6 +35900,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35782,20 +36017,10 @@
             "Ally"
           ],
           "keywords": []
-        },
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Ally"
-          ],
-          "keywords": []
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35811,9 +36036,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "equipment"
+      "equipment",
+      "fix: dedupe to one Ally token"
     ]
   },
   {
@@ -35902,7 +36128,8 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -35918,9 +36145,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "equipment"
+      "equipment",
+      "fix: ETB destroy/exile \u2192 removal_destroy_or_exile"
     ]
   },
   {
@@ -36043,6 +36271,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36150,6 +36379,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36262,6 +36492,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36394,6 +36625,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36522,6 +36754,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36599,8 +36832,12 @@
         },
         "effects": [
           {
-            "kind": "noop",
-            "role_tag": "loot"
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -36651,6 +36888,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36777,6 +37015,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36904,16 +37143,9 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -36929,10 +37161,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "land taps for G (conditional ETB)",
-      "non-mana activated abilities: 1"
+      "non-mana activated abilities: 1",
+      "fix: earthbend doesn't create token"
     ]
   },
   {
@@ -37040,6 +37273,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -37169,6 +37403,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -37295,6 +37530,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -37448,6 +37684,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -37574,6 +37811,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -37700,6 +37938,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -37826,6 +38065,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -37952,6 +38192,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38078,6 +38319,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38217,6 +38459,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38333,6 +38576,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38346,11 +38590,12 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "land taps for C/any"
+      "land taps for C/any",
+      "fix: scry 1 captured on ETB"
     ]
   },
   {
@@ -38450,6 +38695,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38576,6 +38822,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38702,6 +38949,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38841,6 +39089,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -38967,6 +39216,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -39086,6 +39336,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -39222,6 +39473,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": true,
       "is_bounce": false,
@@ -39345,6 +39597,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -39571,6 +39824,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -39695,6 +39949,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -39819,6 +40074,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": 2,
       "is_counterspell": false,
       "is_bounce": false,
@@ -39928,7 +40184,8 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -39947,7 +40204,8 @@
     "status": "needs_llm",
     "reasons": [
       "creature stats parsed",
-      "alternative-cost keyword(s) present: unearth"
+      "alternative-cost keyword(s) present: unearth",
+      "fix: ETB destroy/exile \u2192 removal_destroy_or_exile"
     ]
   },
   {
@@ -40049,6 +40307,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -40172,6 +40431,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -40284,6 +40544,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": 3,
       "is_counterspell": false,
       "is_bounce": false,
@@ -40395,6 +40656,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -40538,6 +40800,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -40695,13 +40958,14 @@
       "is_equipment": false,
       "is_vehicle": false,
       "is_land": false,
-      "is_mana_rock": false,
+      "is_mana_rock": true,
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -40714,12 +40978,14 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "artifact"
+      "artifact",
+      "fix: artifact with mana ability \u2192 is_mana_rock",
+      "fix: cards_drawn=0 \u2014 draw is conditional on ETB trigger"
     ]
   },
   {
@@ -40821,6 +41087,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -40952,6 +41219,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -41081,6 +41349,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -41212,6 +41481,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -41305,6 +41575,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -41416,6 +41687,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -41547,7 +41819,8 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
-      "removal_burn_damage": null,
+      "is_mass_removal": false,
+      "removal_burn_damage": 2,
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
@@ -41562,9 +41835,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "artifact"
+      "artifact",
+      "fix: ETB 2 damage to any target"
     ]
   },
   {
@@ -41636,7 +41910,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "removal_damage_creature_4"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -41651,10 +41930,11 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
-      "removal_burn_damage": null,
+      "is_mass_removal": false,
+      "removal_burn_damage": 4,
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
@@ -41669,9 +41949,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: 'Rending Volley deals 4 damage to target white or blue creature.'"
+      "effects: noop (removal_damage_creature_4)",
+      "fix: 4 to color-restricted creature"
     ]
   },
   {
@@ -41773,6 +42054,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -41888,7 +42170,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "mass_neg_counter"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -41903,9 +42190,10 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": true,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -41921,9 +42209,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: \"Put X -1/-1 counters on each creature. Shuffle Black Sun's Zenith into its owner's library.\""
+      "effects: noop (mass_neg_counter)",
+      "fix: X -1/-1 on each creature \u2192 mass removal"
     ]
   },
   {
@@ -42018,6 +42307,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -42130,6 +42420,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -42256,6 +42547,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -42383,6 +42675,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -42508,6 +42801,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -42677,6 +42971,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -42849,6 +43144,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -42989,6 +43285,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43112,6 +43409,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43237,6 +43535,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43375,6 +43674,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43494,6 +43794,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43605,6 +43906,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43727,6 +44029,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43818,6 +44121,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -43996,6 +44300,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -44130,6 +44435,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -44254,6 +44560,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -44388,6 +44695,7 @@
         }
       ],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -44512,6 +44820,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -44618,6 +44927,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -44770,6 +45080,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -44782,13 +45093,14 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 0,
+      "cards_drawn": 2,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "alternative modes: activated"
+      "alternative modes: activated",
+      "fix: activated draw 2 captured"
     ]
   },
   {
@@ -44890,6 +45202,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -45010,6 +45323,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -45164,6 +45478,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -45296,6 +45611,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -45403,6 +45719,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -45490,6 +45807,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -45591,7 +45909,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "removal_damage_mass_13"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -45606,10 +45929,11 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
-      "removal_burn_damage": null,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": true,
+      "removal_burn_damage": 13,
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
@@ -45624,9 +45948,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: 'Blasphemous Act deals 13 damage to each creature.'"
+      "effects: noop (removal_damage_mass_13)",
+      "fix: chapter-I / sweeper mass removal",
+      "fix: 13 to each creature (mass burn)"
     ]
   },
   {
@@ -45748,6 +46074,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -45868,6 +46195,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -46008,6 +46336,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -46147,7 +46476,8 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -46163,10 +46493,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: menace"
+      "evergreen keywords: menace",
+      "fix: ETB destroy/exile \u2192 removal_destroy_or_exile"
     ]
   },
   {
@@ -46272,6 +46603,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -46384,6 +46716,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -46470,6 +46803,7 @@
       "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
@@ -46593,6 +46927,7 @@
       "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
+      "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
