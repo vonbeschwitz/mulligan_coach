@@ -31,13 +31,13 @@ DEFAULT_EVENT_TYPES: tuple[EventType, ...] = (
     "TradSealed",
 )
 
-# Default set codes — the 3 most recent Premier-Draft-supported sets as of
-# 2026-05-05. SHOULD be reviewed before each download run, since new sets
+# Default set codes — the most recent Premier-Draft-supported sets as of
+# 2026-05-14. SHOULD be reviewed before each download run, since new sets
 # release every few months. Override at the CLI with --sets.
 #
 # The three-letter set codes are the ones 17Lands uses in dataset filenames
 # (e.g. ``game_data_public.TLA.PremierDraft.csv.gz``).
-DEFAULT_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA")
+DEFAULT_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS")
 
 
 class DownloadSelection(BaseModel):

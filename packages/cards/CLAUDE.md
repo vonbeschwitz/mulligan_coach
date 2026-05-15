@@ -121,16 +121,48 @@ class Cost:
 
 #### Encoding alt-cost casts
 
-Alt-cost mechanics (evoke / flashback / foretell / madness / jump-start
-/ aftermath) get a **second `Mode(kind="cast")`** with the alt cost in
-`cost.mana` and effects describing what happens when paying the alt
-cost. The simulator iterates every cast mode and picks the cheapest
-castable one (`policy_spells.py:_first_or_none` sorts by mode CMC), so
-this lets a short-mana hand play the alt-cost form. Omit
-`EntersBattlefieldEffect` from evoke modes — the creature is
-sacrificed on entry, never persisting to the battlefield. New effect
-kinds get a resolver in `simulation/effects.py` and (if hand-affecting)
-a policy hook in `policy_spells.py`.
+Alt-cost mechanics split into two camps depending on **which zone
+pays the alt cost**:
+
+* **Hand-resident alt costs** (evoke, kicker, multikicker, madness,
+  morph, overload) → encode as a **second `Mode(kind="cast")`** with
+  the alt cost in `cost.mana` and effects describing what happens
+  when paying the alt cost. The simulator iterates every cast mode
+  and picks the cheapest castable one
+  (`policy_spells.py:_first_or_none` sorts by mode CMC), so this lets
+  a short-mana hand play the alt-cost form. Omit
+  `EntersBattlefieldEffect` from evoke modes — the creature is
+  sacrificed on entry, never persisting to the battlefield.
+* **Graveyard / exile-resident alt costs** (flashback, jump-start,
+  aftermath, foretell) → **DO NOT** encode as a second cast mode. The
+  simulator treats every cast Mode as castable from hand, so a
+  graveyard alt cost would be incorrectly "cast" from hand. Drop the
+  alt-cost form; the role_features signal still reaches the model.
+  See `CARD_ENCODING_GUIDE.md` §14 for the convention.
+
+The Prepare mechanic (SOS) is the prototype of the right approach for
+non-hand-resident casts: a dedicated `Mode.kind` plus
+battlefield-resident castability hooks in the simulator. See
+`Mode(kind="prepared")` below and the implementation in
+`scripts/sos_encoding/SOS_PREPARED_NOTES.md`. New effect kinds get a
+resolver in `simulation/effects.py` and (if hand-affecting) a policy
+hook in `policy_spells.py`.
+
+#### `Mode(kind="prepared")` — the SOS Prepare mechanic
+
+Prepared spells live on a battlefield permanent (the front-face
+creature) and become castable as sorceries while the source is
+flagged "prepared" in `GameState.prepared`. The simulator marks any
+permanent with at least one `kind="prepared"` mode as prepared on
+cast resolution and unmarks it when the prepared mode is cast.
+
+Encoding convention: pre-prepared creatures (those with "This
+creature enters prepared" on the front face) get TWO modes — a
+normal `kind="cast"` for the creature, and a `kind="prepared"` for
+the back-face spell with its own mana cost and effects. Conditional
+prepares (creatures that need a separate trigger before becoming
+prepared) get only the `kind="cast"` mode. See
+`CARD_ENCODING_GUIDE.md` §13.
 
 ### ManaAbility
 
@@ -279,8 +311,11 @@ Four ParseStatus outcomes:
     * `class` — encodes only the always-on level-1 effect.
       `role_features.is_class = True` regardless. Levels 2 and 3
       require activation and aren't material at mulligan time.
-  All other non-normal layouts (split / adventure / modal_dfc / …)
-  still bail to NEEDS_LLM.
+  All other non-normal layouts (split / adventure / modal_dfc /
+  prepare / …) still bail to NEEDS_LLM. The SOS `prepare` layout was
+  added to `RELEVANT_LAYOUTS` in `loader.py` so prepare-layout cards
+  reach the parser (which then bails to NEEDS_LLM); the LLM encoding
+  follows the rules in `CARD_ENCODING_GUIDE.md` §13.
 * **Alt-cost keyword present** that's in `ALT_COST_KEYWORDS` (kicker,
   flashback, escape, mutate, …). Cycling / channel / landcycling are
   NOT in this list — they're in `MODE_EMITTING_KEYWORDS` and emit
@@ -386,20 +421,26 @@ Hand-crafted Scryfall-shaped dicts. No real data download required.
 After widening to handle Sagas (chapter I only), Classes (level-1 effect
 only), transform DFCs with uncastable back faces, and a few additional
 static-line tolerances (name-as-self-reference, "creature spells you cast
-have …"), across the three current Premier-Draft sets (TMT/ECL/TLA — 738
-cards):
+have …"), across the four current Premier-Draft sets (TMT/ECL/TLA/SOS):
 
 | Set | auto | llm_encoded | needs_human | needs_llm |
 |---|---|---|---|---|
 | TMT | 161 (84.7%) | 29 (15.3%) | 0 | 0 |
 | ECL | 218 (81.6%) | 49 (18.4%) | 0 | 0 |
 | TLA | 223 (79.4%) | 58 (20.6%) | 0 | 0 |
-| **All** | **602 (81.6%)** | **136 (18.4%)** | **0** | **0** |
+| SOS | 189 (55.4%) | 152 (44.6%) | 0 | 0 |
+
+SOS has a lower auto rate because the Prepare layout (36 cards) always
+bails to NEEDS_LLM, the bonus-sheet reprints add 75 cards from older
+sets with mechanics the parser hasn't been taught (Spree, Storm,
+Suspend, Morph, etc.), and SOS introduces several new triggered
+keywords (Repartee, Opus, Increment, Infusion) on otherwise vanilla
+creatures.
 
 Reproduce / refresh with:
 
 ```
-uv run mulligan-coach-cards run-detector --sets TMT,ECL,TLA
+uv run mulligan-coach-cards run-detector --sets TMT,ECL,TLA,SOS
 # Use --reparse-needs-human to re-parse previously human-flagged cards
 # after widening the parser further; --force overrides llm_encoded too.
 ```

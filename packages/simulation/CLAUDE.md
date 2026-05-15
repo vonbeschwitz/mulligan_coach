@@ -96,8 +96,65 @@ Each card has a list of `modes`. The castability check evaluates each mode indep
 - **Cycling**: cost = cycling cost, effect = `discard_self + draw(1)`.
 - **Land-cycling**: cost = land-cycling cost, effect = `discard_self + fetch_land(specified_subtype, hand)`.
 - **Channel / discard-for-effect**: cost = stated cost, effect = stated effect.
+- **Activated**: cost = stated cost (often `{T}` + mana), source must be on battlefield, untapped, and (for creatures) not summoning-sick.
+- **Prepared** (SOS): a sorcery-speed cast that lives on a battlefield permanent. The source is flagged in `GameState.prepared` when its `kind="cast"` mode resolves; the `kind="prepared"` mode is castable while the flag is set. Casting it removes the flag (the source stays on the battlefield). See "Prepare mechanic" below.
 
 Castability for the different modes needs to be tracked separately. So for example spell castable 5+, alternative mode castable 3.
+
+### Prepare mechanic (SOS)
+
+SOS introduced creatures with stapled-spell back faces ("prepare"
+layout). The cards-package convention encodes pre-prepared creatures
+with TWO modes — a normal `kind="cast"` for the creature and a
+`kind="prepared"` for the back-face spell — and the simulator treats
+the prepared mode as a battlefield-resident sorcery-speed cast.
+
+Implementation summary (full notes in
+`scripts/sos_encoding/SOS_PREPARED_NOTES.md`):
+
+* `GameState.prepared: set[int]` tracks which permanent instance_ids
+  are flagged. Snapshot/restore preserved.
+* `runtime._place_after_cast` flags any cast permanent with at least
+  one `kind="prepared"` mode.
+* `runtime.cast` for `kind="prepared"` removes the flag and resolves
+  effects without moving the source (the prepared spell is a copy).
+* `policy_spells._battlefield_prepared_options` chains prepared options
+  into S1a / S1c / S2 / S3 / S4 (mirroring how `_battlefield_activated_options`
+  feeds activated abilities into the same tiers).
+* **S5 — `_pick_s5_cast_prepared_enabler`** is a last-resort tier that
+  casts a hand creature whose prepared mode is mulligan-relevant
+  (FetchLandEffect / DrawCardsEffect / LookAtTopEffect with land).
+  Without S5, plain creatures like Studious First-Year wouldn't be
+  cast on T1 (the policy doesn't cast non-mana creatures), and the
+  prepared spell would never become available.
+* `castability.castability_snapshot` walks prepared permanents
+  alongside hand cards so first-castable-turn tracking covers the
+  prepared mode too.
+
+Conditional-prepared cards (creatures that need a separate trigger
+before becoming prepared — attack, gain life, cast 3 spells, control
+8 lands, etc.) are encoded WITHOUT a `kind="prepared"` mode, so
+they're never flagged and the prepared spell is invisible to the
+simulator. This matches the gameplay reality that the spell only
+fires after a separate event the simulator doesn't model.
+
+### When alt-cost modes should NOT be encoded
+
+The simulator iterates cast modes for cards **in hand**. A second
+`Mode(kind="cast")` lets the policy "cast" the card from hand at the
+alt cost, which is correct for alt costs paid from hand (evoke,
+kicker, madness, morph, overload) but **wrong** for alt costs paid
+from another zone:
+
+* **Flashback** / **jump-start** / **aftermath** / **foretell** —
+  cards-side encoding drops the alt-cost mode (see
+  `CARD_ENCODING_GUIDE.md` §14). The role_features signal still
+  carries the value to the model.
+* The Prepare mechanic above is the canonical pattern for handling
+  non-hand-resident casts properly; future "delayed cast" mechanics
+  (suspend, plot, etc.) should follow the same shape — new
+  `Mode.kind` + state field + battlefield-options yielder + S-tier
+  hook — rather than abusing `kind="cast"`.
 
 ## Castability check (`is_castable`)
 
@@ -163,9 +220,16 @@ For decisions on scry, draw-discard, etc. maximize (1) hitting a land drop every
 **Priority S4 - Hand-fetch effects (if lands in hand).**
 If mana is still available, cast hand-fetch effects to find additional lands.
 
+**Priority S5 - Cast a prepared-mode enabler creature.**
+Cast a hand creature whose `kind="prepared"` mode is mulligan-relevant (FetchLandEffect / DrawCardsEffect / LookAtTopEffect with land), so the prepared spell becomes castable on a later turn. Last-resort tier — fires only when no other tier matches, since "real" ramp / draw / fetch is always strictly better than setting up a prepared cast.
+
 Make sure to account for how much mana is available. E.g. with 2 mana, only 1 spell for 2-mana can be played even if 2 are castable. 
 
-**Everything else: do not cast.** Mark as castable in the snapshot, but don't actually cast. This includes creatures (other than mana dorks), removal, combat tricks, etc.
+**Everything else: do not cast.** Mark as castable in the snapshot, but don't actually cast. This includes creatures (other than mana dorks and prepared-mode enablers), removal, combat tricks, etc.
+
+### Note on plain `DrawCardsEffect` resolution
+
+`apply_mode_effects` (in `effects.py`) only fires `DrawCardsEffect` for the loot pattern (paired with `DiscardCardEffect`). Plain draw effects — cantrips, scry-then-draw cards like Preordain, prepared draw spells like Elite Interceptor's Rejoinder — are deferred and applied by `cast_main_phase` AFTER `_resolve_scry`, so cards bottomed by scry aren't drawn back. This matters for any cast mode whose effects include `DrawCardsEffect` without a `DiscardCardEffect`.
 
 
 ## Mulligan-from-deck pipeline

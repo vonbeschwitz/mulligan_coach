@@ -365,9 +365,16 @@ class Mode(BaseModel):
     add additional modes. The simulator's castability check evaluates
     each mode independently — a card may be "castable as a cycle" but
     not "castable as a cast" on a given turn.
+
+    ``prepared`` is the SOS ``Prepare`` mechanic: a sorcery-speed cast
+    that becomes available only after the source card has been cast as
+    a creature AND is currently flagged "prepared" on the battlefield.
+    The simulator tracks the prepared flag in ``GameState.prepared`` and
+    treats the prepared mode like a battlefield-resident cast option
+    (similar to ``activated``, but with no tap requirement).
     """
 
-    kind: Literal["cast", "cycle", "land_cycle", "channel", "activated"]
+    kind: Literal["cast", "cycle", "land_cycle", "channel", "activated", "prepared"]
     cost: Cost
     effects: list[Effect] = Field(
         default_factory=list,
