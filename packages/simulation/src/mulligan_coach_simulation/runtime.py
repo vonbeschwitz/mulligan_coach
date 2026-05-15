@@ -81,6 +81,7 @@ class GameStateSnapshot:
     graveyard: list[Card]
     tapped: frozenset[int]
     summoning_sick: frozenset[int]
+    prepared: frozenset[int]
     turn: int
     land_drop_used: bool
 
@@ -112,6 +113,10 @@ class GameState:
     graveyard: list[Card] = field(default_factory=list)
     tapped: set[int] = field(default_factory=set)
     summoning_sick: set[int] = field(default_factory=set)
+    # Instance ids of permanents currently flagged "prepared" (SOS Prepare
+    # mechanic). Set on cast for any card that has at least one
+    # ``Mode(kind="prepared")``; cleared when the prepared mode resolves.
+    prepared: set[int] = field(default_factory=set)
     turn: int = 0
     on_the_play: bool = True
     land_drop_used: bool = False
@@ -258,6 +263,13 @@ class GameState:
             self._remove_from_hand(card)
             self._place_after_cast(card)
 
+        # 3b) Prepared mode: the source is already on battlefield. The
+        #     prepared spell is "consumed" (the prepared flag is removed)
+        #     but the source itself stays put. The actual card-in-hand
+        #     of the prepared spell never exists; we cast a copy.
+        if mode.kind == "prepared":
+            self.prepared.discard(card.instance_id)
+
         # 4) Resolve effects.
         apply_mode_effects(self, mode.effects)
 
@@ -275,19 +287,27 @@ class GameState:
                 self.battlefield_other.append(card)
             if card.is_creature:
                 self.summoning_sick.add(card.instance_id)
+            # SOS Prepare: a permanent with at least one Mode(kind="prepared")
+            # enters with the prepared flag set. The encoding convention
+            # (see scripts/sos_encoding/) only adds prepared modes for
+            # cards that actually "enter prepared"; conditional-prepared
+            # cards have no prepared mode and so don't get flagged here.
+            if any(m.kind == "prepared" for m in card.parsed.modes):
+                self.prepared.add(card.instance_id)
             return
         # Sorcery / Instant — straight to graveyard.
         self.graveyard.append(card)
 
     def _remove_from_battlefield(self, card: Card) -> None:
         """Remove *card* from whichever battlefield zone it's in.
-        Also clears tapped / summoning-sick state for that instance."""
+        Also clears tapped / summoning-sick / prepared state for that instance."""
         for zone in (self.battlefield_lands, self.battlefield_mana_perms, self.battlefield_other):
             for i, c in enumerate(zone):
                 if c.instance_id == card.instance_id:
                     del zone[i]
                     self.tapped.discard(card.instance_id)
                     self.summoning_sick.discard(card.instance_id)
+                    self.prepared.discard(card.instance_id)
                     return
         raise ValueError(f"{card.name!r} (id={card.instance_id}) not on battlefield")
 
@@ -322,6 +342,7 @@ class GameState:
             graveyard=self.graveyard.copy(),
             tapped=frozenset(self.tapped),
             summoning_sick=frozenset(self.summoning_sick),
+            prepared=frozenset(self.prepared),
             turn=self.turn,
             land_drop_used=self.land_drop_used,
         )
@@ -337,6 +358,7 @@ class GameState:
         self.graveyard = snap.graveyard.copy()
         self.tapped = set(snap.tapped)
         self.summoning_sick = set(snap.summoning_sick)
+        self.prepared = set(snap.prepared)
         self.turn = snap.turn
         self.land_drop_used = snap.land_drop_used
 

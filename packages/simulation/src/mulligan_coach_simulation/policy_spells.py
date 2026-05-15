@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from mulligan_coach_cards import (
+    DiscardCardEffect,
     DrawCardsEffect,
     Effect,
     FetchLandEffect,
@@ -116,6 +117,16 @@ def cast_main_phase(state: GameState) -> list[CastResult]:
         scry: ScryOutcome | None = None
         if _first_scry(mode.effects) is not None:
             scry = _resolve_scry(state, mode)
+        # Plain DrawCardsEffect is also deferred by apply_mode_effects
+        # (the loot pattern is the only case it fires there). Fire it
+        # here, AFTER scry, so cards bottomed by scry aren't drawn back.
+        is_loot_mode = any(isinstance(e, DiscardCardEffect) for e in mode.effects) and any(
+            isinstance(e, DrawCardsEffect) for e in mode.effects
+        )
+        if not is_loot_mode:
+            for fx in mode.effects:
+                if isinstance(fx, DrawCardsEffect):
+                    state.draw(fx.n)
         taken.append(CastResult(action=action, scry=scry))
     return taken
 
@@ -131,6 +142,7 @@ def pick_next_action(state: GameState) -> CastAction | None:
         _pick_s2_hand_fetch_when_no_land,
         _pick_s3_card_draw_or_scry,
         _pick_s4_hand_fetch,
+        _pick_s5_cast_prepared_enabler,
     ):
         action = picker(state)
         if action is not None:
@@ -198,6 +210,41 @@ def _battlefield_activated_options(
                 yield card, mode_idx, mode, payment
 
 
+def _battlefield_prepared_options(
+    state: GameState,
+    predicate: Callable[[Mode], bool],
+) -> Iterator[tuple[Card, int, Mode, ManaPayment]]:
+    """Walk prepared permanents and yield any prepared mode whose cost
+    we can pay.
+
+    Unlike activated abilities, prepared spells don't tap the source —
+    they just remove the "prepared" designation. So we don't filter out
+    the source's mana abilities. The source itself can be summoning-sick
+    (the prepared spell is sorcery-speed; whether the source has summoning
+    sickness doesn't matter — we're not attacking with it).
+    """
+    if not state.prepared:
+        return
+    abilities = available_mana_abilities(state)
+    # Build a quick lookup: instance_id -> Card across battlefield zones.
+    by_id: dict[int, Card] = {}
+    for zone in (state.battlefield_mana_perms, state.battlefield_other):
+        for c in zone:
+            by_id[c.instance_id] = c
+    for instance_id in state.prepared:
+        card = by_id.get(instance_id)
+        if card is None:
+            continue
+        for mode_idx, mode in enumerate(card.parsed.modes):
+            if mode.kind != "prepared":
+                continue
+            if not predicate(mode):
+                continue
+            payment = can_pay_cost(mode.cost.mana, abilities, state)
+            if payment is not None:
+                yield card, mode_idx, mode, payment
+
+
 def _without_source(abilities: list[AbilityRef], source_instance_id: int) -> list[AbilityRef]:
     return [a for a in abilities if a.source.instance_id != source_instance_id]
 
@@ -256,11 +303,24 @@ def _first_or_none(
 # ---------------------------------------------------------------------------
 
 
+def _chain(
+    *its: Iterator[tuple[Card, int, Mode, ManaPayment]],
+) -> Iterator[tuple[Card, int, Mode, ManaPayment]]:
+    for it in its:
+        yield from it
+
+
 def _pick_s1a_cast_fetch_battlefield_untapped(state: GameState) -> CastAction | None:
     return _first_or_none(
-        _hand_castable_options(
-            state,
-            lambda m: m.kind == "cast" and _has_fetch_to(m, "battlefield_untapped"),
+        _chain(
+            _hand_castable_options(
+                state,
+                lambda m: m.kind == "cast" and _has_fetch_to(m, "battlefield_untapped"),
+            ),
+            _battlefield_prepared_options(
+                state,
+                lambda m: _has_fetch_to(m, "battlefield_untapped"),
+            ),
         ),
         "S1a",
     )
@@ -294,9 +354,15 @@ def _pick_s1b_cast_mana_permanent(state: GameState) -> CastAction | None:
 
 def _pick_s1c_cast_fetch_battlefield_tapped(state: GameState) -> CastAction | None:
     return _first_or_none(
-        _hand_castable_options(
-            state,
-            lambda m: m.kind == "cast" and _has_fetch_to(m, "battlefield_tapped"),
+        _chain(
+            _hand_castable_options(
+                state,
+                lambda m: m.kind == "cast" and _has_fetch_to(m, "battlefield_tapped"),
+            ),
+            _battlefield_prepared_options(
+                state,
+                lambda m: _has_fetch_to(m, "battlefield_tapped"),
+            ),
         ),
         "S1c",
     )
@@ -341,9 +407,12 @@ def _pick_s2_hand_fetch_when_no_land(state: GameState) -> CastAction | None:
     )
     if hand_action is not None:
         return hand_action
-    # From battlefield: any activated ability that fetches to hand.
+    # From battlefield: any activated or prepared mode that fetches to hand.
     return _first_or_none(
-        _battlefield_activated_options(state, _has_land_to_hand),
+        _chain(
+            _battlefield_activated_options(state, _has_land_to_hand),
+            _battlefield_prepared_options(state, _has_land_to_hand),
+        ),
         "S2",
     )
 
@@ -357,7 +426,10 @@ def _pick_s3_card_draw_or_scry(state: GameState) -> CastAction | None:
     if hand_action is not None:
         return hand_action
     return _first_or_none(
-        _battlefield_activated_options(state, _has_draw_or_scry),
+        _chain(
+            _battlefield_activated_options(state, _has_draw_or_scry),
+            _battlefield_prepared_options(state, _has_draw_or_scry),
+        ),
         "S3",
     )
 
@@ -370,9 +442,45 @@ def _pick_s4_hand_fetch(state: GameState) -> CastAction | None:
     if hand_action is not None:
         return hand_action
     return _first_or_none(
-        _battlefield_activated_options(state, _has_land_to_hand),
+        _chain(
+            _battlefield_activated_options(state, _has_land_to_hand),
+            _battlefield_prepared_options(state, _has_land_to_hand),
+        ),
         "S4",
     )
+
+
+def _card_has_useful_prepared_mode(card: Card) -> bool:
+    """True if *card* has at least one prepared mode whose effect is
+    mulligan-relevant — fetch_land, look_at_top with land, or
+    draw_cards. Used by S5 to decide which hand creatures are worth
+    casting so their prepared mode becomes available next turn.
+    """
+    for m in card.parsed.modes:
+        if m.kind != "prepared":
+            continue
+        for fx in m.effects:
+            if isinstance(fx, (FetchLandEffect, DrawCardsEffect)):
+                return True
+            if isinstance(fx, LookAtTopEffect) and fx.accepts_land:
+                return True
+    return False
+
+
+def _pick_s5_cast_prepared_enabler(state: GameState) -> CastAction | None:
+    """Cast a hand creature whose prepared mode is mulligan-relevant
+    (fetch / draw / land-find), so the prepared spell is castable on a
+    later turn. Last resort: only fires if no other tier matched.
+
+    Casting the creature pays its mana cost; the engine flags the
+    resulting permanent as prepared via ``runtime._place_after_cast``.
+    """
+    candidates = (
+        (card, idx, mode, payment)
+        for card, idx, mode, payment in _hand_castable_options(state, lambda m: m.kind == "cast")
+        if _card_has_useful_prepared_mode(card)
+    )
+    return _first_or_none(candidates, "S5")
 
 
 # ---------------------------------------------------------------------------

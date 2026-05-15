@@ -42,7 +42,12 @@ from .trace import (
     TurnSnapshot,
 )
 
-_HAND_MODE_KINDS = frozenset({"cast", "cycle", "land_cycle", "channel"})
+# Modes that the snapshot evaluates per turn. Hand-resident kinds plus
+# "prepared" — the SOS Prepare mechanic's sorcery-speed cast that lives
+# on a battlefield permanent. Prepared modes are pre-populated as
+# ModeFirstTurn entries so first-castable-turn tracking works the same
+# way as for hand modes.
+_HAND_MODE_KINDS = frozenset({"cast", "cycle", "land_cycle", "channel", "prepared"})
 
 # Sentinel used in trace bookkeeping. ``5`` slots into the
 # first-castable-turn distribution's "5+" bucket.

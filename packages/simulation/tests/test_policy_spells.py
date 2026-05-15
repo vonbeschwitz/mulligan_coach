@@ -325,7 +325,7 @@ def test_s4_fires_for_look_at_top_card_when_land_in_hand() -> None:
 def test_scry_bottoms_uncastable_keeps_castable() -> None:
     """Cast Preordain (Scry 2, draw 1). Top of library: a useless 5-drop
     and a castable 1-drop. The 5-drop should be bottomed; the 1-drop
-    kept on top."""
+    kept on top, then drawn into hand by the draw-1 effect."""
     island_bf = [Card(instance_id=i, parsed=f.island()) for i in range(1, 3)]
     five_drop = Card(instance_id=20, parsed=f.vanilla_creature("Hydra", "{4}{U}", 4, 4))
     one_drop = Card(instance_id=21, parsed=f.vanilla_creature("Bird", "{U}", 1, 1))
@@ -335,22 +335,26 @@ def test_scry_bottoms_uncastable_keeps_castable() -> None:
 
     cast_main_phase(state)
 
-    # After resolving Scry 2: the keepable 1-drop should be on top
-    # (or wherever in the kept-top section), and the uncastable 5-drop
-    # should be below the rest of the library.
-    assert state.library[0].instance_id == one_drop.instance_id
+    # The 1-drop was kept on top by scry (5-drop bottomed) and then
+    # drawn into hand by the draw-1 effect that fires after scry.
+    assert any(c.instance_id == one_drop.instance_id for c in state.hand)
+    # The 5-drop is at the bottom of the library.
+    assert state.library[-1].instance_id == five_drop.instance_id
 
 
 def test_scry_keeps_lands_when_no_land_in_hand() -> None:
-    """If hand has no land, the scry policy keeps any land seen on top."""
+    """If hand has no land, the scry policy keeps any land seen on top.
+    The kept land is then drawn (Preordain draws after scry)."""
     island_bf = [Card(instance_id=i, parsed=f.island()) for i in range(1, 3)]
     plains_top = Card(instance_id=20, parsed=f.plains())
     library = [plains_top, Card(instance_id=21, parsed=f.vanilla_creature("Hydra", "{4}{U}", 4, 4))]
     preordain = Card(instance_id=10, parsed=_scry_card())
     state = _state(hand=[preordain], lands=island_bf, library=library)
     cast_main_phase(state)
-    # Plains was a land we'd want next turn → kept on top.
-    assert state.library[0].instance_id == plains_top.instance_id
+    # The Plains was kept on top by scry (the Hydra gets bottomed since
+    # we had a land in hand-zone... wait, we don't). Hmm, actually since
+    # hand has no land, the Plains is kept on top, then drawn.
+    assert any(c.instance_id == plains_top.instance_id for c in state.hand)
 
 
 # ----------------------------------------------------------------------

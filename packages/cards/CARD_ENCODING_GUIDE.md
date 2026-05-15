@@ -12,6 +12,12 @@ to be encoded. New LLM-encoded cards should follow these rules.
 The rules below were derived from auditing 840 cards in TMT / ECL /
 TLA and resolving every disagreement (see
 `scripts/audit/FLAGGED_feedback.md` and `apply_flagged_fixes.py`).
+SOS additions (Prepare mechanic, modal-card aggregation, flashback
+non-encoding) were settled during the SOS encoding round on 2026-05-14;
+see `scripts/sos_encoding/build_sos_patches.py` for examples and
+`scripts/sos_encoding/SOS_PREPARED_NOTES.md` for the simulator change
+that landed alongside.
+
 Update this guide when a new convention is settled; cite the affected
 cards so future readers can verify.
 
@@ -423,14 +429,234 @@ current encoding.
 
 ---
 
-## 12. When to update this guide
+## 12. Modal cards (Choose one / Charm / Spree)
+
+For modal cards — "Choose one — A / B / C", multi-color Charms, and
+Spree-style "additional cost" choices — aggregate `role_features` flags
+across **every** legal mode, not just the "primary" one a player will
+most often pick. The role_features feature space has no "modal"
+concept, so summing flags reflects the option value the card gives.
+
+### Booleans — set if any mode triggers
+
+If any mode of a modal spell would set a flag in isolation, set it on
+the aggregate:
+
+- Lorehold Charm `{R}{W}` — sac artifact / reanimate ≤2 / +1/+1
+  anthem EOT → `combat_trick_power=1, combat_trick_toughness=1`
+  (the anthem mode is the only one that maps to a flag; sac-artifact
+  and gy-reanimate are no-ops in role_features).
+- Prismari Charm `{U}{R}` — surveil 2 + draw / 1 dmg / bounce nonland
+  → `cards_drawn=1, cards_manipulated=2, removal_burn_damage=1,
+  is_bounce=True` (every mode contributes a flag).
+- Silverquill Charm `{W}{B}` — +1/+1 counters / exile pow≤2 / drain 3
+  → `combat_trick_power=2, combat_trick_toughness=2,
+  removal_destroy_or_exile=True`.
+- Witherbloom Charm `{B}{G}` — sac → draw 2 / gain 5 / destroy nonland
+  ≤2 → `cards_drawn=2, removal_destroy_or_exile=True`.
+- Quandrix Charm `{G}{U}` — counter unless 2 / destroy ench / 5/5 base
+  EOT → `is_counterspell=True, combat_trick_power=3,
+  combat_trick_toughness=3` (5/5 base ≈ +3/+3 over a typical 2/2;
+  use the differential as the combat-trick scalar).
+
+### Scalar damage — take the MAX across modes
+
+For `removal_burn_damage: int`, take the LARGER value across modes
+(the player picks the better option for the situation):
+
+- Artistic Process `{3}{R}{R}` — modal "6 to creature OR 2 to each
+  non-yours OR 3/3 flying token" → `removal_burn_damage=6` (the
+  targeted-burn option), plus `is_mass_removal=True` and
+  `removal_destroy_or_exile=True` (6 dmg kills).
+- Splatter Technique `{1}{U}{U}{R}{R}` — "draw 4 OR 4 dmg sweeper"
+  → `cards_drawn=4, removal_burn_damage=4, is_mass_removal=True,
+  removal_destroy_or_exile=True`.
+- Burst Lightning kicker — `{R}` burn 2 / kicker `{4}{R}` burn 4 →
+  `removal_burn_damage=4` (max). Kicker is a from-hand alt cost so
+  the kicked Mode IS encoded (see §15).
+
+### Combat-tricks — pick the largest pump
+
+When multiple modes pump (e.g. counters mode + base-P/T mode), pick
+the largest scalar across modes for `combat_trick_power` /
+`combat_trick_toughness`. See Quandrix Charm above.
+
+### `creates_creatures` aggregation
+
+Include every body any mode creates, one entry per token.
+
+### Spree — encode base + cheapest +mode
+
+Spree spells require at least one paid `+{cost}` choice to do
+anything; encoding the base printed cost alone makes the card look
+free, which the simulator would treat as castable on T1. Encode the
+**printed cost + 1** (the cheapest mode):
+
+- Requisition Raid `{W}` Spree → encode cost `{1}{W}`.
+- Return the Favor `{R}{R}` Spree → encode cost `{1}{R}{R}`.
+
+The +modes themselves are mostly out-of-scope for the simulator (none
+of them are mana / draw / fetch); leave `role_features` as `is_other`
+until a Spree card with a sim-relevant +mode appears.
+
+---
+
+## 13. SOS Prepare mechanic
+
+The Prepare mechanic prints a creature on the front face and a sorcery
+or instant on the back face. While the creature is *prepared*, the
+controller may cast a copy of the back-face spell from exile, paying
+its mana cost separately, and then unprepare the source.
+
+The simulator tracks prepared status via `GameState.prepared` and
+treats `Mode(kind="prepared")` as a battlefield-resident sorcery-speed
+cast. See `scripts/sos_encoding/SOS_PREPARED_NOTES.md` for the
+implementation.
+
+### Pre-prepared (front face says "This creature enters prepared")
+
+Encode TWO modes:
+
+- The creature's normal `Mode(kind="cast")` with the printed cost and
+  `EntersBattlefieldEffect`. The engine's `_place_after_cast` flags
+  the resulting permanent as prepared automatically because it has
+  at least one `kind="prepared"` mode.
+- A `Mode(kind="prepared")` with the prepare spell's mana cost and
+  effects. Use the same effect vocabulary as a regular cast mode
+  (`FetchLandEffect`, `DrawCardsEffect`, `LookAtTopEffect`, etc.).
+
+`role_features` are merged across the creature + prepare spell — from
+the player's perspective the card is one slot that gives both. So
+Studious First-Year `{G}` // Rampant Growth `{1}{G}` keeps
+`is_creature=True` (the body) but the simulator's S1c picker will
+auto-cast the prepared FetchLandEffect on a later turn.
+
+Reference the helper `prepared_mode(...)` in
+`scripts/sos_encoding/build_sos_patches.py` for the canonical encoding.
+
+### Conditionally prepared (no "enters prepared")
+
+If becoming prepared requires a separate trigger (attack, gain life,
+cast your third spell, control 8+ lands, …) we do **not** encode the
+prepare spell. Encode the creature's `Mode(kind="cast")` only, and
+omit the `Mode(kind="prepared")` entirely.
+
+Without a `kind="prepared"` mode, the engine's `_place_after_cast`
+won't flag the permanent as prepared and the prepare spell is
+invisible to the simulator — which matches the gameplay reality that
+the spell only fires after a separate event we don't model.
+
+Examples currently encoded this way: #13 Emeritus of Truce, #23 Joined
+Researchers, #33 Spiritcall Enthusiast, #46 Encouraging Aviator,
+#52 Harmonized Trio, #85 Grave Researcher, #88 Leech Collector,
+#98 Scathing Shadelock, #99 Scheming Silvertongue, #113 Emeritus of
+Conflict, #170 Abigale Poet Laureate, #198 Kirol History Buff,
+#237 Tam Observant Sequencer.
+
+### S5 — the policy enabler
+
+The simulator's S5 picker (`_pick_s5_cast_prepared_enabler`) casts a
+hand creature whose prepared mode is mulligan-relevant (fetch / draw /
+land-find) when no other tier matches. Without S5, Studious
+First-Year wouldn't be cast on T1 (the policy doesn't normally cast
+plain creatures) and its prepared Rampant Growth would never become
+available on T2.
+
+S5 fires LAST in the priority chain, so any genuinely-better action
+(real ramp, real draw, mana dork) takes precedence.
+
+---
+
+## 14. Alt-cost mechanics — when to encode as a second cast mode
+
+The `Mode(kind="cast")` discriminator covers spells played from hand.
+For mechanics that pay the alt cost from a different zone, the
+simulator's policy would mis-treat a second cast mode as "cast from
+hand at the alt cost," which is wrong. Decide based on **where the
+alt cost is paid from**:
+
+### Alt cost paid from hand → second `Mode(kind="cast")` (or other appropriate kind)
+
+- **Evoke** (ECL Catharsis) — second cast Mode at the evoke cost.
+  Effects describe what happens when the creature is sacrificed on
+  entry; omit `EntersBattlefieldEffect` because the creature dies
+  immediately.
+- **Kicker / Multikicker** — second cast Mode at `printed + kicker`
+  with the kicked effects (Burst Lightning kicker `{4}` → second
+  Mode at `{4}{R}` with `removal_burn_damage=4`).
+- **Madness** — alt cast from exile after discarding; treat as
+  hand-resident for the simulator.
+- **Morph** — second cast Mode at `{3}` (face-down 2/2). Effects:
+  `EntersBattlefieldEffect` only — the face-down body is vanilla.
+- **Overload** — second cast Mode at the overload cost; effects mirror
+  the targeted version but mass.
+
+### Alt cost paid from graveyard (or another non-hand zone) → DO NOT encode
+
+The simulator iterates cast modes for cards **in hand**; encoding a
+graveyard-resident alt cost as `kind="cast"` lets the policy "cast"
+it from hand at the alt cost (wrong both because the card isn't in
+the gy and because the behavior duplicates the original cast mode at
+a higher cost). Drop these alt-cost modes from the encoding entirely;
+the role_features signal carries the value to the model:
+
+- **Flashback** — drop the flashback Mode. SOS examples: #7 Antiquities
+  on the Loose, #9 Daydream, #10 Dig Site Inventory, #25 Practiced
+  Offense, #112 Duel Tactics, #135 Tome Blast, #204 Molten Note,
+  #216 Pursue the Past, #bonus-fdn-80 Bulk Up.
+- **Group Project** (#17) — flashback cost is "tap three untapped
+  creatures" (non-mana); drop both because we can't model the cost
+  AND because flashback shouldn't be a second cast mode anyway.
+- **Jump-start** — same shape as flashback; drop the jump-start mode.
+- **Aftermath** — drop the aftermath mode.
+- **Suspend** — currently encoded as a single cast mode at the suspend
+  cost when the card has no normal mana cost (Living End). For cards
+  with both a normal cost AND suspend, drop the suspend mode and
+  keep the normal cast.
+- **Foretell** — drop the foretell mode. (No SOS examples; same
+  principle as flashback.)
+
+If a graveyard-resident alt cost ever needs proper sim support, the
+right approach is to mirror the SOS Prepare implementation — a new
+`Mode.kind` plus battlefield/exile-resident castability, not a second
+cast Mode.
+
+### Cycling, channel, land-cycling — keep as-is
+
+These have their own mode kinds (`cycle`, `channel`, `land_cycle`) and
+the simulator already knows how to treat them as alternatives to
+casting from hand.
+
+---
+
+## 15. Look-at-top-N — `cards_drawn += 1`, `cards_manipulated += N - 1`
+
+The look-at-top-N pattern (Stock Up, Sleight of Hand, Flow State,
+Expressive Iteration, Follow the Lumarets) consistently encodes:
+
+- `cards_drawn += 1` — the card put in hand counts as a draw.
+- `cards_manipulated += N - 1` — the cards looked at but not taken.
+
+Set both, plus a `LookAtTopEffect(n=N, accepts_land=True,
+accepts_nonland=True)` on the cast Mode so the simulator's S2/S4
+policy can use the card as a probabilistic hand-fetch.
+
+For multi-take patterns (Stock Up: top 5, take 2) bump `cards_drawn`
+by the number taken: `cards_drawn=2, cards_manipulated=3` (5 - 2).
+
+Variable-N (Stargaze: top 2X, take X) uses X=1 minimum per the
+encoding guide §9 convention: `cards_drawn=1, cards_manipulated=2`.
+
+---
+
+## 16. When to update this guide
 
 Update when:
 
 - The owner makes a new judgment call on a card class (mass removal,
   threaten, sac-effects, etc.).
-- A new mechanic is added (firebending, waterbending, earthbending →
-  documented above).
+- A new mechanic is added (firebending, waterbending, earthbending,
+  prepared → documented above).
 - A pattern shows up repeatedly in `FLAGGED_feedback.md` and is
   resolved one way for the canonical case.
 

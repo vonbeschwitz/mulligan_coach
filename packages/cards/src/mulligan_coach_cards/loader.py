@@ -36,6 +36,10 @@ RELEVANT_LAYOUTS: frozenset[str] = frozenset(
         "flip",
         "meld",
         "prototype",
+        # SOS introduced "prepare" — a creature face stapled to a spell
+        # face that you may cast as a copy while the creature is prepared.
+        # The parser bails to NEEDS_LLM for this layout (handled by hand).
+        "prepare",
     }
 )
 

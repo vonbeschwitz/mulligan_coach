@@ -116,14 +116,32 @@ def castability_snapshot(state: GameState) -> tuple[list[CastabilityRecord], dic
     records: list[CastabilityRecord] = []
     aggregate: dict[int, bool] = {}
 
+    # Walk hand cards (cast / cycle / land_cycle / channel modes), then
+    # also walk prepared permanents for their kind="prepared" modes —
+    # those are battlefield-resident but castable as a sorcery, so they
+    # belong in the snapshot's option-value reckoning for the turn.
+    cards_to_eval: list[tuple[Card, list[tuple[int, Mode]]]] = []
     for card in state.hand:
         if card.is_land:
             continue
         modes = _hand_castable_modes(card)
+        cards_to_eval.append((card, modes))
+    # Add prepared modes of prepared permanents on battlefield.
+    for zone in (state.battlefield_mana_perms, state.battlefield_other):
+        for card in zone:
+            if card.instance_id not in state.prepared:
+                continue
+            prepared_modes = [
+                (i, m) for i, m in enumerate(card.parsed.modes) if m.kind == "prepared"
+            ]
+            if prepared_modes:
+                cards_to_eval.append((card, prepared_modes))
+
+    for card, modes in cards_to_eval:
         if not modes:
-            # Card with no hand modes (e.g. an activated-only utility
-            # artifact). Mark its instance as not-castable for the
-            # aggregate; emit no per-mode rows.
+            # Card with no relevant modes — mark not-castable (only
+            # applies to hand cards; prepared cards always have at least
+            # one prepared mode by construction of the iteration above).
             aggregate[card.instance_id] = False
             continue
 
