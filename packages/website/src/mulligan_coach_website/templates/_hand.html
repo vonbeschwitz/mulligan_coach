@@ -1,0 +1,60 @@
+{# Hand grid — replaces #hand after POST /hand.
+
+   Renders a fixed 7-slot grid. Each slot is either:
+   * A filled card chip with image + name + remove button, OR
+   * An empty placeholder ("1", "2", ...) so the user sees the target.
+
+   Hidden inputs (<input type="hidden" name="hand_ids">) carry the
+   ordered ids back to the server on every subsequent HTMX post. We
+   render one per slot (in form order) so the next /hand call sees
+   the same ordering the template painted.
+#}
+
+{% if error %}
+  <p class="validation-warn">{{ error }}</p>
+{% endif %}
+
+<div class="hand-grid">
+  {% for slot_index in range(hand_size) %}
+    {% set entry = entries[slot_index] if slot_index < entries|length else None %}
+    {% if entry and entry.card %}
+      <div class="card-slot filled">
+        <img
+          src="{{ url_for('card_image', name=entry.card.name) }}"
+          alt="{{ entry.card.name }}"
+          loading="eager"
+          referrerpolicy="no-referrer">
+        <button type="button"
+                class="remove-card"
+                title="Remove this card"
+                hx-post="{{ url_for('hand') }}"
+                hx-target="#hand"
+                hx-include="#builder"
+                hx-vals='{"action":"remove","index":"{{ entry.index }}"}'>
+          &times;
+        </button>
+        <input type="hidden" name="hand_ids" value="{{ entry.id }}">
+      </div>
+    {% elif entry %}
+      {# A hand_ids entry that couldn't be resolved against the current
+         deck — render a broken placeholder so the user sees the
+         mismatch. Keep the hidden input so the form state survives. #}
+      <div class="card-slot broken">
+        <span class="placeholder-num">!</span>
+        <span class="muted small">{{ entry.id }}</span>
+        <input type="hidden" name="hand_ids" value="{{ entry.id }}">
+      </div>
+    {% else %}
+      <div class="card-slot empty">
+        <span class="placeholder-num">{{ slot_index + 1 }}</span>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<p class="muted small">
+  {{ entries|length }}/{{ hand_size }} cards in hand.
+  {% if entries|length == hand_size %}
+    Ready — scroll down and click <em>Keep or mulligan?</em> to get the recommendation.
+  {% endif %}
+</p>

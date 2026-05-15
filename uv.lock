@@ -17,6 +17,7 @@ members = [
     "mulligan-coach-features",
     "mulligan-coach-model",
     "mulligan-coach-simulation",
+    "mulligan-coach-website",
     "simulation-viewer",
 ]
 
@@ -417,6 +418,7 @@ dependencies = [
     { name = "mulligan-coach-features" },
     { name = "mulligan-coach-model" },
     { name = "mulligan-coach-simulation" },
+    { name = "mulligan-coach-website" },
     { name = "simulation-viewer" },
 ]
 
@@ -438,6 +440,7 @@ requires-dist = [
     { name = "mulligan-coach-features", editable = "packages/features" },
     { name = "mulligan-coach-model", editable = "packages/model" },
     { name = "mulligan-coach-simulation", editable = "packages/simulation" },
+    { name = "mulligan-coach-website", editable = "packages/website" },
     { name = "simulation-viewer", editable = "utilities/simulation_viewer" },
 ]
 
@@ -557,6 +560,37 @@ dependencies = [
 requires-dist = [
     { name = "mulligan-coach-cards", editable = "packages/cards" },
     { name = "pydantic", specifier = ">=2.7" },
+]
+
+[[package]]
+name = "mulligan-coach-website"
+version = "0.0.0"
+source = { editable = "packages/website" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "jinja2" },
+    { name = "mulligan-coach-cards" },
+    { name = "mulligan-coach-features" },
+    { name = "mulligan-coach-model" },
+    { name = "mulligan-coach-simulation" },
+    { name = "pydantic" },
+    { name = "python-multipart" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "jinja2", specifier = ">=3.1" },
+    { name = "mulligan-coach-cards", editable = "packages/cards" },
+    { name = "mulligan-coach-features", editable = "packages/features" },
+    { name = "mulligan-coach-model", editable = "packages/model" },
+    { name = "mulligan-coach-simulation", editable = "packages/simulation" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "python-multipart", specifier = ">=0.0.9" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 
 [[package]]

@@ -1,0 +1,525 @@
+/* Mulligan Coach — dark theme.
+ *
+ * Visual lineage is the user's prior FIN Mulligan Simulator site
+ * (dark midnight-blue gradient, gold accents, green/red verdict
+ * colours), simplified and translated to the new template structure.
+ *
+ * No frameworks; ~250 lines of hand-written CSS. Keeping it dependency-
+ * free matches the workspace convention (see card_viewer / simulation_viewer)
+ * and means the page renders correctly even when the HTMX CDN is unreachable.
+ */
+
+:root {
+  --primary: #1a1a2e;
+  --secondary: #16213e;
+  --dark: #0f3460;
+  --accent: #ffd700;
+  --accent-hover: #ffed4e;
+  --text: #e0e0e0;
+  --text-muted: #9aa0b0;
+  --keep: #27ae60;
+  --keep-bg: rgba(39, 174, 96, 0.12);
+  --mulligan: #e74c3c;
+  --mulligan-bg: rgba(231, 76, 60, 0.12);
+  --warn: #f39c12;
+  --warn-bg: rgba(243, 156, 18, 0.12);
+  --radius: 8px;
+  --transition: 0.2s ease;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ---- Topbar ------------------------------------------------------ */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.2rem;
+  text-decoration: none;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.muted.small,
+.small {
+  font-size: 0.85rem;
+}
+
+main {
+  padding: 24px;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ---- Banners ----------------------------------------------------- */
+
+.banner {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+}
+
+.banner-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn);
+  color: #f5c878;
+}
+
+.banner-info {
+  background: rgba(64, 158, 232, 0.10);
+  border-color: rgba(64, 158, 232, 0.55);
+  color: #9ec6ee;
+}
+
+/* ---- Form section cards ----------------------------------------- */
+
+.card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.card h2 {
+  color: var(--accent);
+  margin-bottom: 8px;
+  font-size: 1.15rem;
+}
+
+.card p {
+  margin-bottom: 10px;
+}
+
+/* ---- Inputs ------------------------------------------------------ */
+
+textarea,
+input[type="text"],
+input[type="number"],
+select {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: var(--transition);
+}
+
+textarea {
+  font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  resize: vertical;
+  min-height: 200px;
+}
+
+textarea:focus,
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+button {
+  padding: 9px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius);
+  background: var(--secondary);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+button:hover {
+  background: var(--dark);
+  border-color: var(--accent);
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--primary);
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* ---- Validation panel ------------------------------------------- */
+
+.validation-block {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.validation-ok {
+  color: var(--keep);
+}
+
+.validation-ok .warn {
+  color: var(--warn);
+  margin-left: 8px;
+}
+
+.validation-warn {
+  color: var(--warn);
+}
+
+.issue-list {
+  list-style: none;
+  margin-top: 8px;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.issue-list li {
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.9rem;
+}
+
+.issue-list code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  font-size: 0.85rem;
+}
+
+.issue-msg {
+  color: var(--text-muted);
+}
+
+/* ---- Hand controls ---------------------------------------------- */
+
+.hand-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.hand-controls input[type="text"] {
+  flex: 1 1 220px;
+}
+
+/* ---- Hand grid --------------------------------------------------- */
+
+.hand-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.4);
+  margin-bottom: 12px;
+}
+
+.card-slot {
+  position: relative;
+  aspect-ratio: 145 / 203; /* MTG card aspect ratio */
+  border-radius: 6px;
+  overflow: hidden;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+
+.card-slot.empty {
+  background: rgba(0, 0, 0, 0.35);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-slot.empty .placeholder-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.card-slot.filled {
+  background: #000;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+}
+
+.card-slot.filled:hover {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.7);
+  z-index: 5;
+}
+
+.card-slot.filled img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-slot.broken {
+  background: var(--mulligan-bg);
+  border: 2px dashed var(--mulligan);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  text-align: center;
+}
+
+.card-slot.broken .placeholder-num {
+  font-size: 1.4rem;
+  color: var(--mulligan);
+}
+
+.remove-card {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(231, 76, 60, 0.92);
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 24px;
+  text-align: center;
+  padding: 0;
+  border: none;
+  opacity: 0;
+  transition: opacity var(--transition);
+  cursor: pointer;
+}
+
+.card-slot.filled:hover .remove-card {
+  opacity: 1;
+}
+
+/* ---- Context grid ------------------------------------------------ */
+
+.context-grid {
+  border: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.context-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.context-grid label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+}
+
+.context-grid input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--accent);
+}
+
+.sim-options {
+  border: none;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+.sim-options label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* ---- Recommendation pane ---------------------------------------- */
+
+.recommendation-pane {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 22px;
+  min-height: 110px;
+}
+
+.rec-error {
+  color: var(--warn);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+}
+
+.rec-result {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  text-align: center;
+}
+
+.rec-verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 28px;
+  border-radius: var(--radius);
+  border: 2px solid;
+}
+
+.rec-verdict-keep {
+  border-color: var(--keep);
+  background: var(--keep-bg);
+  color: var(--keep);
+}
+
+.rec-verdict-mulligan {
+  border-color: var(--mulligan);
+  background: var(--mulligan-bg);
+  color: var(--mulligan);
+}
+
+.rec-label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+}
+
+.rec-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+}
+
+.rec-comparison {
+  display: flex;
+  align-items: stretch;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.rec-arm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 22px;
+  min-width: 200px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+}
+
+.rec-arm-better {
+  background: var(--keep-bg);
+  border-color: var(--keep);
+  box-shadow: 0 0 10px rgba(39, 174, 96, 0.25);
+}
+
+.rec-arm-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.rec-arm-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.rec-arm-better .rec-arm-value {
+  color: var(--keep);
+}
+
+.rec-vs {
+  align-self: center;
+  font-size: 1rem;
+  color: var(--text-muted);
+}
+
+.rec-delta {
+  color: var(--text-muted);
+}
+
+.rec-delta strong {
+  color: var(--text);
+}
+
+/* ---- HTMX indicator --------------------------------------------- */
+
+.htmx-indicator {
+  display: none;
+  margin-left: 10px;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline;
+}
+
+/* ---- Responsive -------------------------------------------------- */
+
+@media (max-width: 760px) {
+  .hand-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .rec-comparison {
+    flex-direction: column;
+  }
+}

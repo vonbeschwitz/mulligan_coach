@@ -1,0 +1,56 @@
+{# Validation panel — replaces #validation after POST /validate.
+
+   Renders:
+   * Top-line status (✓ valid / X issues / empty).
+   * The per-line issue list when something failed to parse.
+   * A <datalist id="deck-cards"> populated with the deck's unique
+     card names, used by the hand-builder's "add by name" input. The
+     datalist is included on every render (even when there are issues)
+     so the autocomplete works on partial decks too.
+#}
+
+{% if result.cards or result.unknown_lines %}
+  <div class="validation-block">
+
+    {% if result.is_valid %}
+      <p class="validation-ok">
+        ✓ Deck parsed: <strong>{{ result.total_cards }}</strong> cards,
+        <strong>{{ result.unique_cards }}</strong> unique.
+        {% if result.total_cards != required_deck_size %}
+          <span class="warn">
+            (Heads up: the trained model expects exactly {{ required_deck_size }} —
+            recommendation will fail until you adjust.)
+          </span>
+        {% endif %}
+      </p>
+    {% else %}
+      <p class="validation-warn">
+        {{ result.unknown_lines|length }} issue(s) in the decklist —
+        the rest ({{ result.total_cards }} card{{ '' if result.total_cards == 1 else 's' }})
+        resolved fine.
+      </p>
+    {% endif %}
+
+    {% if result.unknown_lines %}
+      <ul class="issue-list">
+        {% for issue in result.unknown_lines %}
+          <li>
+            <span class="muted">line {{ issue.line_no }}:</span>
+            <code>{{ issue.raw_line }}</code>
+            <span class="issue-msg">— {{ issue.message }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+  </div>
+{% endif %}
+
+{# Datalist for the "add card" input autocomplete. Lives inside the
+   validation partial so a fresh deck paste regenerates the list of
+   names without a full-page re-render. #}
+<datalist id="deck-cards">
+  {% for name in datalist_names %}
+    <option value="{{ name }}"></option>
+  {% endfor %}
+</datalist>
