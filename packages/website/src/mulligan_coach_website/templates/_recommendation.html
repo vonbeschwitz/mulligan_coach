@@ -1,0 +1,83 @@
+{# Recommendation panel — replaces #recommendation after POST /recommend.
+
+   Two render modes:
+   * Error mode (`error` truthy, `recommendation` None): inline error
+     message in a warning box. Used for all preflight failures
+     (model not loaded, wrong sizes, hand-resolve mismatches).
+   * Result mode: Keep/Mulligan verdict + both P(win) arms +
+     delta + context summary.
+#}
+
+{% if error %}
+  <div class="rec-error">
+    <strong>Can't compute a recommendation:</strong> {{ error }}
+  </div>
+{% else %}
+  {% set rec = recommendation %}
+  {% set verdict = rec.verdict %}
+  {% set keep_pct = (rec.keep_win_probability * 100) | round(1) %}
+  {% set mull_pct = (rec.mulligan_win_probability * 100) | round(1) %}
+  {% set delta_pp = (rec.delta * 100) | round(1) %}
+
+  <div class="rec-result">
+    <div class="rec-verdict rec-verdict-{{ verdict }}">
+      <span class="rec-label">Recommendation</span>
+      <span class="rec-value">
+        {% if verdict == 'keep' %}Keep this hand{% else %}Mulligan{% endif %}
+      </span>
+    </div>
+
+    <div class="rec-comparison">
+      <div class="rec-arm {% if verdict == 'keep' %}rec-arm-better{% endif %}">
+        <span class="rec-arm-label">Keep this hand</span>
+        <span class="rec-arm-value">{{ keep_pct }}%</span>
+        <span class="muted small">P(win) at mulligan number {{ rec.mulligan_number_from }}</span>
+      </div>
+      <div class="rec-vs">vs</div>
+      <div class="rec-arm {% if verdict == 'mulligan' %}rec-arm-better{% endif %}">
+        <span class="rec-arm-label">Mulligan to {{ 7 - rec.mulligan_number_to }}</span>
+        <span class="rec-arm-value">{{ mull_pct }}%</span>
+        <span class="muted small">average P(win) over fresh draws</span>
+      </div>
+    </div>
+
+    <p class="rec-delta">
+      Keep minus mulligan: <strong>{{ '+' if rec.delta >= 0 else '' }}{{ delta_pp }} pp</strong>.
+      {% if rec.delta|abs < 0.005 %}
+        The two arms are within noise of each other — flip a coin.
+      {% elif rec.delta|abs < 0.02 %}
+        Small edge; consider game context (matchup, opponent count) before deciding.
+      {% endif %}
+    </p>
+
+    <p class="muted small">
+      Format: <strong>{{ primary_set or "unknown" }}</strong>
+      {% if not set_stats_present %}
+        <span class="warn">(no 17Lands stats loaded — per-card features fall to zero)</span>
+      {% endif %}
+      &middot; on the {% if on_the_play %}play{% else %}draw{% endif %}
+      &middot; came from mulligan number {{ mulligan_number }}.
+    </p>
+    <p class="muted small">
+      Keep arm: {{ rec.n_sims_keep }} sims &middot;
+      Mulligan arm: {{ rec.n_mulligan_samples }} samples × {{ rec.n_sims_per_mulligan }} sims
+      {% if rec.mulligan_arm_was_cached %}
+        &middot; <strong>mulligan arm prefetched</strong> (already done when you clicked)
+      {% endif %}
+    </p>
+    {% if rec.mulligan_arm_floor is not none %}
+      {% set raw_pct = (rec.mulligan_arm_raw_mean * 100) | round(1) %}
+      {% set floor_pct = (rec.mulligan_arm_floor * 100) | round(1) %}
+      <p class="muted small">
+        Deeper-mulligan floor: <strong>{{ floor_pct }}%</strong>
+        (average P(win) at mulligan-to-{{ 7 - rec.mulligan_number_to - 1 }}).
+        {{ rec.n_samples_below_floor }} of {{ rec.n_mulligan_samples }} sampled hands scored below
+        the floor and were clamped &mdash; reflecting that the player would just mulligan again
+        rather than keep them.
+        {% if rec.n_samples_below_floor > 0 %}
+          Without the floor the mulligan arm would have been {{ raw_pct }}%.
+        {% endif %}
+      </p>
+    {% endif %}
+  </div>
+{% endif %}

@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page">
+
+  {#
+    Top-of-page service banner. The recommendation pipeline needs both a
+    trained model bundle and per-format 17Lands stats; show the user
+    on first paint whether they'll be able to get a recommendation.
+  #}
+  {% if not service_status.model_loaded %}
+    <section class="banner banner-warn">
+      <strong>Model not loaded.</strong>
+      {{ service_status.error or "Set MULLIGAN_COACH_MODEL_DIR to a trained model directory." }}
+      You can still paste a deck and build a hand, but
+      <em>Get recommendation</em> will return an error.
+    </section>
+  {% elif service_status.formats_missing_stats %}
+    <section class="banner banner-info">
+      <strong>Heads up:</strong> ratings parquet is missing for
+      {{ service_status.formats_missing_stats|join(", ") }}. Recommendations
+      still run, but per-card 17Lands features fall to zero for those formats.
+    </section>
+  {% endif %}
+
+  {#
+    The single big form. Each interactive element posts to a specific
+    HTMX endpoint with `hx-include="#builder"` so the server gets the
+    whole state — decklist text, hand_ids hidden inputs, context fields —
+    on every request. Mirrors the simulation_viewer pattern.
+  #}
+  <form id="builder">
+
+    {# ===== Decklist input ============================================ #}
+    <section class="card">
+      <h2>1. Decklist</h2>
+      <p class="muted small">
+        Paste an MTGA "Export to Clipboard" decklist
+        (e.g. <code>17 Mountain (TLA) 270</code>). Validation runs as you type.
+        Trained model expects exactly {{ required_deck_size }} cards.
+      </p>
+      <textarea name="decklist"
+                rows="14"
+                placeholder="Deck&#10;17 Mountain (TLA) 270&#10;4 Goblin (TLA) 100&#10;..."
+                spellcheck="false"
+                hx-post="{{ url_for('validate') }}"
+                hx-trigger="input changed delay:300ms"
+                hx-target="#validation"
+                hx-include="#builder"></textarea>
+      <p class="muted small">
+        Loaded {{ n_cards }} encoded cards from
+        {{ loaded_sets|join(", ") or "no sets — run mulligan-coach-cards run-detector" }}
+        (override with <code>MULLIGAN_COACH_WEBSITE_SETS=...</code>).
+      </p>
+
+      {# Validation panel — populated by POST /validate. The <datalist>
+         lives inside this region so the hand-builder autocomplete sees
+         fresh deck names whenever the textarea contents change. #}
+      <div id="validation"></div>
+    </section>
+
+    {# ===== Hand builder ============================================== #}
+    <section class="card">
+      <h2>2. Opening hand ({{ hand_size }} cards)</h2>
+
+      <div class="hand-controls">
+        <button type="button"
+                hx-post="{{ url_for('hand') }}"
+                hx-target="#hand"
+                hx-include="#builder"
+                hx-vals='{"action":"random"}'>
+          Random hand
+        </button>
+
+        <input type="text"
+               id="add-card-input"
+               name="add_name"
+               list="deck-cards"
+               placeholder="Add card by name (autocomplete from deck)"
+               autocomplete="off">
+        <button type="button"
+                id="add-card-btn"
+                hx-post="{{ url_for('hand') }}"
+                hx-target="#hand"
+                hx-include="#builder"
+                hx-vals='{"action":"add"}'
+                hx-on::after-request="document.getElementById('add-card-input').value=''">
+          Add
+        </button>
+
+        <button type="button"
+                class="ghost"
+                hx-post="{{ url_for('hand') }}"
+                hx-target="#hand"
+                hx-include="#builder"
+                hx-vals='{"action":"clear"}'>
+          Clear
+        </button>
+      </div>
+
+      <div id="hand">
+        {# Initial state — empty. The /hand endpoint replaces this with
+           the rendered _hand.html partial on the first mutation. #}
+        <p class="muted">
+          No hand yet. Paste a decklist above, then click
+          <em>Random hand</em> or add cards manually.
+        </p>
+      </div>
+    </section>
+
+    {# ===== Game context ============================================== #}
+    <section class="card">
+      <h2>3. Game context</h2>
+      <fieldset class="context-grid">
+        <label class="check">
+          <input type="checkbox" name="on_the_play" value="true" checked>
+          On the play
+        </label>
+
+        <label>
+          Mulligan number (already taken)
+          <select name="mulligan_number">
+            <option value="0" selected>0 (kept seven)</option>
+            <option value="1">1 (mulled to six)</option>
+            <option value="2">2 (mulled to five)</option>
+            <option value="3">3 (mulled to four)</option>
+            <option value="4">4 (mulled to three)</option>
+            <option value="5">5 (mulled to two)</option>
+          </select>
+        </label>
+
+        <label>
+          Opponent mulligans (only relevant on the draw)
+          <select name="opp_mulligan_number">
+            <option value="">unknown</option>
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3+</option>
+          </select>
+        </label>
+      </fieldset>
+    </section>
+
+    {# ===== Run recommendation ======================================== #}
+    <section class="card">
+      <h2>4. Get recommendation</h2>
+      <p class="muted small">
+        Asymmetric sim split: the keep arm runs once at high precision;
+        the mulligan arm averages over many independent fresh draws at
+        lower per-hand precision (between-hand variance dominates).
+        The mulligan arm also starts computing in the background the
+        moment you finish pasting a deck, so most clicks here only
+        need to compute the keep arm.
+      </p>
+      <details>
+        <summary class="muted small">Advanced (simulation depth)</summary>
+        <fieldset class="sim-options">
+          <label>
+            Keep-arm sims
+            <input type="number" name="n_sims_keep" value="1000" min="100" max="10000" step="100">
+          </label>
+          <label>
+            Sims per mulligan sample
+            <input type="number" name="n_sims_per_mulligan" value="40" min="10" max="2000" step="10">
+          </label>
+          <label>
+            Mulligan-arm samples
+            <input type="number" name="n_mulligan_samples" value="50" min="5" max="500" step="5">
+          </label>
+        </fieldset>
+      </details>
+      <button type="button"
+              class="primary"
+              hx-post="{{ url_for('recommend_route') }}"
+              hx-target="#recommendation"
+              hx-include="#builder"
+              hx-indicator="#recommend-spinner"
+              hx-disabled-elt="this"
+              hx-on::before-request="clearRecommendation()">
+        Keep or mulligan?
+      </button>
+      <span id="recommend-spinner" class="htmx-indicator muted small">
+        Simulating&hellip; (a few seconds if the mulligan arm was prefetched,
+        otherwise up to ~5 s on defaults)
+      </span>
+    </section>
+
+  </form>
+
+  {# Recommendation pane — outside the form so HTMX swap doesn't blow
+     away the form state. #}
+  <section id="recommendation" class="recommendation-pane">
+    <p class="muted">No recommendation yet. Build a deck + hand above, then click <em>Keep or mulligan?</em>.</p>
+  </section>
+
+</div>
+
+{#
+  Small UX helpers.
+
+  1. Auto-add a card the moment the user picks an autocomplete option
+     from the deck-cards datalist (or types a full match by hand).
+     Detection: every `input` event, check whether the field's current
+     value exactly matches one of the datalist `<option value>`s.
+     That covers both "clicked a suggestion" and "typed full name".
+     The Add button's hx-on::after-request clears the input after the
+     request returns so the next pick starts fresh.
+
+  2. Clear the recommendation pane the instant the user hits
+     "Keep or mulligan?". Without this the stale verdict sits there
+     for the few seconds the new keep arm takes to compute — too easy
+     to misread as "still showing the old answer".
+#}
+<script>
+  (function () {
+    const input = document.getElementById('add-card-input');
+    const btn = document.getElementById('add-card-btn');
+    if (!input || !btn) return;
+    input.addEventListener('input', function () {
+      // Datalist is re-rendered server-side on every /validate, so
+      // we query the DOM live rather than caching the options list.
+      const opts = document.querySelectorAll('#deck-cards option');
+      for (let i = 0; i < opts.length; i++) {
+        if (opts[i].value === input.value) {
+          btn.click();
+          return;
+        }
+      }
+    });
+  })();
+
+  function clearRecommendation() {
+    const el = document.getElementById('recommendation');
+    if (el) {
+      el.innerHTML = '<p class="muted">Computing recommendation&hellip;</p>';
+    }
+  }
+</script>
+
+{% endblock %}
