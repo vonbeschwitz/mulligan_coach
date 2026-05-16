@@ -18,6 +18,8 @@ from collections import Counter
 from dataclasses import dataclass
 
 from mulligan_coach_cards import ParsedCard
+from mulligan_coach_simulation import draw_smoothed_hand
+from mulligan_coach_simulation.runtime import Card
 
 from .decklist import DeckCard, ParseResult, expand_deck
 
@@ -112,7 +114,14 @@ def random_hand(
     rng: random.Random | None = None,
     size: int = HAND_SIZE,
 ) -> list[str]:
-    """Return ``size`` hand_ids sampled without replacement from the deck.
+    """Return ``size`` hand_ids drawn with Arena's BO1 hand smoother.
+
+    Uses :func:`mulligan_coach_simulation.draw_smoothed_hand` so the
+    sampled hand follows the same distribution Arena would deal — a
+    softmax over three independent shuffles weighted toward
+    deck-matching land ratios. Uniform sampling here would show users
+    far more land-flooded / land-screwed hands than they actually see
+    on Arena.
 
     Raises :class:`ValueError` if the deck has fewer than ``size``
     copies — caller surfaces this to the user inline.
@@ -121,8 +130,9 @@ def random_hand(
     deck = expand_deck(result.cards)
     if len(deck) < size:
         raise ValueError(f"Deck has only {len(deck)} cards; need at least {size} for a hand.")
-    sample = rng.sample(deck, size)
-    return [card_to_id(c) for c in sample]
+    deck_cards = [Card(instance_id=i, parsed=p) for i, p in enumerate(deck)]
+    hand_cards, _library = draw_smoothed_hand(deck_cards, rng, hand_size=size)
+    return [card_to_id(c.parsed) for c in hand_cards]
 
 
 def add_card_by_name(

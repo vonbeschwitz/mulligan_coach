@@ -69,7 +69,8 @@ from mulligan_coach_features import (
 from mulligan_coach_model import ModelBundle, Recommendation, predict_win_probability, recommend
 from mulligan_coach_model.feature_matrix import _library_from_deck
 from mulligan_coach_model.inference import _predict_proba
-from mulligan_coach_simulation import simulate
+from mulligan_coach_simulation import draw_smoothed_hand, simulate
+from mulligan_coach_simulation.runtime import Card
 
 log = logging.getLogger(__name__)
 
@@ -644,11 +645,24 @@ class RecommendationService:
         apply_floor = deeper_level <= _MAX_MULLIGAN_NUMBER
 
         rng = random.Random(seed)
+        # Smoother input is the ``Card`` runtime wrapper (it needs the
+        # is_land flag). Wrap each ParsedCard once and reuse the
+        # wrappers across mulligan samples — re-wrapping per sample is
+        # the same instances just with new ids, and we only care about
+        # is_land for smoother weighting, never about instance_id at
+        # this layer.
+        deck_cards = [Card(instance_id=i, parsed=p) for i, p in enumerate(deck)]
         p_target: list[float] = []
         p_deeper: list[float] = []
         for _ in range(n_mulligan_samples):
-            indices = rng.sample(range(len(deck)), 7)
-            sample_hand = [deck[i] for i in indices]
+            # Arena BO1 smoother: select one of N shuffles weighted by
+            # how close the hand's land fraction is to the deck's.
+            # This matches how 17Lands opening hands were drawn, so
+            # the model is in-distribution. Plain ``rng.sample`` would
+            # over-represent land-flooded / land-screwed hands and
+            # bias p_mull downward.
+            hand_cards, _library_cards = draw_smoothed_hand(deck_cards, rng)
+            sample_hand = [c.parsed for c in hand_cards]
             sample_seed = rng.randint(0, 2**31 - 1)
             if apply_floor:
                 pt, pd = _predict_levels_for_hand(

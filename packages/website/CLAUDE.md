@@ -103,7 +103,22 @@ a Plains would fail to resolve.
 ## Recommendation pipeline
 
 The pipeline in `recommendation.py` is the heart of the package.
-Three pieces compose:
+Four pieces compose:
+
+### 0. Arena BO1 hand smoother
+
+Every place the website draws a fresh opening hand —
+`hand.random_hand` for the "Random hand" button, and
+`_compute_mulligan_arm` for each mulligan-arm sample — uses
+`mulligan_coach_simulation.draw_smoothed_hand` instead of uniform
+`rng.sample`. The 17Lands training data was drawn through Arena's
+BO1 smoother (softmax over three shuffles, weighted toward
+deck-matching land ratios), so uniform sampling at inference time
+would feed the model out-of-distribution land-flooded and
+land-screwed hands and bias the mulligan arm downward. Skip the
+smoother and the should-mull rate roughly halves — see
+`models/all3_v1/website_mulligan_benchmark.log` for the empirical
+gap.
 
 ### 1. Asymmetric sim budget
 
