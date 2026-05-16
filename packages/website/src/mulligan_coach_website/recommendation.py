@@ -75,7 +75,13 @@ log = logging.getLogger(__name__)
 
 # Default model directory — checked relative to the workspace root
 # (the parent of `packages/`). Override via env var.
-_DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "tla_v2"
+#
+# ``all3_v1`` is the current multi-set Premier-Draft model: trained on
+# TLA + ECL + TMT (1.07M rows). Feature vocabulary is identical to the
+# previous ``tla_v2`` (set/event-type one-hots were already in the
+# spec), so this swap is a pure path change — no inference-side code
+# needs to know which model is loaded.
+_DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "all3_v1"
 _DEFAULT_EVENT_TYPE = "PremierDraft"
 
 # Default sim budgets for the asymmetric path. The keep arm runs once;
