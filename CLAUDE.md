@@ -36,6 +36,10 @@ mulligan-coach/
 │   ├── model/                   # XGBoost training + inference
 │   ├── website/                 # FastAPI + HTMX testing interface
 │   └── overlay/                 # PyQt6 Arena log-tailing overlay
+├── scripts/                     # Ad-hoc, one-off analysis / extraction tools
+│   ├── audit/                   # Card-audit fixes (per-set encoding review)
+│   ├── mulligan_decisions/      # 17Lands replay-data -> per-decision parquet
+│   └── sos_encoding/            # SOS encoding patches
 └── utilities/                   # Dev-only helper tools (workspace members, not shipped)
     └── card_viewer/             # Local web UI for verifying ParsedCard encodings
 ```
@@ -47,6 +51,17 @@ them, and listed in the root's `[project.dependencies]` so a plain
 `uv sync` puts them on the path. Because the workspace root has
 `package = false`, dev-tool deps here can never leak into a downstream
 wheel.
+
+`scripts/` is for ad-hoc, one-off tools that live outside the workspace
+(plain Python files, run via `.venv/Scripts/python.exe scripts/<name>.py`).
+Each subdirectory has a focused scope — see each script's docstring for
+inputs/outputs. The `mulligan_decisions/` directory holds a builder that
+extracts every candidate opening hand (kept and mulliganed) from the
+17Lands `replay_data` CSVs into a per-decision parquet at
+`data/processed/seventeenlands/mulligan_decisions/`. Unlike the
+`game_data` pipeline owned by `data-download/` (which only sees the
+final kept hand), the replay-data extraction recovers the *mulligan
+decisions themselves*.
 
 ### 1. data-download
 
