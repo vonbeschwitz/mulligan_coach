@@ -196,11 +196,14 @@ and stashed on `app.state.service`. Loading is conditional: if
 message rather than crashing. This makes the website usable in
 dev environments without a fully-trained model.
 
-Format support: the trained `tla_v2` model declares
-`set_code_{TMT,ECL,TLA}` one-hot columns. SOS isn't trained yet —
-recommendations for an SOS deck will run, but the set one-hot
-will be all-zero (XGBoost treats the missing one-hot as "no
-in-distribution set"); the call still returns a verdict.
+Format support: the current model is `all3_v1` — trained on
+Premier Draft data across TLA + ECL + TMT (1.07M rows). All three
+sets are now in-distribution; the `set_code_{TMT,ECL,TLA}` one-hot
+fires for the corresponding deck and the per-set learned offsets
+apply. SOS isn't trained yet — recommendations for an SOS deck
+will still run, but the set one-hot will be all-zero (XGBoost
+treats the missing one-hot as "no in-distribution set") so the
+call falls back to the format-agnostic part of the model.
 
 ## Routes
 
@@ -223,7 +226,7 @@ uv run uvicorn mulligan_coach_website.app:app --reload # autoreload during templ
 
 Override loaded sets via `MULLIGAN_COACH_WEBSITE_SETS=TLA,SOS`.
 Override the model directory via `MULLIGAN_COACH_MODEL_DIR=...`
-(default: `models/tla_v2/` under the repo root).
+(default: `models/all3_v1/` under the repo root).
 
 ## Tests
 
