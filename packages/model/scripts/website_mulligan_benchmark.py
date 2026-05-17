@@ -161,7 +161,10 @@ def load_test_sample(
         chunks = sorted((TRAINING_DIR / set_code / EVENT_TYPE).glob("chunk_*.parquet"))
         log.info("  %s: %d chunks", set_code, len(chunks))
         for chunk in chunks:
-            parts.append(pq.read_table(chunk, columns=needed_cols).to_pandas())
+            # pyarrow.parquet is partially typed; the project's mypy
+            # config silences no-untyped-call for the module's own
+            # functions but not for cross-module calls like this one.
+            parts.append(pq.read_table(chunk, columns=needed_cols).to_pandas())  # type: ignore[no-untyped-call]
     df = pd.concat(parts, ignore_index=True)
     log.info("  total rows: %s", f"{len(df):,}")
 

@@ -364,6 +364,7 @@ def _do_keep(item: _KeepWorkItem) -> tuple[int, float]:
     assert _WORKER_SERVICE is not None
     row_idx, hand, deck, set_code, on_play, opp_mull, n_sims, seed = item
     service = _WORKER_SERVICE
+    assert service.bundle is not None, "worker should never spin up without a model bundle"
     stats = service.stats_by_set.get(set_code)
     shrunk = stats.shrunk if stats is not None else {}
     zscores = stats.zscores if stats is not None else {}
