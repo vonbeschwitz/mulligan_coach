@@ -42,6 +42,7 @@ from mulligan_coach_overlay.events import (
     MulliganDecisionRequest,
 )
 from mulligan_coach_recommend import AsymmetricRecommendation, ServiceStatus
+from mulligan_coach_recommend.service import RecommendationExplanation
 
 # ---------------------------------------------------------------------------
 # Test fixtures: minimal ParsedCards + fake service
@@ -106,6 +107,24 @@ def _fake_asymmetric_recommendation(
         mulligan_arm_raw_mean=mull,
         mulligan_arm_floor=None,
         n_samples_below_floor=0,
+        explanation=_fake_explanation(),
+    )
+
+
+def _fake_explanation() -> RecommendationExplanation:
+    """All-zeros RecommendationExplanation for tests that don't read the panel."""
+    return RecommendationExplanation(
+        p_make_2nd_land_by_t2=0.0,
+        p_make_3rd_land_by_t3=0.0,
+        p_make_4th_land_by_t4=0.0,
+        expected_mana_at_t4=0.0,
+        p_cast_any_spell_t1=0.0,
+        p_cast_any_creature_t2=0.0,
+        p_cast_any_removal_t2=0.0,
+        p_cast_small_creature_by_t3=0.0,
+        p_cast_3drop_by_t4=0.0,
+        color_fix_by_t4=0.0,
+        hand_cards=(),
     )
 
 
