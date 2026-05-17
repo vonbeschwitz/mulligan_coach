@@ -110,12 +110,13 @@ Monte Carlo engine. Pure function: `(hand, deck, on_play) -> playability_feature
 
 ### 5. model
 
-XGBoost training and inference.
+XGBoost training and inference. Two parallel models share the
+upstream `simulate -> build_feature_row` pipeline:
 
-- Trains on 17Lands game data: each row is a game, label is win/loss, features are derived from the opening hand, decklist, and on-play/draw.
-- Feature set combines simulation outputs (playability) with hand/deck statistics (GIH WR sums, earliness scores, role counts, curve shape) and context (mulligan number, hand size, on play/draw).
-- Trains across multiple recent formats to mitigate the ~4-week 17Lands data lag for new sets. Format-specific fine-tuning when sufficient data is available.
-- Inference: `(hand, deck, on_play, mulligan_number) -> P(win)`. Calling it twice (current hand vs. simulated mulligan to N-1) gives the comparison needed for a recommendation.
+- **Win model** — trains on 17Lands game data (kept hands only); each row is a game, label is win/loss, features are derived from the opening hand, decklist, and on-play/draw. Inference: `(hand, deck, on_play, mulligan_number) -> P(win)`. Calling it twice (current hand vs. simulated mulligan to N-1) gives the comparison needed for a recommendation.
+- **Choice model** — trains on 17Lands replay data (every candidate hand, kept or mulled) filtered to competent players; label is `was_kept`. Inference: `(hand, deck, on_play, mulligan_number) -> P(skilled player would keep)`. Useful as a sanity check or ensemble component beside the win model. Reuses kept-hand simulations from the win-model cache so only mulled-away hands require fresh sims.
+
+Both train across multiple recent formats to mitigate the ~4-week 17Lands data lag for new sets. Feature set combines simulation outputs (playability) with hand/deck statistics (GIH WR sums, earliness scores, role counts, curve shape) and context (mulligan number, hand size, on play/draw).
 
 ### 6. recommend
 
