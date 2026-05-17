@@ -43,6 +43,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -82,7 +83,7 @@ def raw_probabilities(bundle: ModelBundle, df: pd.DataFrame) -> np.ndarray:
 
 def _logit(p: np.ndarray) -> np.ndarray:
     p = np.clip(p, EPS, 1 - EPS)
-    return np.log(p / (1 - p))
+    return np.log(p / (1 - p))  # type: ignore[no-any-return]
 
 
 def fit_platt(p_calib: np.ndarray, y_calib: np.ndarray) -> LogisticRegression:
@@ -93,7 +94,7 @@ def fit_platt(p_calib: np.ndarray, y_calib: np.ndarray) -> LogisticRegression:
 
 
 def apply_platt(lr: LogisticRegression, p: np.ndarray) -> np.ndarray:
-    return lr.predict_proba(_logit(p).reshape(-1, 1))[:, 1]
+    return lr.predict_proba(_logit(p).reshape(-1, 1))[:, 1]  # type: ignore[no-any-return]
 
 
 def fit_isotonic(
@@ -102,7 +103,7 @@ def fit_isotonic(
     y_min: float | None = None,
     y_max: float | None = None,
 ) -> IsotonicRegression:
-    kw: dict = {"out_of_bounds": "clip", "increasing": True}
+    kw: dict[str, Any] = {"out_of_bounds": "clip", "increasing": True}
     if y_min is not None:
         kw["y_min"] = y_min
     if y_max is not None:
@@ -112,7 +113,7 @@ def fit_isotonic(
     return iso
 
 
-def metrics(y: np.ndarray, p: np.ndarray) -> dict:
+def metrics(y: np.ndarray, p: np.ndarray) -> dict[str, float]:
     pc = np.clip(p, EPS, 1 - EPS)
     return {
         "n": len(y),
@@ -147,7 +148,7 @@ def ece_mce(p: np.ndarray, y: np.ndarray, n_bins: int = 10) -> tuple[float, floa
     return float(ece_v), float(mce_v)
 
 
-def reliability_rows(p: np.ndarray, y: np.ndarray, n_bins: int) -> list[dict]:
+def reliability_rows(p: np.ndarray, y: np.ndarray, n_bins: int) -> list[dict[str, Any]]:
     """Per-bin reliability for the lowest and highest quintiles, n_bins each.
 
     Returns rows with ``bin``, ``n``, ``p_lo``, ``p_hi``, ``mean_p``,
@@ -156,7 +157,7 @@ def reliability_rows(p: np.ndarray, y: np.ndarray, n_bins: int) -> list[dict]:
     return _reliability(p, y, n_bins)
 
 
-def _reliability(p: np.ndarray, y: np.ndarray, n_bins: int) -> list[dict]:
+def _reliability(p: np.ndarray, y: np.ndarray, n_bins: int) -> list[dict[str, Any]]:
     bins = pd.qcut(p, n_bins, labels=False, duplicates="drop")
     out = []
     for b in sorted(np.unique(bins)):
@@ -177,7 +178,9 @@ def _reliability(p: np.ndarray, y: np.ndarray, n_bins: int) -> list[dict]:
     return out
 
 
-def tail_reliability(p: np.ndarray, y: np.ndarray, n_bins_overall: int = 20) -> list[dict]:
+def tail_reliability(
+    p: np.ndarray, y: np.ndarray, n_bins_overall: int = 20
+) -> list[dict[str, Any]]:
     """Bin into 20 quantiles. Caller inspects top/bottom rows."""
     return _reliability(p, y, n_bins_overall)
 
