@@ -2,13 +2,21 @@
 
 ## Purpose
 
-XGBoost mulligan-recommendation model. Consumes the upstream
-feature row built by `packages/features` and the simulator's
-per-row castability aggregates, predicts P(win | this hand,
-context), and compares keep vs. mulligan to produce the
-recommendation.
+XGBoost mulligan-recommendation model. Two parallel models share most of
+the upstream pipeline:
 
-Five logical layers, landing as five sequential PRs:
+* **Win model** — predicts P(win | this hand, context) from 17Lands
+  game-data rows; labels are game outcomes.
+* **Choice model** — predicts P(skilled player would keep | this hand,
+  context) from 17Lands replay-data mulligan decisions, filtered to
+  competent players; labels are keep/mull choices.
+
+Both flow through `packages/features` and the simulator's per-row
+castability aggregates. The choice pipeline reuses kept-hand
+simulations from the win pipeline's cache so only mulled-away hands
+need fresh sims.
+
+Win-model layers (PRs 1-5):
 
 ```
 src/mulligan_coach_model/
@@ -17,6 +25,16 @@ src/mulligan_coach_model/
 ├── baseline.py         # PR 3: saturated-cell logistic regression -> base_margin
 ├── train.py            # PR 4: XGBoost fit + serialization (no post-hoc calibrator)
 └── inference.py        # PR 5: predict(...) -> P(win) + recommend(...) keep-vs-mull
+```
+
+Choice-model layers (added later, mirror the win-model structure):
+
+```
+src/mulligan_coach_model/
+├── choice_rows.py            # mulligan_decisions parquet -> ChoiceRow tuples (with player filter)
+├── choice_feature_matrix.py  # cache-aware materialiser (reuses kept-hand sims)
+├── choice_train.py           # XGBoost on was_kept label (no baseline)
+└── choice_inference.py       # predict_keep_probability(...) -> P(keep)
 ```
 
 ## Why residualize on context
@@ -318,6 +336,133 @@ After all five PRs merge, the full pipeline runs as:
 The `tests/test_inference.py::test_recommend_produces_valid_recommendation`
 integration test exercises 1-4 end-to-end on synthetic data; it's
 the canonical proof that the pipeline composes correctly.
+
+## Choice (keep/mull) model
+
+The choice pipeline answers a different question than the win model:
+"what would a *competent player* decide to do with this hand?" rather
+than "what is the win probability if we keep?"
+
+### Why both
+
+The two probabilities are independent signals:
+
+* **P(win)** — useful for raw expected-value reasoning. Calibrated on
+  game outcomes across all players (after baseline residualisation).
+* **P(keep)** — useful as a sanity check or ensemble component, and as
+  the primary signal when callers care about decision similarity rather
+  than absolute outcome quality. Trained on the *decisions* of
+  skilled-enough players, so it captures human intuition about
+  keepability that the win model would have to derive indirectly.
+
+Both share the same upstream `simulate -> build_feature_row` chain, so
+running them together costs one sim per hand (call
+`predict_keep_probability_from_feature_row` on the already-built row).
+
+### Data source
+
+Labels come from `scripts/mulligan_decisions/build_dataset.py`, which
+extracts every candidate opening hand (kept AND mulliganed) from the
+17Lands replay-data CSVs into per-set parquets at
+`data/processed/seventeenlands/mulligan_decisions/{SET}.{EVENT}.parquet`.
+Unlike `game_data` (which only records the final kept hand), `replay_data`
+captures the actual mulligan choices the player made.
+
+### Player-skill filter (`choice_rows.should_keep_player`)
+
+We drop a decision row when **both** of:
+
+* The player has played at least `min_n_games_to_judge` (default 50)
+  games in the format (so we have a meaningful sample), AND
+* Their lifetime win rate is strictly below `min_win_rate` (default
+  0.50).
+
+When either signal is unknown, we keep the row — can't judge them as
+bad without both. This is a "remove the known-bad" filter rather than
+a "keep only the known-good" filter, so it preserves most of the data
+while pruning the tail that's most likely to mull badly. Both
+thresholds are CLI-configurable on
+`packages/model/scripts/materialize_choice_features.py`.
+
+### Kept-hand simulation reuse (`choice_feature_matrix.KeptHandCache`)
+
+Every `was_kept=True` decision row's underlying `(hand, deck,
+mulligan_number)` is *also* the hand the player actually played, which
+the win-model pipeline has already simulated and turned into a
+200-column feature row at
+`data/processed/model_training/{SET}/{EVENT}/`. The choice
+materialiser loads that cache once per format (~1 GB DataFrame for a
+TLA-sized format), looks up each kept-hand decision by `(draft_id,
+match_number, game_number)`, and reuses the cached features
+bit-identically — only swapping the win-model's `won` label for the
+choice model's `was_kept` label and updating the context columns.
+
+Mulled-away hands (`was_kept=False`) and any cache misses fall back
+through the same `simulate -> build_feature_row` chain the
+fresh-compute path uses. In TLA's dataset this is a ~10x compute
+reduction: about 63k mulled hands to simulate vs 626k total decision
+rows.
+
+Bit-identical reuse only works because:
+
+* The simulator's seed is deterministic in `(draft_id, match_number,
+  game_number)` — same row in the win-model cache and the choice
+  materialiser produces the same aggregate.
+* `build_feature_row` is pure given its inputs and the simulator
+  aggregate. The kept-hand row's `mulligan_number` in the cache
+  equals `num_mulligans_in_game`, which by construction equals the
+  ChoiceRow's `mulligan_number` for `was_kept=True` rows.
+
+### Why no baseline residualization
+
+The win model strips player-skill + opp-mulligan variance via a
+saturated-cell logistic baseline because game outcome is heavily
+confounded by skill (a brilliant keep loses if the player misplays).
+For the choice model the label is the player's *decision*, not the
+outcome. After filtering to competent players upstream, the remaining
+decisions are a population of competent choices and the natural
+"baseline" is dominated by `mulligan_number`, which XGBoost picks up
+directly as a feature. Layering a separate baseline would be
+redundant and would require a context column the choice model
+shouldn't need at inference time.
+
+### Choice-model output schema
+
+Same 200 features as the win-model cache, plus:
+
+* `was_kept` — the label.
+* `num_mulligans_in_game` — context for audit (not a feature; would
+  be label-leaking at inference because we don't know the final
+  mulligan count when the decision is being made).
+* `user_n_games_raw`, `user_wr_raw` — raw 17Lands buckets for
+  filter-audit. Not features.
+* `opp_mulligan_count_if_known`, `opp_mulligan_number`,
+  `mulligan_number`, `expansion`, `event_type`, `draft_id`,
+  `build_index`, `match_number`, `game_number` — same meaning as the
+  win-model cache.
+
+### Choice-model run order
+
+1. `scripts/mulligan_decisions/build_dataset.py --sets TLA TMT ECL SOS`
+   — pulls 17Lands replay CSVs into `mulligan_decisions/` parquets.
+2. `packages/model/scripts/materialize_choice_features.py --sets TLA
+   TMT ECL SOS --n-workers 8` — builds
+   `data/processed/choice_training/{SET}/{EVENT}/chunk_*.parquet`
+   atomically + resumably, with kept-hand sim reuse.
+3. `packages/model/scripts/train_choice_model.py --sets TLA TMT ECL
+   SOS --output-dir models/choice_v1` — trains XGBoost on the
+   combined chunks; writes `xgboost.json` + `metadata.json`.
+
+### Choice-model artifacts
+
+Two files in `models/<name>/`:
+
+* `xgboost.json` — booster in its native JSON format.
+* `metadata.json` — feature names + per-split metrics + best
+  iteration + seed.
+
+No `baseline.json` because the choice model doesn't use one. Load
+via `ChoiceModelBundle.load(model_dir)`.
 
 ## scripts/
 

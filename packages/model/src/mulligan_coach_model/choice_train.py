@@ -1,0 +1,394 @@
+"""XGBoost training entry point for the choice (keep/mull) model.
+
+End-to-end pipeline:
+
+1. Load one or more choice-model feature parquets (output of
+   :func:`choice_feature_matrix.materialize_choice_feature_matrix`).
+2. Grouped train / val / test split by ``draft_id`` — same rationale
+   as the win model: one strong drafter has multiple games, so a
+   row-level split would leak the player's tendencies across folds.
+3. Fit XGBoost with early stopping on the validation split.
+4. Evaluate on the test split: log-loss, Brier, accuracy.
+5. Optionally persist ``xgboost.json`` + ``metadata.json`` to
+   ``output_dir``.
+
+Why no baseline residualization
+--------------------------------
+
+The win model uses a saturated-cell logistic baseline to strip
+player-skill + opp-mulligan variance before XGBoost sees the row.
+That made sense because game outcome is heavily confounded by player
+skill — even a brilliant keep loses if the player misplays.
+
+For the choice model the label is the player's *decision*, not the
+outcome. After the player-skill filter (we drop known-below-average
+players upstream in :mod:`choice_rows`), the remaining decisions
+are a population of competent choices. The natural baseline — "what
+fraction of decisions at this mulligan level are keeps" — is
+heavily dominated by mulligan_number, which is already a feature
+column XGBoost will pick up directly. Layering a separate baseline
+would be redundant and introduce a context column the choice model
+shouldn't depend on (player skill at *inference* time isn't queryable).
+
+Why a 3-way split (no calibration set)
+---------------------------------------
+
+The win model carries a calibration split as a second held-out eval
+point even though no post-hoc calibrator runs there. For the choice
+model we keep things simple: train / val (for early stopping) / test
+(for the final metric). If a future iteration wants to fit a Platt
+or isotonic calibrator on top, we'll add it as a fourth split then.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import xgboost as xgb
+
+log = logging.getLogger(__name__)
+
+
+# Columns in the choice-model parquet that are NOT features.
+# Kept in sync with the cache schema in :mod:`choice_feature_matrix`.
+_NON_FEATURE_COLUMNS = frozenset(
+    {
+        # Label.
+        "was_kept",
+        # Direct or near-direct leaks of the label. num_mulligans_in_game
+        # equals mulligan_number on kept rows, so it would let the model
+        # cheat at training and break at inference (we don't know the
+        # final mulligan count when the decision is being made).
+        "num_mulligans_in_game",
+        # Identity / split context — not modelling signal.
+        "expansion",
+        "event_type",
+        "draft_id",
+        "build_index",
+        "match_number",
+        "game_number",
+        # Per-row opponent context that the win model used for the
+        # baseline. The conditional feature opp_mulligan_count_if_known
+        # is the XGBoost-visible version; the raw column stays for audit.
+        "opp_mulligan_number",
+        # Per-player skill values — audit only. The choice model is
+        # supposed to predict *good* players' decisions; the filter on
+        # the dataset handles that, the model shouldn't condition on
+        # the skill at inference (which we don't have).
+        "user_n_games_raw",
+        "user_wr_raw",
+    }
+)
+
+
+# ---------------------------------------------------------------------------
+# Public types
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SplitMetrics:
+    """Per-split predicted-vs-observed metrics."""
+
+    log_loss: float
+    brier: float
+    accuracy: float
+    n_rows: int
+    keep_rate: float
+    """Fraction of rows where ``was_kept=True``. The base rate to beat —
+    a model that always predicts "keep" gets this accuracy."""
+
+
+@dataclass(frozen=True)
+class ChoiceTrainingMetadata:
+    """Audit / provenance fields for a fitted choice model."""
+
+    feature_names: tuple[str, ...]
+    train: SplitMetrics
+    val: SplitMetrics
+    test: SplitMetrics
+    best_iteration: int
+    seed: int
+
+
+@dataclass(frozen=True)
+class ChoiceTrainResult:
+    """Bundle returned by :func:`train_choice_model`."""
+
+    booster: xgb.Booster
+    metadata: ChoiceTrainingMetadata
+
+
+# ---------------------------------------------------------------------------
+# Split + metrics helpers
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class _Split:
+    train: np.ndarray
+    val: np.ndarray
+    test: np.ndarray
+
+
+def _grouped_split(
+    draft_ids: pd.Series,
+    *,
+    val_frac: float,
+    test_frac: float,
+    seed: int,
+) -> _Split:
+    """Assign each unique ``draft_id`` to exactly one of three splits.
+
+    Three splits — no calibration set — see module docstring.
+    """
+    for name, val in (("val", val_frac), ("test", test_frac)):
+        if not 0.0 < val < 1.0:
+            raise ValueError(f"{name}_frac must be in (0, 1); got {val!r}")
+    total_eval = val_frac + test_frac
+    if total_eval >= 1.0:
+        raise ValueError(f"val_frac + test_frac must sum to < 1; got {total_eval}")
+
+    unique = draft_ids.unique()
+    rng = np.random.default_rng(seed)
+    shuffled = rng.permutation(unique)
+    n = len(shuffled)
+    n_val = round(n * val_frac)
+    n_test = round(n * test_frac)
+    n_train = n - n_val - n_test
+    if n_train <= 0:
+        raise ValueError("Splits leave no rows for training; reduce val/test fractions.")
+
+    train_ids = set(shuffled[:n_train].tolist())
+    val_ids = set(shuffled[n_train : n_train + n_val].tolist())
+    test_ids = set(shuffled[n_train + n_val :].tolist())
+
+    return _Split(
+        train=draft_ids.isin(train_ids).to_numpy(),
+        val=draft_ids.isin(val_ids).to_numpy(),
+        test=draft_ids.isin(test_ids).to_numpy(),
+    )
+
+
+def _feature_columns(df_columns: Iterable[str]) -> list[str]:
+    """Return columns from the parquet that are XGBoost-visible features.
+
+    Order is stable on the input iteration so the same parquet schema
+    always produces the same ``feature_names`` list.
+    """
+    return [col for col in df_columns if col not in _NON_FEATURE_COLUMNS]
+
+
+def _compute_metrics(y_true: np.ndarray, p_pred: np.ndarray) -> SplitMetrics:
+    """Log-loss / Brier / accuracy / keep-rate on one split."""
+    eps = 1e-7
+    p = np.clip(p_pred, eps, 1.0 - eps)
+    log_loss = float(-(y_true * np.log(p) + (1 - y_true) * np.log(1 - p)).mean())
+    brier = float(((p - y_true) ** 2).mean())
+    accuracy = float(((p >= 0.5).astype(int) == y_true).mean())
+    keep_rate = float(y_true.mean())
+    return SplitMetrics(
+        log_loss=log_loss,
+        brier=brier,
+        accuracy=accuracy,
+        n_rows=len(y_true),
+        keep_rate=keep_rate,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Metadata persistence
+# ---------------------------------------------------------------------------
+
+
+def _metrics_to_dict(m: SplitMetrics) -> dict[str, float | int]:
+    return {
+        "log_loss": m.log_loss,
+        "brier": m.brier,
+        "accuracy": m.accuracy,
+        "n_rows": m.n_rows,
+        "keep_rate": m.keep_rate,
+    }
+
+
+def _save_metadata(metadata: ChoiceTrainingMetadata, path: Path) -> None:
+    payload = {
+        "feature_names": list(metadata.feature_names),
+        "train": _metrics_to_dict(metadata.train),
+        "val": _metrics_to_dict(metadata.val),
+        "test": _metrics_to_dict(metadata.test),
+        "best_iteration": metadata.best_iteration,
+        "seed": metadata.seed,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2))
+
+
+# ---------------------------------------------------------------------------
+# Top-level entry point
+# ---------------------------------------------------------------------------
+
+
+def train_choice_model(
+    *,
+    parquet_paths: Sequence[Path] | Path,
+    output_dir: Path | None = None,
+    val_frac: float = 0.10,
+    test_frac: float = 0.10,
+    n_estimators: int = 500,
+    max_depth: int = 6,
+    learning_rate: float = 0.05,
+    early_stopping_rounds: int = 20,
+    seed: int = 0,
+) -> ChoiceTrainResult:
+    """End-to-end XGBoost training on choice (keep/mull) labels.
+
+    Parameters
+    ----------
+    parquet_paths:
+        One or more choice-model feature parquets. Multiple shards are
+        concatenated, so a multi-format model can be fit in a single call.
+    output_dir:
+        When provided, ``xgboost.json`` + ``metadata.json`` are written
+        here. Created if missing. ``None`` skips persistence (useful in
+        tests that only inspect the in-memory result).
+    val_frac, test_frac:
+        Draft-grouped fractions for the two held-out splits. Training
+        gets the remainder (``1 - val - test``). Default 80/10/10. Each
+        must be in ``(0, 1)`` and they must sum to ``< 1``.
+    n_estimators, max_depth, learning_rate, early_stopping_rounds:
+        XGBoost hyperparameters. Starting defaults match the win model;
+        tune via validation log-loss on real data.
+    seed:
+        Controls the draft assignment and the XGBoost RNG.
+    """
+    paths = [parquet_paths] if isinstance(parquet_paths, Path) else list(parquet_paths)
+    if not paths:
+        raise ValueError("Need at least one parquet path to fit.")
+    log.info("Loading %d choice-feature parquet shard(s)", len(paths))
+    df = pd.concat([pd.read_parquet(p) for p in paths], ignore_index=True)
+    if len(df) == 0:
+        raise ValueError("Loaded an empty feature dataframe; nothing to train on.")
+    log.info(
+        "Loaded %d total rows (keep_rate=%.3f)",
+        len(df),
+        float(df["was_kept"].astype(int).mean()),
+    )
+
+    feature_names = _feature_columns(df.columns)
+    if not feature_names:
+        raise ValueError(
+            "No feature columns found after stripping non-feature columns; "
+            "the parquet schema may have changed."
+        )
+
+    splits = _grouped_split(
+        df["draft_id"],
+        val_frac=val_frac,
+        test_frac=test_frac,
+        seed=seed,
+    )
+    log.info(
+        "Split rows: train=%d val=%d test=%d",
+        int(splits.train.sum()),
+        int(splits.val.sum()),
+        int(splits.test.sum()),
+    )
+
+    X = df[feature_names].astype(float).to_numpy()
+    y = df["was_kept"].astype(int).to_numpy()
+
+    dtrain = xgb.DMatrix(X[splits.train], label=y[splits.train], feature_names=feature_names)
+    dval = xgb.DMatrix(X[splits.val], label=y[splits.val], feature_names=feature_names)
+    dtest = xgb.DMatrix(X[splits.test], label=y[splits.test], feature_names=feature_names)
+
+    params = {
+        "objective": "binary:logistic",
+        "eval_metric": "logloss",
+        "tree_method": "hist",
+        "max_depth": max_depth,
+        "eta": learning_rate,
+        "seed": seed,
+    }
+    log.info("Training XGBoost: %s", params)
+    booster = xgb.train(
+        params,
+        dtrain,
+        num_boost_round=n_estimators,
+        evals=[(dtrain, "train"), (dval, "val")],
+        early_stopping_rounds=early_stopping_rounds,
+        verbose_eval=False,
+    )
+    best_iteration = int(booster.best_iteration)
+    iter_range = (0, best_iteration + 1)
+    p_train = booster.predict(dtrain, iteration_range=iter_range)
+    p_val = booster.predict(dval, iteration_range=iter_range)
+    p_test = booster.predict(dtest, iteration_range=iter_range)
+
+    metadata = ChoiceTrainingMetadata(
+        feature_names=tuple(feature_names),
+        train=_compute_metrics(y[splits.train], p_train),
+        val=_compute_metrics(y[splits.val], p_val),
+        test=_compute_metrics(y[splits.test], p_test),
+        best_iteration=best_iteration,
+        seed=seed,
+    )
+    log.info(
+        "Done. test_log_loss=%.4f test_brier=%.4f test_accuracy=%.4f keep_rate=%.3f",
+        metadata.test.log_loss,
+        metadata.test.brier,
+        metadata.test.accuracy,
+        metadata.test.keep_rate,
+    )
+
+    result = ChoiceTrainResult(booster=booster, metadata=metadata)
+    if output_dir is not None:
+        save_choice_train_result(result, output_dir)
+    return result
+
+
+def save_choice_train_result(result: ChoiceTrainResult, output_dir: Path) -> None:
+    """Write a :class:`ChoiceTrainResult` to disk under ``output_dir``.
+
+    Two files (no baseline.json — the choice model doesn't use one):
+
+    * ``xgboost.json`` — booster in its native JSON format.
+    * ``metadata.json`` — feature names + per-split metrics.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    result.booster.save_model(str(output_dir / "xgboost.json"))
+    _save_metadata(result.metadata, output_dir / "metadata.json")
+    log.info("Saved choice-model artifacts to %s", output_dir)
+
+
+def load_choice_train_result(model_dir: Path) -> ChoiceTrainResult:
+    """Inverse of :func:`save_choice_train_result`."""
+    booster = xgb.Booster()
+    booster.load_model(str(model_dir / "xgboost.json"))
+    metadata_path = model_dir / "metadata.json"
+    payload = json.loads(metadata_path.read_text())
+
+    def _mk_split(d: dict[str, float | int]) -> SplitMetrics:
+        return SplitMetrics(
+            log_loss=float(d["log_loss"]),
+            brier=float(d["brier"]),
+            accuracy=float(d["accuracy"]),
+            n_rows=int(d["n_rows"]),
+            keep_rate=float(d["keep_rate"]),
+        )
+
+    metadata = ChoiceTrainingMetadata(
+        feature_names=tuple(payload["feature_names"]),
+        train=_mk_split(payload["train"]),
+        val=_mk_split(payload["val"]),
+        test=_mk_split(payload["test"]),
+        best_iteration=int(payload["best_iteration"]),
+        seed=int(payload["seed"]),
+    )
+    return ChoiceTrainResult(booster=booster, metadata=metadata)
