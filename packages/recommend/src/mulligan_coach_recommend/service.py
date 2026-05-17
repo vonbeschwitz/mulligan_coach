@@ -66,10 +66,12 @@ from mulligan_coach_features import (
     shrink_stats,
     zscore_stats,
 )
-from mulligan_coach_model import ModelBundle, Recommendation, predict_win_probability, recommend
+from mulligan_coach_features.categories import cmc as _card_cmc
+from mulligan_coach_features.categories import is_land as _card_is_land
+from mulligan_coach_model import ModelBundle, Recommendation, recommend
 from mulligan_coach_model.feature_matrix import _library_from_deck
 from mulligan_coach_model.inference import _predict_proba
-from mulligan_coach_simulation import draw_smoothed_hand, simulate
+from mulligan_coach_simulation import AggregateStats, draw_smoothed_hand, simulate
 from mulligan_coach_simulation.runtime import Card
 
 log = logging.getLogger(__name__)
@@ -212,6 +214,115 @@ class MulliganArmResult:
 
 
 @dataclass(frozen=True)
+class HandCardPlayability:
+    """Per-hand-card castability summary surfaced in the explanation panel.
+
+    Lands populate ``p_castable_by_turn`` with zeros — the simulator
+    plays lands, it doesn't "cast" them — and the template renders
+    them with a dash. ``mana_value`` is ``None`` for lands as well.
+    """
+
+    name: str
+    is_land: bool
+    mana_value: int | None
+    # P(card castable on turn T | drawn by turn T), averaged across
+    # the keep arm's Monte Carlo runs. Length-4 tuple for T = 1..4.
+    p_castable_by_turn: tuple[float, float, float, float]
+
+
+@dataclass(frozen=True)
+class RecommendationExplanation:
+    """Playability stats from the keep arm's Monte Carlo run.
+
+    Surfaced under the verdict so the user can see *why* the model
+    rated the hand the way it did. All values come straight from the
+    same ``AggregateStats`` and feature row the model consumed — no
+    extra simulation cost.
+
+    Three sections, picked to cover the top of the trained model's
+    feature-importance ranking (see ``models/all3_v1`` feature
+    importance dump) while staying readable to a non-technical user:
+
+    * **Mana base** — ``p_land_drop_by_turn_{2,3,4}`` plus
+      ``expected_mana_count_turn_4``. Captures land screw / flood.
+    * **Curve hits** — five "did you have something to do on this
+      turn?" probabilities pulled directly from the castability
+      grid: T1 play, T2 creature, T2 removal, T3 small creature
+      (the #2 feature overall by gain), and a T4 3-drop slot.
+    * **Color fixing** — ``avg_pct_hand_spells_with_colored_mana_by_turn_4``,
+      the share of hand spells whose colored cost is castable by T4.
+    * **Per-card playability** — one row per hand card with its
+      per-turn castability. Lets the user see which cards anchor the
+      keep value and which sit dead in hand.
+    """
+
+    p_make_2nd_land_by_t2: float
+    p_make_3rd_land_by_t3: float
+    p_make_4th_land_by_t4: float
+    expected_mana_at_t4: float
+    p_cast_any_spell_t1: float
+    p_cast_any_creature_t2: float
+    p_cast_any_removal_t2: float
+    p_cast_small_creature_by_t3: float
+    p_cast_3drop_by_t4: float
+    color_fix_by_t4: float
+    hand_cards: tuple[HandCardPlayability, ...]
+
+
+def _build_explanation(
+    *,
+    hand: list[ParsedCard],
+    aggregate: AggregateStats,
+    feature_row: dict[str, float],
+) -> RecommendationExplanation:
+    """Pull the explanatory subset out of the per-card stats + feature row.
+
+    The feature row is the canonical source of truth for the aggregate
+    castability numbers — it's the exact dict the model consumed, so
+    showing values from it guarantees the user sees the same signal
+    the prediction was built on. Per-card castability comes from the
+    aggregate directly because the feature row aggregates across cards
+    and loses the per-card breakdown.
+    """
+    per_card: list[HandCardPlayability] = []
+    for card in hand:
+        cs = aggregate.by_card_name.get(card.name)
+        if cs is None:
+            ps: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+        else:
+            ps = (
+                float(cs.p_castable_by_turn[0]),
+                float(cs.p_castable_by_turn[1]),
+                float(cs.p_castable_by_turn[2]),
+                float(cs.p_castable_by_turn[3]),
+            )
+        is_land = _card_is_land(card)
+        per_card.append(
+            HandCardPlayability(
+                name=card.name,
+                is_land=is_land,
+                mana_value=None if is_land else int(_card_cmc(card)),
+                p_castable_by_turn=ps,
+            )
+        )
+    return RecommendationExplanation(
+        p_make_2nd_land_by_t2=float(feature_row.get("p_land_drop_by_turn_2", 0.0)),
+        p_make_3rd_land_by_t3=float(feature_row.get("p_land_drop_by_turn_3", 0.0)),
+        p_make_4th_land_by_t4=float(feature_row.get("p_land_drop_by_turn_4", 0.0)),
+        expected_mana_at_t4=float(feature_row.get("expected_mana_count_turn_4", 0.0)),
+        p_cast_any_spell_t1=float(feature_row.get("p_any_any_spell_t1", 0.0)),
+        p_cast_any_creature_t2=float(feature_row.get("p_any_creature_t2", 0.0)),
+        p_cast_any_removal_t2=float(feature_row.get("p_any_removal_t2", 0.0)),
+        p_cast_small_creature_by_t3=float(feature_row.get("p_any_creature_mv_0_2_t3", 0.0)),
+        p_cast_3drop_by_t4=float(feature_row.get("p_any_any_spell_mv_3_t4", 0.0)),
+        color_fix_by_t4=float(
+            feature_row.get("avg_pct_hand_spells_with_colored_mana_by_turn_4", 0.0)
+        ),
+        hand_cards=tuple(per_card),
+    )
+
+
+@dataclass(frozen=True)
 class AsymmetricRecommendation:
     """Result of :meth:`RecommendationService.recommend_asymmetric`.
 
@@ -254,6 +365,9 @@ class AsymmetricRecommendation:
     mulligan_arm_raw_mean: float
     mulligan_arm_floor: float | None
     n_samples_below_floor: int
+    # Why-the-verdict panel: playability stats from the keep arm's
+    # sim, surfaced under the verdict on the website.
+    explanation: RecommendationExplanation
 
 
 @dataclass(frozen=True)
@@ -592,7 +706,7 @@ class RecommendationService:
         # Keep arm inline. Same fixed seed-pattern as the legacy
         # recommend() — uses the cache key's stable seed so the keep
         # arm is also reproducible for a given (deck, hand) request.
-        p_keep = self._compute_keep_arm(
+        p_keep, keep_aggregate, keep_feature_row = self._compute_keep_arm(
             hand=hand,
             deck=deck,
             on_the_play=on_the_play,
@@ -611,6 +725,9 @@ class RecommendationService:
         delta = p_keep - p_mull
         adjusted_delta = delta - MULLIGAN_BIAS
         verdict = _classify_verdict(adjusted_delta)
+        explanation = _build_explanation(
+            hand=hand, aggregate=keep_aggregate, feature_row=keep_feature_row
+        )
         return AsymmetricRecommendation(
             verdict=verdict,
             keep_win_probability=p_keep,
@@ -628,6 +745,7 @@ class RecommendationService:
             mulligan_arm_raw_mean=mull_result.raw_mean,
             mulligan_arm_floor=mull_result.floor_value,
             n_samples_below_floor=mull_result.n_samples_below_floor,
+            explanation=explanation,
         )
 
     # -----------------------------------------------------------------
@@ -645,24 +763,57 @@ class RecommendationService:
         set_code: str,
         n_sims: int,
         seed: int,
-    ) -> float:
-        """Single :func:`predict_win_probability` call for the kept hand."""
+    ) -> tuple[float, AggregateStats, dict[str, float]]:
+        """Predict P(win) for the kept hand and return the sim aggregate too.
+
+        Inlines the body of :func:`predict_win_probability` so we can
+        keep the ``AggregateStats`` and the assembled feature row —
+        the explanation panel reads playability stats from them and
+        we don't want to pay for a second simulate just to surface
+        the same numbers. Same chain (simulate -> build_feature_row
+        -> baseline margin -> XGBoost) as ``predict_win_probability``;
+        :func:`mulligan_coach_model.tests.test_inference` covers the
+        chain end-to-end.
+        """
         assert self.bundle is not None  # checked by caller
         stats = self.stats_by_set.get(set_code)
-        return predict_win_probability(
-            self.bundle,
-            hand=hand,
-            deck=deck,
+        shrunk = stats.shrunk if stats is not None else {}
+        zscores = stats.zscores if stats is not None else {}
+
+        library = _library_from_deck(tuple(hand), tuple(deck))
+        aggregate = simulate(
+            list(hand),
+            list(library),
             on_the_play=on_the_play,
-            mulligan_number=mulligan_number,
-            opp_mulligan_number=opp_mulligan_number,
-            event_type=_DEFAULT_EVENT_TYPE,
-            set_code=set_code,
-            shrunk=stats.shrunk if stats is not None else {},
-            zscores=stats.zscores if stats is not None else {},
-            n_sims=n_sims,
+            n_runs=n_sims,
             seed=seed,
         )
+        row = build_feature_row(
+            hand=list(hand),
+            deck=list(deck),
+            aggregate_stats=aggregate,
+            shrunk=shrunk,
+            zscores=zscores,
+            on_the_play=on_the_play,
+            mulligan_number=mulligan_number,
+            event_type=_DEFAULT_EVENT_TYPE,
+            set_code=set_code,
+        )
+        # Conditional opp_mulligan feature: NaN on the play / when
+        # unknown, value on the draw — matches predict_win_probability.
+        if on_the_play or opp_mulligan_number is None:
+            row["opp_mulligan_count_if_known"] = float("nan")
+        else:
+            row["opp_mulligan_count_if_known"] = float(opp_mulligan_number)
+
+        base_margin = self.bundle.baseline.margin(
+            user_wr_bucket=None,
+            user_n_games_bucket=None,
+            on_the_play=on_the_play,
+            opp_mulligan_number=opp_mulligan_number,
+        )
+        p_win = _predict_proba(self.bundle, row, base_margin)
+        return p_win, aggregate, row
 
     def _compute_mulligan_arm(
         self,

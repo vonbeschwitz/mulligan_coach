@@ -521,6 +521,116 @@ button.ghost {
   color: var(--text);
 }
 
+/* ---- Recommendation explanation panel --------------------------- */
+/* "Why this hand plays out the way it does": three sections of
+   playability stats from the keep arm's sim. The first two are
+   short definition lists (label : value); the third is a per-card
+   castability table. Layout is full-width inside .rec-result —
+   the parent uses align-items:center for the verdict block, so
+   we explicitly stretch this panel back to full width and left-
+   align its text. */
+
+.rec-explanation {
+  width: 100%;
+  text-align: left;
+  margin-top: 4px;
+  padding: 16px 18px;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius);
+}
+
+.rec-explanation h3 {
+  font-size: 1rem;
+  color: var(--accent);
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+
+.rec-explanation h4 {
+  font-size: 0.9rem;
+  color: var(--text);
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.rec-explanation-blurb {
+  margin-bottom: 12px;
+}
+
+.rec-explanation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.rec-explanation-section dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  font-size: 0.9rem;
+}
+
+.rec-explanation-section dt {
+  color: var(--text-muted);
+}
+
+.rec-explanation-section dd {
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-card-table-heading {
+  margin-top: 8px;
+}
+
+.rec-card-table-blurb {
+  margin-bottom: 8px;
+}
+
+.rec-card-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.rec-card-table th,
+.rec-card-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-card-table th {
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.rec-card-table th.rec-card-name,
+.rec-card-table td.rec-card-name {
+  text-align: left;
+}
+
+.rec-card-table th.rec-card-mv,
+.rec-card-table td.rec-card-mv {
+  text-align: center;
+}
+
+/* Lands aren't cast — gray them out so the dashes don't look like
+   missing data. */
+.rec-card-table tr.rec-card-land {
+  color: var(--text-muted);
+}
+
 /* ---- HTMX indicator --------------------------------------------- */
 
 .htmx-indicator {
