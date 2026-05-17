@@ -6,6 +6,12 @@
      (model not loaded, wrong sizes, hand-resolve mismatches).
    * Result mode: Keep/Mulligan verdict + both P(win) arms +
      delta + context summary.
+
+   The verdict label has four levels (clear vs marginal x keep vs
+   mulligan), driven by `adjusted_delta` after a +MULLIGAN_BIAS
+   shift on the mulligan arm. The raw P(win) numbers shown to the
+   user remain the model's actual predictions; the bias only moves
+   the verdict cutoff.
 #}
 
 {% if error %}
@@ -18,23 +24,31 @@
   {% set keep_pct = (rec.keep_win_probability * 100) | round(1) %}
   {% set mull_pct = (rec.mulligan_win_probability * 100) | round(1) %}
   {% set delta_pp = (rec.delta * 100) | round(1) %}
+  {% set adj_delta_pp = (rec.adjusted_delta * 100) | round(1) %}
+  {% set bias_pp = (rec.mulligan_bias * 100) | round(1) %}
+  {% set threshold_pp = (rec.margin_threshold * 100) | round(1) %}
+  {% set verdict_label = {
+      'clear_keep': 'Clear keep',
+      'marginal_keep': 'Marginal keep',
+      'marginal_mulligan': 'Marginal mulligan',
+      'clear_mulligan': 'Clear mulligan',
+  }[verdict] %}
+  {% set keep_side = verdict in ('clear_keep', 'marginal_keep') %}
 
   <div class="rec-result">
-    <div class="rec-verdict rec-verdict-{{ verdict }}">
+    <div class="rec-verdict rec-verdict-{{ verdict.replace('_', '-') }}">
       <span class="rec-label">Recommendation</span>
-      <span class="rec-value">
-        {% if verdict == 'keep' %}Keep this hand{% else %}Mulligan{% endif %}
-      </span>
+      <span class="rec-value">{{ verdict_label }}</span>
     </div>
 
     <div class="rec-comparison">
-      <div class="rec-arm {% if verdict == 'keep' %}rec-arm-better{% endif %}">
+      <div class="rec-arm {% if keep_side %}rec-arm-better{% endif %}">
         <span class="rec-arm-label">Keep this hand</span>
         <span class="rec-arm-value">{{ keep_pct }}%</span>
         <span class="muted small">P(win) at mulligan number {{ rec.mulligan_number_from }}</span>
       </div>
       <div class="rec-vs">vs</div>
-      <div class="rec-arm {% if verdict == 'mulligan' %}rec-arm-better{% endif %}">
+      <div class="rec-arm {% if not keep_side %}rec-arm-better{% endif %}">
         <span class="rec-arm-label">Mulligan to {{ 7 - rec.mulligan_number_to }}</span>
         <span class="rec-arm-value">{{ mull_pct }}%</span>
         <span class="muted small">average P(win) over fresh draws</span>
@@ -42,11 +56,13 @@
     </div>
 
     <p class="rec-delta">
-      Keep minus mulligan: <strong>{{ '+' if rec.delta >= 0 else '' }}{{ delta_pp }} pp</strong>.
-      {% if rec.delta|abs < 0.005 %}
-        The two arms are within noise of each other — flip a coin.
-      {% elif rec.delta|abs < 0.02 %}
-        Small edge; consider game context (matchup, opponent count) before deciding.
+      Keep minus mulligan: <strong>{{ '+' if rec.delta >= 0 else '' }}{{ delta_pp }} pp</strong>
+      &middot; after the {{ bias_pp }} pp mulligan bias:
+      <strong>{{ '+' if rec.adjusted_delta >= 0 else '' }}{{ adj_delta_pp }} pp</strong>
+      ({% if verdict.startswith('clear_') %}outside{% else %}inside{% endif %}
+      the &plusmn;{{ threshold_pp }} pp marginal band).
+      {% if verdict.startswith('marginal_') %}
+        Game context (matchup, mana base, opponent's plan) should drive the final call.
       {% endif %}
     </p>
 

@@ -172,7 +172,42 @@ because the simulator releases the GIL through numpy and XGBoost
 predict is C-side; a process pool would parallelise more cleanly
 but adds pickle / spawn overhead that isn't worth it at this scale.
 
-### 3. Deeper-mulligan floor heuristic
+### 3. Mulligan bias + four-way verdict
+
+The raw model under-flags mulligans relative to skilled players:
+on ~9.7k real replay-data decisions (n_games>=100, WR>=0.58) the
+unbiased model recommended mulligan on 3.7% of hands vs the
+players' actual 8.7%. The marginal hands the model would add at
+each percentage point of bias have below-format-average WR out
+to about 5 pp, beyond which the bias starts pulling in
+ordinary keeps.
+
+`recommendation.py` applies a **+4 pp bias** (`MULLIGAN_BIAS =
+0.04`) to the mulligan arm before the verdict comparison. At
+that cutoff the website's marginal mulligan frequency lines up
+with skilled-player behaviour (predicted 8.3% vs actual 8.7%
+in the benchmark), and the cumulative player-kept hands flipped
+to "website mull" run a 0.453 WR vs the population's 0.650.
+
+A **+/-3 pp margin band** (`MARGIN_THRESHOLD = 0.03`) around the
+biased cutoff splits the verdict into four levels:
+
+* `clear_keep` -> `adjusted_delta >= +0.03`
+* `marginal_keep` -> `0 <= adjusted_delta < +0.03`
+* `marginal_mulligan` -> `-0.03 < adjusted_delta < 0`
+* `clear_mulligan` -> `adjusted_delta <= -0.03`
+
+where `adjusted_delta = p_keep - (p_mull + 0.04)`. The raw arms
+shown to the user are still the model's actual P(win) numbers;
+only the verdict reads the adjusted delta. The template surfaces
+both deltas (raw and bias-adjusted) and the margin band so the
+user can see why the recommendation came out the way it did.
+
+Empirical motivation lives in
+`models/all3_v1/replay_mulligan_benchmark.log` and the per-row
+parquet alongside it.
+
+### 4. Deeper-mulligan floor heuristic
 
 A drawn mulligan-arm sample whose P(win) is well below the average
 isn't an outcome a player would actually keep — they'd just

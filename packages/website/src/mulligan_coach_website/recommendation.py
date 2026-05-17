@@ -94,6 +94,24 @@ DEFAULT_N_SIMS_KEEP = 1000
 DEFAULT_N_SIMS_PER_MULLIGAN = 40
 DEFAULT_N_MULLIGAN_SAMPLES = 50
 
+# Empirical bias added to the mulligan arm before the keep-vs-mull
+# comparison. Calibrated against ~9.7k replay-data decisions by
+# skilled players (n_games>=100, WR>=0.58): the un-biased model
+# flagged mulligan on only 3.7% of hands vs 8.7% actual, and the
+# marginal hands the model adds at each percentage point of bias
+# have WR < format-average out to ~5pp. Picking 4pp lines the
+# website's marginal mulligan frequency up with skilled-player
+# behaviour while keeping the marginal-band hands clearly weaker
+# than typical keeps. See ``replay_mulligan_benchmark.log``.
+MULLIGAN_BIAS = 0.04
+
+# Width of the "marginal" band around the verdict cutoff. If
+# ``|p_keep - (p_mull + MULLIGAN_BIAS)| < MARGIN_THRESHOLD`` the
+# verdict is qualified as "marginal" rather than "clear" — the
+# arms are close enough that game-context (matchup, mana base,
+# opponent's known plan) should drive the call.
+MARGIN_THRESHOLD = 0.03
+
 # Highest mulligan number the model can accept. Mulligan-to-0 (mulled
 # six times, hand of one card) is the deepest a player can keep in
 # Limited. Mulligan-from-6 raises in mulligan_coach_model.recommend()
@@ -201,12 +219,31 @@ class AsymmetricRecommendation:
     diagnostic fields about the sim budget used, the deeper-mulligan
     floor adjustment, and whether the mulligan arm came from the
     prefetch cache.
+
+    Verdict semantics
+    -----------------
+    The comparison adds :data:`MULLIGAN_BIAS` to the mulligan arm
+    before deciding (an empirical correction; see the constant's
+    docstring). ``adjusted_delta = p_keep - (p_mull + MULLIGAN_BIAS)``
+    is what the verdict reads:
+
+    * ``adjusted_delta >= MARGIN_THRESHOLD``  -> ``"clear_keep"``
+    * ``0 <= adjusted_delta < MARGIN_THRESHOLD`` -> ``"marginal_keep"``
+    * ``-MARGIN_THRESHOLD < adjusted_delta < 0`` -> ``"marginal_mulligan"``
+    * ``adjusted_delta <= -MARGIN_THRESHOLD`` -> ``"clear_mulligan"``
+
+    ``delta`` is kept as the raw ``p_keep - p_mull`` so callers and
+    the template can show both the unadjusted comparison and the
+    adjusted decision.
     """
 
-    verdict: Literal["keep", "mulligan"]
+    verdict: Literal["clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan"]
     keep_win_probability: float
     mulligan_win_probability: float
     delta: float
+    adjusted_delta: float
+    mulligan_bias: float
+    margin_threshold: float
     mulligan_number_from: int
     mulligan_number_to: int
     n_sims_keep: int
@@ -235,6 +272,24 @@ class _MulliganCacheKey:
     opp_mulligan_number: int | None
     n_sims_per_mulligan: int
     n_mulligan_samples: int
+
+
+def _classify_verdict(
+    adjusted_delta: float,
+) -> Literal["clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan"]:
+    """Map ``adjusted_delta`` -> one of four verdict labels.
+
+    Ties (``adjusted_delta == 0`` exactly) resolve to
+    ``"marginal_keep"`` — keeping is the lower-variance choice when
+    the arms are within rounding of each other.
+    """
+    if adjusted_delta >= MARGIN_THRESHOLD:
+        return "clear_keep"
+    if adjusted_delta >= 0:
+        return "marginal_keep"
+    if adjusted_delta > -MARGIN_THRESHOLD:
+        return "marginal_mulligan"
+    return "clear_mulligan"
 
 
 def _deck_signature(deck: list[ParsedCard]) -> tuple[str, ...]:
@@ -554,12 +609,16 @@ class RecommendationService:
         p_mull = mull_result.floored_mean
 
         delta = p_keep - p_mull
-        verdict: Literal["keep", "mulligan"] = "keep" if delta >= 0 else "mulligan"
+        adjusted_delta = delta - MULLIGAN_BIAS
+        verdict = _classify_verdict(adjusted_delta)
         return AsymmetricRecommendation(
             verdict=verdict,
             keep_win_probability=p_keep,
             mulligan_win_probability=p_mull,
             delta=delta,
+            adjusted_delta=adjusted_delta,
+            mulligan_bias=MULLIGAN_BIAS,
+            margin_threshold=MARGIN_THRESHOLD,
             mulligan_number_from=mulligan_number,
             mulligan_number_to=mulligan_number + 1,
             n_sims_keep=n_sims_keep,

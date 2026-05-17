@@ -422,13 +422,33 @@ button.ghost {
   border: 2px solid;
 }
 
-.rec-verdict-keep {
+/* Clear verdicts use the full keep/mulligan colour. Marginal
+   verdicts share the colour but lose saturation (dashed border +
+   muted background) so the user can see at a glance that the
+   recommendation isn't strong. */
+.rec-verdict-clear-keep {
   border-color: var(--keep);
   background: var(--keep-bg);
   color: var(--keep);
 }
 
-.rec-verdict-mulligan {
+.rec-verdict-marginal-keep {
+  border-style: dashed;
+  border-color: var(--keep);
+  background: var(--keep-bg);
+  color: var(--keep);
+  opacity: 0.85;
+}
+
+.rec-verdict-marginal-mulligan {
+  border-style: dashed;
+  border-color: var(--mulligan);
+  background: var(--mulligan-bg);
+  color: var(--mulligan);
+  opacity: 0.85;
+}
+
+.rec-verdict-clear-mulligan {
   border-color: var(--mulligan);
   background: var(--mulligan-bg);
   color: var(--mulligan);
