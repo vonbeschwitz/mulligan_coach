@@ -457,7 +457,6 @@ def test_model_bundle_load_matches_from_train_result(tmp_path: Path) -> None:
     result = TrainResult(
         booster=bundle_in_memory.booster,
         baseline=bundle_in_memory.baseline,
-        calibrator=bundle_in_memory.calibrator,
         metadata=metadata,
     )
     out_dir = tmp_path / "model"
