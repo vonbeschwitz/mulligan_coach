@@ -242,6 +242,38 @@ there's no deeper mulligan to fall back to.
 value, how many samples were clamped, and what the unfloored mean
 would have been if any clamping happened.
 
+### 5. Explanation panel
+
+A black-box "63% keep, 59% mull" verdict isn't actionable on its
+own — the user can't tell whether the hand wins on a smooth curve,
+a particular bomb, or by surviving with a removal spell. The
+explanation panel makes the model's reasoning legible by surfacing
+playability stats from the keep arm's sim alongside the verdict.
+
+Three sections, chosen to hit the top of the trained model's
+feature-importance ranking (top 10 by XGBoost gain, from
+`models/all3_v1`) while staying readable:
+
+* **Mana base** — `p_land_drop_by_turn_{2,3,4}` plus
+  `expected_mana_count_turn_4`. Captures land screw / flood.
+* **Doing something each turn** — five "did the hand let you act
+  this turn?" probabilities pulled from the castability grid:
+  `p_any_any_spell_t1`, `p_any_creature_t2`, `p_any_removal_t2`,
+  `p_any_creature_mv_0_2_t3` (the #2 feature by gain),
+  `p_any_any_spell_mv_3_t4` (rank 4), and
+  `avg_pct_hand_spells_with_colored_mana_by_turn_4` for color
+  fixing.
+* **Per-card playability** — one row per hand card showing
+  P(castable by turn T) for T = 1..4. Lets the user see which
+  cards anchor the keep value and which sit stranded.
+
+All values come from the same `AggregateStats` and feature row the
+model consumed, so there's no extra simulation cost. The plumbing:
+`_compute_keep_arm` returns `(p_win, aggregate, feature_row)`
+instead of just `p_win`, and `recommend_asymmetric` packs a
+`RecommendationExplanation` onto the recommendation. The template
+renders it under the verdict + delta paragraph.
+
 ### Model loading
 
 The trained ModelBundle and per-format shrunk WR / z-score dicts

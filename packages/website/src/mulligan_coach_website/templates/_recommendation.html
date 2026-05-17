@@ -66,6 +66,88 @@
       {% endif %}
     </p>
 
+    {# ------------------------------------------------------------------ #}
+    {# Why the verdict — playability stats from the keep arm's sim.       #}
+    {# Three sections: mana base, curve hits, per-card playability.       #}
+    {# All values come directly from the AggregateStats / feature row     #}
+    {# the model consumed, so the user sees the same signal the           #}
+    {# prediction was built on.                                           #}
+    {# ------------------------------------------------------------------ #}
+    {% set exp = rec.explanation %}
+    {% macro pct(p) %}{{ (p * 100) | round(0, 'common') | int }}%{% endmacro %}
+    <div class="rec-explanation">
+      <h3>Why this hand plays out the way it does</h3>
+      <p class="muted small rec-explanation-blurb">
+        Averages across the keep arm's {{ rec.n_sims_keep }} simulated games.
+        These are the same playability numbers the model reads.
+      </p>
+
+      <div class="rec-explanation-grid">
+        <section class="rec-explanation-section">
+          <h4>Mana base</h4>
+          <dl>
+            <dt>2nd land by turn 2</dt>
+            <dd>{{ pct(exp.p_make_2nd_land_by_t2) }}</dd>
+            <dt>3rd land by turn 3</dt>
+            <dd>{{ pct(exp.p_make_3rd_land_by_t3) }}</dd>
+            <dt>4th land by turn 4</dt>
+            <dd>{{ pct(exp.p_make_4th_land_by_t4) }}</dd>
+            <dt>Average mana at turn 4</dt>
+            <dd>{{ '%.1f' % exp.expected_mana_at_t4 }}</dd>
+          </dl>
+        </section>
+
+        <section class="rec-explanation-section">
+          <h4>Doing something each turn</h4>
+          <dl>
+            <dt>Cast any spell turn 1</dt>
+            <dd>{{ pct(exp.p_cast_any_spell_t1) }}</dd>
+            <dt>Cast a creature turn 2</dt>
+            <dd>{{ pct(exp.p_cast_any_creature_t2) }}</dd>
+            <dt>Cast removal turn 2</dt>
+            <dd>{{ pct(exp.p_cast_any_removal_t2) }}</dd>
+            <dt>Cast a 2-drop creature by turn 3</dt>
+            <dd>{{ pct(exp.p_cast_small_creature_by_t3) }}</dd>
+            <dt>Cast a 3-drop by turn 4</dt>
+            <dd>{{ pct(exp.p_cast_3drop_by_t4) }}</dd>
+            <dt>Colors fixed for hand spells by turn 4</dt>
+            <dd>{{ pct(exp.color_fix_by_t4) }}</dd>
+          </dl>
+        </section>
+      </div>
+
+      <h4 class="rec-card-table-heading">Per-card playability</h4>
+      <p class="muted small rec-card-table-blurb">
+        For each card, the chance you've drawn it and can cast it on each turn.
+        Lands play, not cast, so they show a dash.
+      </p>
+      <table class="rec-card-table">
+        <thead>
+          <tr>
+            <th class="rec-card-name">Card</th>
+            <th class="rec-card-mv">MV</th>
+            <th>T1</th>
+            <th>T2</th>
+            <th>T3</th>
+            <th>T4</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for hc in exp.hand_cards %}
+            <tr {% if hc.is_land %}class="rec-card-land"{% endif %}>
+              <td class="rec-card-name">{{ hc.name }}</td>
+              <td class="rec-card-mv">
+                {% if hc.is_land %}&mdash;{% else %}{{ hc.mana_value }}{% endif %}
+              </td>
+              {% for p in hc.p_castable_by_turn %}
+                <td>{% if hc.is_land %}&mdash;{% else %}{{ pct(p) }}{% endif %}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
     <p class="muted small">
       Format: <strong>{{ primary_set or "unknown" }}</strong>
       {% if not set_stats_present %}
