@@ -64,7 +64,7 @@ from mulligan_coach_cards import ParsedCard, ParseStatus
 from mulligan_coach_cards.seventeenlands_stats import load_premier_draft_stats
 from mulligan_coach_model import ModelBundle, build_name_lookup
 from mulligan_coach_model.inference import predict_win_probability
-from mulligan_coach_website.recommendation import (
+from mulligan_coach_recommend import (
     DEFAULT_N_MULLIGAN_SAMPLES,
     DEFAULT_N_SIMS_KEEP,
     DEFAULT_N_SIMS_PER_MULLIGAN,

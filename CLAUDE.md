@@ -34,6 +34,7 @@ mulligan-coach/
 │   ├── features/                # Derived per-card / hand-level features (e.g. shrunk WRs)
 │   ├── simulation/              # Monte Carlo playability engine
 │   ├── model/                   # XGBoost training + inference
+│   ├── recommend/               # Shared keep/mulligan service (used by website + overlay)
 │   ├── website/                 # FastAPI + HTMX testing interface
 │   └── overlay/                 # PyQt6 Arena log-tailing overlay
 ├── scripts/                     # Ad-hoc, one-off analysis / extraction tools
@@ -116,7 +117,17 @@ XGBoost training and inference.
 - Trains across multiple recent formats to mitigate the ~4-week 17Lands data lag for new sets. Format-specific fine-tuning when sufficient data is available.
 - Inference: `(hand, deck, on_play, mulligan_number) -> P(win)`. Calling it twice (current hand vs. simulated mulligan to N-1) gives the comparison needed for a recommendation.
 
-### 6. website
+### 6. recommend
+
+Shared keep/mulligan service used by both the website and the overlay.
+Composes `cards` + `features` + `simulation` + `model` into a single
+`RecommendationService.recommend_asymmetric(hand, deck, ...)` entry
+point with the asymmetric sim budget, mulligan-arm prefetch cache,
++4 pp mulligan bias, and deeper-mulligan floor heuristic. Pure
+Python — no FastAPI, no Qt — so the overlay can depend on it
+without dragging in web framework code.
+
+### 7. website
 
 FastAPI backend + HTMX frontend. Lightweight and easy to iterate on. Lets the user:
 
@@ -127,12 +138,13 @@ FastAPI backend + HTMX frontend. Lightweight and easy to iterate on. Lets the us
 
 This is the primary testing/validation surface for the simulation and model. It exists before the overlay because it isolates the recommendation pipeline from all the Arena-specific complexity (log parsing, transparent windows, fullscreen handling). Once the website produces good recommendations, the overlay just replaces the manual input step with automatic log-tailing.
 
-### 7. overlay
+### 8. overlay
 
 PyQt6 transparent always-on-top window over MTG Arena.
 
 - Tails Arena's `Player.log` and parses GameStateMessage events to detect mulligan decisions, opening hands, decklists, on play/draw, and mulligan count.
-- Calls the same simulation + model pipeline used by the website.
+- Resolves card grpIds via Arena's local `Raw_CardDatabase` SQLite (MTGJSON's arena_id index lags weeks behind a freshly-rotated format; Arena's own DB is always current).
+- Calls into the shared `recommend` service — same logic the website uses.
 - Renders a small overlay panel near the mulligan UI showing keep vs. mulligan win probabilities and the recommendation.
 - Read-only log parsing only — no game memory access, no client interaction. This is the line WotC tolerates.
 
@@ -166,8 +178,9 @@ Recommended order for building this out:
 3. **features** — derived per-card / hand-level features over cards + 17Lands.
 4. **simulation** — pure function, easy to test in isolation, produces features for the model.
 5. **model** — trains on simulation + features outputs + 17Lands data.
-6. **website** — validates the full pipeline end-to-end with manual input.
-7. **overlay** — final integration; reuses everything from website.
+6. **recommend** — shared keep/mull service composing the upstream packages.
+7. **website** — validates the full pipeline end-to-end with manual input.
+8. **overlay** — final integration; reuses `recommend` directly.
 
 Each step should be working and tested before starting the next.
 

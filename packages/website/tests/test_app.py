@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from mulligan_coach_recommend import RecommendationService, ServiceStatus
 from mulligan_coach_website.app import app
-from mulligan_coach_website.recommendation import RecommendationService, ServiceStatus
 from mulligan_coach_website.scryfall import ScryfallImages
 
 from ._factories import goblin_decklist, make_store

@@ -1,0 +1,70 @@
+# mulligan-coach-overlay — PyQt6 transparent always-on-top overlay for MTGA.
+#
+# Workspace member (see root pyproject.toml's
+# `[tool.uv.workspace] members = ["packages/*", "utilities/*"]`).
+#
+# Tails Arena's `Player.log`, parses GRE messages to detect mulligan
+# decisions (and the deck submitted for the match), feeds the data
+# into the shared `mulligan-coach-recommend` service, and shows a
+# small Keep / Mulligan verdict pane on top of the Arena window.
+#
+# The package layers cleanly:
+#
+#   * `log_tailer`  — poll-based file tail + JSON block reconstruction.
+#                     Pure stdlib, no Qt, no GUI. Trivially testable
+#                     against on-disk log fixtures.
+#   * `arena_paths` — resolves the Windows / macOS Player.log location.
+#   * `events`      — typed Pydantic events the tailer emits.
+#   * `card_index`  — `arena_id -> ParsedCard` lookup built from the
+#                     persisted parsed_cards JSON.
+#   * `headless`    — wires the tailer to the recommendation service
+#                     and prints verdicts to stdout. No GUI needed —
+#                     used for end-to-end validation before the Qt
+#                     pane lands and as a fallback when running on a
+#                     machine without a display.
+#   * `gui`         — the PyQt6 transparent overlay (added in a later
+#                     step; declared here so the dep list is honest).
+
+[project]
+name = "mulligan-coach-overlay"
+version = "0.0.0"
+description = "Transparent always-on-top overlay for MTG Arena that surfaces keep/mulligan recommendations live."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Bastian von Beschwitz", email = "bastian.vonbeschwitz@gmail.com" }]
+
+dependencies = [
+    # Card representation + arena_id index. The tailer emits raw
+    # arena_ids; the card index resolves them to ParsedCards so the
+    # recommendation pipeline (which talks ParsedCard) can consume.
+    "mulligan-coach-cards",
+    # Shared keep/mulligan recommendation service. Pulls in the rest of
+    # the pipeline (features/simulation/model) as transitive deps.
+    "mulligan-coach-recommend",
+    # Typed events emitted by the tailer. Pydantic is already a
+    # transitive dep of every other package; we use it here for
+    # consistency rather than dragging in a new validation library.
+    "pydantic>=2.7",
+    # GUI toolkit. PyQt6 (not PySide6) for licence consistency with the
+    # rest of the project's GPL-compatible Qt usage and because the
+    # PyQt6 API surface is what the project owner's earlier overlay
+    # research targeted. The headless path doesn't import PyQt6 — so
+    # `uv run mulligan-coach-overlay-headless` runs fine on servers
+    # without a display.
+    "PyQt6>=6.7",
+]
+
+[project.scripts]
+# Headless tailer: prints recommendation events to stdout as they
+# fire. Useful for end-to-end validation without the GUI, and as the
+# canonical entry point when iterating on the parser.
+mulligan-coach-overlay-headless = "mulligan_coach_overlay.headless:main"
+mulligan-coach-overlay = "mulligan_coach_overlay.gui:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mulligan_coach_overlay"]

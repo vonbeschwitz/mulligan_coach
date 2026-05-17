@@ -63,7 +63,7 @@ from mulligan_coach_model import (
     build_name_lookup,
     iter_training_rows,
 )
-from mulligan_coach_website.recommendation import (
+from mulligan_coach_recommend import (
     DEFAULT_N_MULLIGAN_SAMPLES,
     DEFAULT_N_SIMS_PER_MULLIGAN,
     FormatStats,
