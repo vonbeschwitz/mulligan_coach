@@ -2,11 +2,18 @@
 
 ## Purpose
 
-PyQt6 always-on-top transparent overlay over MTG Arena. Tails
-Arena's `Player.log`, detects mulligan decisions (and the deck
-submitted for the match), feeds the data into the shared
-`mulligan-coach-recommend` service, and shows a small Keep / Mulligan
-verdict pane near the mulligan UI in the Arena window.
+PyQt6 transparent overlay over MTG Arena. Tails Arena's `Player.log`,
+detects mulligan decisions (and the deck submitted for the match),
+feeds the data into the shared `mulligan-coach-recommend` service,
+and shows a small Keep / Mulligan verdict pane near the mulligan UI
+in the Arena window.
+
+Behaves like untapped.gg's overlay: topmost only when Arena (or the
+overlay itself) is the foreground window, follows Arena when it
+minimises, hides when Arena exits, and remembers the last submitted
+deck across restarts so a launch mid-match doesn't end up with "no
+deck loaded". Can be collapsed to a compact pill (verdict + keep% /
+mull% only) via a global hotkey or the title bar.
 
 Pure read-only: only reads `Player.log`, never touches the Arena
 client, never reads Arena's memory. This is the line WotC tolerates
@@ -19,15 +26,20 @@ src/mulligan_coach_overlay/
 ├── __init__.py          # Re-exports nothing — top-level import is Qt-free
 ├── arena_paths.py       # Resolve Player.log on Windows / macOS
 ├── arena_card_db.py     # Read Arena's local Raw_CardDatabase SQLite for grpId mapping
+├── arena_window.py      # Win32 watcher: Arena foreground / minimised / absent state
+├── deck_persistence.py  # Save / load last submitted deck (cross-restart fallback)
 ├── events.py            # Pydantic events: DeckSubmitted, MulliganDecisionRequest, MatchEnded
 ├── log_tailer.py        # Poll-based tail + block / JSON parsing + event extraction
 ├── card_index.py        # arena_id -> ParsedCard (MTGJSON + Arena DB merged)
 ├── coordinator.py       # State machine: events -> CoordinatorOutput
 ├── headless.py          # CLI: tail + recommend + print verdicts
-└── gui.py               # PyQt6 overlay widget
+└── gui.py               # PyQt6 overlay widget + Arena-follow + collapse hotkey
 tests/
-├── fixtures/            # Captured / synthesized Player.log snippets
-└── test_log_tailer.py   # Parser tests; no live Arena needed
+├── fixtures/                  # Captured / synthesized Player.log snippets
+├── test_arena_card_db.py
+├── test_coordinator.py
+├── test_deck_persistence.py
+└── test_log_tailer.py
 ```
 
 ## Architecture
@@ -69,6 +81,26 @@ Three layers, each replaceable without touching the others:
    events to `RecommendationService.recommend_asymmetric`. Holds the
    "current match deck" (from the most recent `DeckSubmitted`), resets
    on `MatchEnded`, and presents the verdict.
+
+4. **Arena window watcher** (`arena_window.py`). Polls Win32 every
+   250 ms for Arena's main HWND and emits one of four states —
+   `foreground`, `background`, `minimized`, `absent` — whenever it
+   changes. The GUI uses this to set its own z-order (Win32
+   `SetWindowPos` with `HWND_TOPMOST` / `HWND_NOTOPMOST`),
+   minimise / restore in lock-step with Arena, and hide when Arena
+   exits. Non-Windows platforms get a constant-`foreground` stub so
+   the call sites don't need platform checks.
+
+5. **Deck persistence** (`deck_persistence.py`). Serialises every
+   fully-resolved `DeckSubmitted` to
+   `%LOCALAPPDATA%\MulliganCoach\last_deck.json`
+   (`~/Library/Application Support/MulliganCoach/last_deck.json` on
+   macOS, `~/.local/share/mulligan-coach/last_deck.json` on Linux).
+   On startup the GUI loads it and seeds the coordinator before the
+   tailer starts — so launching the overlay after Arena has already
+   submitted the deck falls back to the previous-session deck rather
+   than refusing to recommend. Atomic-write via `.tmp` + `replace`
+   so a crash mid-write leaves the previous valid file untouched.
 
 ## Event flow
 
@@ -125,6 +157,24 @@ hand-constructed minimal JSON that matches the shapes the real log
 emits; when we start capturing real-log samples we'll add them here
 too (anonymised — strip `clientMetadata` block, screen names, etc.).
 
+## GUI surface
+
+* Two layouts on the same widget: an expanded panel (verdict +
+  keep%/mull% + resolved hand + a debug footer) and a compact pill
+  (verdict + keep%/mull% only). Toggle via the title-bar collapse
+  button, a left double-click anywhere on the panel, or the global
+  hotkey **Ctrl+Shift+M** (Win32 `RegisterHotKey`; registered under
+  the overlay's HWND and routed through a
+  `QAbstractNativeEventFilter`).
+* The window has no `Qt.WindowStaysOnTopHint` flag at construction
+  time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
+  the Arena watcher emits `foreground` / `background`. Setting it as
+  a Qt flag would force-on topmost any time Qt re-realised the
+  window.
+* Position is top-right of the primary screen by default; the user
+  can drag-to-move and the position is preserved across layout
+  toggles.
+
 ## Out of scope (for now)
 
 * **Suggesting which card to bottom on a mulligan.** Same reason as
@@ -133,7 +183,11 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
 * **Modifying or reading from the Arena client.** Read-only log
   tailing only. Anything that requires hooking the game process is a
   hard no.
-* **Cross-platform GUI parity.** Windows is the primary target. macOS
-  PyQt6 transparent-overlay behaviour is messier (window-server quirks
-  with `Qt.WindowStaysOnTopHint`); we'll address it if a real macOS
-  user shows up.
+* **Cross-platform GUI parity.** Windows is the primary target. The
+  Arena window watcher is a no-op stub on macOS / Linux (the
+  overlay collapses back to its plain "always topmost" behaviour
+  there); the global hotkey is Win32-only. macOS PyQt6
+  transparent-overlay behaviour also has window-server quirks we
+  haven't addressed because Arena doesn't ship for macOS in
+  the form the overlay would target. We'll revisit if a real
+  cross-platform user shows up.
