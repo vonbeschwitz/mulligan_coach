@@ -7,9 +7,8 @@ exercises:
 
 * the grouped train/val/calib/test split by draft_id (no
   draft appears in two splits),
-* the baseline -> XGBoost -> isotonic pipeline ends with
-  calibrated probabilities,
-* save -> load round-trip preserves all four artifacts,
+* the baseline -> XGBoost pipeline produces probabilities,
+* save -> load round-trip preserves all three artifacts,
 * the prediction is stable across rounds (deterministic given
   the seed).
 """
@@ -195,8 +194,8 @@ def _write_parquet(df: pd.DataFrame, path: Path) -> Path:
 
 
 def test_train_model_produces_valid_bundle(tmp_path: Path) -> None:
-    """End-to-end: fit baseline + XGBoost + calibrator, all artifacts
-    are non-None, metrics are populated, and probabilities are in
+    """End-to-end: fit baseline + XGBoost, all artifacts are
+    non-None, metrics are populated, and probabilities are in
     [0, 1]."""
     df = _synthetic_features_dataframe(n_drafts=120, games_per_draft=5)
     p = _write_parquet(df, tmp_path / "shard.parquet")
@@ -243,11 +242,12 @@ def test_train_model_save_load_roundtrip(tmp_path: Path) -> None:
         early_stopping_rounds=3,
         seed=0,
     )
-    # All four artifacts exist on disk.
+    # All three artifacts exist on disk.
     assert (out_dir / "baseline.json").exists()
     assert (out_dir / "xgboost.json").exists()
-    assert (out_dir / "calibrator.json").exists()
     assert (out_dir / "metadata.json").exists()
+    # No calibrator file should be written.
+    assert not (out_dir / "calibrator.json").exists()
 
     loaded = load_train_result(out_dir)
 
@@ -263,10 +263,10 @@ def test_train_model_save_load_roundtrip(tmp_path: Path) -> None:
     margins = _per_row_base_margin(sample, loaded.baseline)
     dm = xgb.DMatrix(X, base_margin=margins, feature_names=features)
     iter_range = (0, loaded.metadata.best_iteration + 1)
-    p_loaded = loaded.calibrator.predict(loaded.booster.predict(dm, iteration_range=iter_range))
+    p_loaded = loaded.booster.predict(dm, iteration_range=iter_range)
 
     dm2 = xgb.DMatrix(X, base_margin=margins, feature_names=features)
-    p_original = result.calibrator.predict(result.booster.predict(dm2, iteration_range=iter_range))
+    p_original = result.booster.predict(dm2, iteration_range=iter_range)
     np.testing.assert_allclose(p_loaded, p_original, atol=1e-6)
 
     # _fc is the same function — sanity check on the helper export.

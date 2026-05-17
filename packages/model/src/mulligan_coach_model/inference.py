@@ -3,8 +3,8 @@
 Two public surfaces:
 
 * :func:`predict_win_probability` — single-hand prediction through
-  the full sim -> features -> baseline -> XGBoost -> isotonic
-  pipeline. Returns a calibrated probability in ``[0, 1]``.
+  the full sim -> features -> baseline -> XGBoost pipeline. Returns
+  a calibrated probability in ``[0, 1]``.
 * :func:`recommend` — compares ``P(win | keep)`` against
   ``P(win | mulligan-to-(N+1))`` via a Monte Carlo over fresh
   draws from the deck. Returns a typed :class:`Recommendation`.
@@ -14,6 +14,17 @@ their only model-side interface. The overlay is the latency-
 sensitive path: at the default ``n_sims=1000`` /
 ``n_mulligan_samples=30`` it should complete well under a second
 on a modern laptop.
+
+No post-hoc calibrator
+----------------------
+
+The booster trained with ``binary:logistic`` + ``base_margin`` is
+already well calibrated at the relevant data scale (test ECE
+~0.005). An earlier version of the pipeline applied an isotonic
+post-hoc step; we removed it after benchmarking confirmed it (a)
+gave no log-loss improvement, (b) introduced a saturation bug at
+the tails where rare calibration-split runs of all-loss or all-win
+got pinned to exactly 0 or 1. See :mod:`train` for details.
 
 Baseline cancellation
 ---------------------
@@ -45,7 +56,6 @@ from mulligan_coach_features import (
     build_feature_row,
 )
 from mulligan_coach_simulation import simulate
-from sklearn.isotonic import IsotonicRegression
 
 from .baseline import BaselineModel
 from .feature_matrix import _library_from_deck
@@ -55,7 +65,7 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# ModelBundle: container for the four artifacts inference needs
+# ModelBundle: container for the artifacts inference needs
 # ---------------------------------------------------------------------------
 
 
@@ -75,7 +85,6 @@ class ModelBundle:
 
     booster: xgb.Booster
     baseline: BaselineModel
-    calibrator: IsotonicRegression
     feature_names: tuple[str, ...]
     best_iteration: int
 
@@ -83,9 +92,9 @@ class ModelBundle:
     def load(cls, model_dir: Path) -> ModelBundle:
         """Load a fitted model from ``model_dir``.
 
-        The directory must contain the four files written by
+        The directory must contain the three files written by
         :func:`save_train_result`: ``baseline.json``,
-        ``xgboost.json``, ``calibrator.json``, ``metadata.json``.
+        ``xgboost.json``, ``metadata.json``.
         """
         result = load_train_result(model_dir)
         return cls.from_train_result(result)
@@ -101,7 +110,6 @@ class ModelBundle:
         return cls(
             booster=result.booster,
             baseline=result.baseline,
-            calibrator=result.calibrator,
             feature_names=result.metadata.feature_names,
             best_iteration=result.metadata.best_iteration,
         )
@@ -142,7 +150,7 @@ def _predict_proba(
     row: dict[str, float],
     base_margin: float,
 ) -> float:
-    """Run one already-built feature dict through XGBoost + calibration.
+    """Run one already-built feature dict through baseline + XGBoost.
 
     The bundle's ``feature_names`` order drives column layout.
     Missing features default to ``np.nan`` so a new build_feature_row
@@ -160,12 +168,8 @@ def _predict_proba(
         feature_names=list(bundle.feature_names),
     )
     iter_range = (0, bundle.best_iteration + 1)
-    raw = bundle.booster.predict(dm, iteration_range=iter_range)
-    calibrated = bundle.calibrator.predict(raw)
-    # Clip to [0, 1] to defend against any tiny isotonic-extrapolation
-    # numerical excursions; the calibrator is fit out_of_bounds="clip"
-    # but the stored knots may not cover the absolute extremes.
-    return float(np.clip(calibrated[0], 0.0, 1.0))
+    proba = bundle.booster.predict(dm, iteration_range=iter_range)
+    return float(proba[0])
 
 
 # ---------------------------------------------------------------------------
@@ -194,8 +198,7 @@ def predict_win_probability(
     :func:`mulligan_coach_simulation.simulate`
     -> :func:`mulligan_coach_features.build_feature_row`
     -> :meth:`BaselineModel.margin`
-    -> ``bundle.booster.predict``
-    -> ``bundle.calibrator.predict``.
+    -> ``bundle.booster.predict``.
 
     User-skill buckets are intentionally not passed — at runtime we
     don't query 17Lands per-player stats. The baseline falls back

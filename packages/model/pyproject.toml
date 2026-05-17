@@ -18,9 +18,8 @@ dependencies = [
     "mulligan-coach-simulation",
     "mulligan-coach-features",
     # DuckDB to query the games view; scikit-learn for the baseline
-    # logistic regression + isotonic calibrator; xgboost is the actual
-    # predictor; numpy / pandas / pyarrow for the parquet materialisation
-    # cache.
+    # logistic regression; xgboost is the actual predictor; numpy /
+    # pandas / pyarrow for the parquet materialisation cache.
     "duckdb>=1.0",
     "numpy>=1.26",
     "pandas>=2.2",

@@ -12,10 +12,10 @@ Five logical layers, landing as five sequential PRs:
 
 ```
 src/mulligan_coach_model/
-├── training_rows.py    # PR 1 (this PR): DuckDB games view -> TrainingRow tuples
+├── training_rows.py    # PR 1: DuckDB games view -> TrainingRow tuples
 ├── feature_matrix.py   # PR 2: simulate() + build_feature_row -> slim parquet cache
 ├── baseline.py         # PR 3: saturated-cell logistic regression -> base_margin
-├── train.py            # PR 4: XGBoost fit + isotonic calibration + serialization
+├── train.py            # PR 4: XGBoost fit + serialization (no post-hoc calibrator)
 └── inference.py        # PR 5: predict(...) -> P(win) + recommend(...) keep-vs-mull
 ```
 
@@ -212,11 +212,10 @@ what we want for a hand-specific decision.
 
 End-to-end training: load feature parquets, fit the baseline on
 the training split only, compute per-row `base_margin`, fit
-XGBoost with early stopping against the validation split, fit an
-isotonic calibrator on the calibration split, evaluate on the
-test split. Persist the four artifacts (`baseline.json`,
-`xgboost.json`, `calibrator.json`, `metadata.json`) into a single
-output directory.
+XGBoost with early stopping against the validation split,
+evaluate on the calibration and test splits. Persist the three
+artifacts (`baseline.json`, `xgboost.json`, `metadata.json`)
+into a single output directory.
 
 * `train_model(parquet_paths, output_dir, val_frac, calib_frac,
   test_frac, n_estimators, max_depth, learning_rate,
@@ -229,12 +228,35 @@ output directory.
   across the loaded dataframe for speed; correctness is asserted
   in tests vs. per-call `BaselineModel.margin`.
 * `save_train_result` / `load_train_result` round-trip the
-  bundle. The isotonic calibrator is stored as JSON knots
-  (`X_thresholds_`, `y_thresholds_`) so the file is human-
-  inspectable.
+  bundle. Three human-inspectable JSON / XGBoost-native files,
+  no pickled state.
 * XGBoost objective is `binary:logistic`, metric `logloss`,
   `tree_method="hist"`. Default hyperparameters are the plan's
   starting point; tune via the validation log-loss.
+
+### Why no post-hoc calibrator
+
+An earlier version of the pipeline fit an isotonic regression on
+the calibration split. We removed it after a head-to-head
+benchmark (`scripts/compare_calibration_methods.py`):
+
+* The booster's raw output is already well calibrated at this
+  data scale (test ECE ~0.005, MCE ~0.01 with no post-hoc step).
+  `binary:logistic` directly optimizes log-loss, and the
+  `base_margin` trick removes player-skill / opp-mull variance
+  before the booster sees it, so the residual the booster fits
+  is already centered.
+* Platt scaling on the same data fits ``A=0.99 / B=0.00`` —
+  effectively the identity. Two parameters can't improve on a
+  booster that's already where it should be.
+* Isotonic adds a step-function quirk: the pool-adjacent-violators
+  algorithm pins tail bins to ``y=0`` / ``y=1`` when the
+  calibration split happens to be all-loss / all-win in that
+  band. On `models/all3_v1` that saturated 64 of 106,905 test
+  predictions and cost +0.0015 log-loss vs no calibration.
+
+The four-way split is retained: the "calibration" split is now
+just a second held-out eval point alongside `test`.
 
 ### Why fit the baseline on the training split only
 
@@ -248,15 +270,15 @@ baseline coefficients (~70% of the rows instead of 100%) — at
 The single model-side interface that the website (PR 6) and
 overlay (PR 7) consume.
 
-* `ModelBundle.load(model_dir)` — load all four artifacts from a
+* `ModelBundle.load(model_dir)` — load the three artifacts from a
   saved directory. `ModelBundle.from_train_result(result)` for
   the in-process path.
 * `predict_win_probability(bundle, hand, deck, on_the_play,
   mulligan_number, opp_mulligan_number, event_type, set_code,
   shrunk, zscores, n_sims, seed)` — single-hand prediction.
-  Returns a calibrated probability in `[0, 1]`. Runs the same
-  pipeline training used: simulate -> build_feature_row -> baseline
-  margin -> XGBoost -> isotonic.
+  Returns a probability in `[0, 1]`. Runs the same pipeline
+  training used: simulate -> build_feature_row -> baseline margin
+  -> XGBoost.
 * `recommend(bundle, ..., n_mulligan_samples=30)` -> `Recommendation`
   — compares `P(win | keep)` vs `P(win | mulligan-to-(N+1))`.
   The mulligan arm is a Monte Carlo over fresh 7-card draws from
@@ -288,7 +310,7 @@ After all five PRs merge, the full pipeline runs as:
 1. `materialize_feature_matrix(set_code="TLA", output_dir=..., ...)` — build the
    slim feature parquet for TLA Premier Draft.
 2. `train_model(parquet_paths=[...], output_dir="models/v1")` —
-   fit baseline + XGBoost + isotonic; save the four artifacts.
+   fit baseline + XGBoost; save the three artifacts.
 3. `bundle = ModelBundle.load("models/v1")` — load for inference.
 4. `recommend(bundle, hand=..., deck=..., ...)` — get a keep/mull
    verdict on a hand.
@@ -401,8 +423,12 @@ parametrised directly.
 * **Slim feature parquet cache** — features + label + context only.
 * **Grouped train/val/calibration/test split by `draft_id`** —
   prevents same-draft leakage in CV.
-* **Isotonic calibration on a separate held-out split** — for
-  displaying probabilities the user can trust.
+* **No post-hoc calibration** — the booster's raw output is the
+  final prediction. The booster trained with `binary:logistic` +
+  `base_margin` is already well calibrated at our data scale;
+  isotonic added saturation at the tails without improving
+  log-loss, and Platt fit the identity. See the `train.py`
+  section above.
 
 ## Known limitations
 

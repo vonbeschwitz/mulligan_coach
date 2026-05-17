@@ -1,4 +1,4 @@
-"""XGBoost training entry point with baseline residualization + calibration.
+"""XGBoost training entry point with baseline residualization.
 
 End-to-end pipeline (one function — :func:`train_model` — calls the
 others):
@@ -12,19 +12,32 @@ others):
 4. Compute per-row ``base_margin`` from the baseline for every split.
 5. Train XGBoost on the training split with ``base_margin`` and
    early stopping against the validation split.
-6. Predict on the calibration split (with base_margin) and fit an
-   isotonic regression on the
-   ``(predicted_prob, observed_won)`` pairs.
-7. Evaluate on the test split: log-loss, Brier, accuracy.
-8. Optionally serialise the three model files
-   (``baseline.json``, ``xgboost.json``, ``calibrator.json``) plus
-   ``metadata.json`` into a single output directory.
+6. Evaluate on the calibration and test splits: log-loss, Brier,
+   accuracy. (No post-hoc calibrator is fit — see below.)
+7. Optionally serialise the two model files
+   (``baseline.json``, ``xgboost.json``) plus ``metadata.json``
+   into a single output directory.
 
-The composition (baseline -> XGBoost -> isotonic) preserves
-probability calibration: the baseline does the logit-scale
-residualization, XGBoost learns a zero-mean residual on top, and
-the isotonic step trims any systematic miscalibration that
-remains.
+No post-hoc calibration step
+----------------------------
+
+An earlier version of the pipeline fit an isotonic regression on a
+held-out calibration split. We removed it after a head-to-head
+comparison (see ``scripts/compare_calibration_methods.py``):
+
+* The booster trained with ``base_margin`` + ``binary:logistic`` is
+  already well calibrated (test ECE ~0.005, MCE ~0.01 with no
+  post-hoc step).
+* Platt scaling on the same data fits A=0.99 / B=0.00 — effectively
+  the identity transform — confirming the booster needs no shift.
+* Isotonic adds a step-function quirk: the pool-adjacent-violators
+  algorithm pins tail bins to ``y=0`` / ``y=1`` when the calibration
+  split is sparse and unlucky in that band. That saturation costs
+  log-loss (a single misclassified saturated row contributes ~16
+  nats clipped at the floor).
+
+The four-way split shape is retained: the "calibration" split is
+now simply a second held-out eval point alongside ``test``.
 """
 
 from __future__ import annotations
@@ -38,7 +51,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.isotonic import IsotonicRegression
 
 from .baseline import BaselineModel
 
@@ -85,10 +97,9 @@ class SplitMetrics:
 class TrainingMetadata:
     """Audit / provenance fields for a fitted model.
 
-    Saved alongside the booster + calibrator + baseline so PR 5's
-    :class:`ModelBundle.load` can validate that the feature column
-    order matches at inference time (mismatched order silently
-    corrupts predictions).
+    Saved alongside the booster + baseline so :meth:`ModelBundle.load`
+    can validate that the feature column order matches at inference
+    time (mismatched order silently corrupts predictions).
     """
 
     feature_names: tuple[str, ...]
@@ -104,14 +115,13 @@ class TrainingMetadata:
 class TrainResult:
     """Bundle returned by :func:`train_model`.
 
-    Holds the three independently-saveable artifacts plus the
-    training metadata. PR 5's inference path consumes these
+    Holds the two independently-saveable artifacts plus the
+    training metadata. The inference path consumes these
     objects directly when called in-process.
     """
 
     booster: xgb.Booster
     baseline: BaselineModel
-    calibrator: IsotonicRegression
     metadata: TrainingMetadata
 
 
@@ -252,58 +262,6 @@ def _compute_metrics(
 
 
 # ---------------------------------------------------------------------------
-# Calibrator persistence
-# ---------------------------------------------------------------------------
-
-
-def _save_calibrator(calibrator: IsotonicRegression, path: Path) -> None:
-    """Serialise an ``IsotonicRegression`` to JSON via its knots.
-
-    The fitted state we care about is ``X_thresholds_`` and
-    ``y_thresholds_`` (the monotone-step function knots);
-    ``out_of_bounds`` controls extrapolation. We don't shell out to
-    ``pickle`` so the file is human-inspectable.
-    """
-    payload = {
-        "X_thresholds": calibrator.X_thresholds_.tolist(),
-        "y_thresholds": calibrator.y_thresholds_.tolist(),
-        "out_of_bounds": calibrator.out_of_bounds,
-        "increasing": calibrator.increasing,
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2))
-
-
-def _load_calibrator(path: Path) -> IsotonicRegression:
-    payload = json.loads(path.read_text())
-    iso = IsotonicRegression(
-        out_of_bounds=payload.get("out_of_bounds", "clip"),
-        increasing=payload.get("increasing", True),
-    )
-    # Reconstruct the fitted attributes directly. sklearn's
-    # `IsotonicRegression.predict` only needs `X_thresholds_` /
-    # `y_thresholds_` / `f_` to run.
-    x = np.asarray(payload["X_thresholds"], dtype=float)
-    y = np.asarray(payload["y_thresholds"], dtype=float)
-    iso.X_thresholds_ = x
-    iso.y_thresholds_ = y
-    # `f_` is the underlying interp1d the predict path calls; build
-    # it from the knots so .predict works without a re-fit.
-    from scipy.interpolate import interp1d
-
-    iso.f_ = interp1d(
-        x,
-        y,
-        kind="linear",
-        bounds_error=False,
-        fill_value=(y[0], y[-1]),
-    )
-    iso.X_min_ = float(x[0])
-    iso.X_max_ = float(x[-1])
-    return iso
-
-
-# ---------------------------------------------------------------------------
 # Metadata persistence
 # ---------------------------------------------------------------------------
 
@@ -350,7 +308,7 @@ def train_model(
     baseline_l2_C: float = 10.0,
     seed: int = 0,
 ) -> TrainResult:
-    """End-to-end training: baseline -> XGBoost -> calibration.
+    """End-to-end training: baseline -> XGBoost.
 
     Parameters
     ----------
@@ -360,15 +318,17 @@ def train_model(
         concatenated so a unified multi-format model can be fit
         in one call.
     output_dir:
-        When provided, the four files
-        (``baseline.json``, ``xgboost.json``, ``calibrator.json``,
-        ``metadata.json``) are written here. The directory is
-        created if missing. ``None`` skips persistence — useful
-        for tests that only inspect the in-memory artifacts.
+        When provided, the three files (``baseline.json``,
+        ``xgboost.json``, ``metadata.json``) are written here.
+        The directory is created if missing. ``None`` skips
+        persistence — useful for tests that only inspect the
+        in-memory artifacts.
     val_frac, calib_frac, test_frac:
         Draft-grouped fractions for the three eval splits. Training
         gets the remainder (``1 - val - calib - test``). Default
         70/10/10/10. Must each be in ``(0, 1)`` and sum to ``< 1``.
+        The "calibration" split is retained as a second held-out
+        eval point even though no calibrator is fit on it.
     n_estimators, max_depth, learning_rate, early_stopping_rounds:
         XGBoost hyperparameters. Starting defaults are from the plan;
         tune via the validation log-loss.
@@ -469,32 +429,20 @@ def train_model(
     best_iteration = int(booster.best_iteration)
 
     # Predict on each split using the best iteration. iteration_range=(0, best+1)
-    # ensures the early-stopping point is honoured.
+    # ensures the early-stopping point is honoured. The booster output
+    # is the final prediction — no post-hoc calibration step.
     iter_range = (0, best_iteration + 1)
-
     p_train = booster.predict(dtrain, iteration_range=iter_range)
     p_val = booster.predict(dval, iteration_range=iter_range)
     p_calib = booster.predict(dcalib, iteration_range=iter_range)
-    p_test_uncalibrated = booster.predict(dtest, iteration_range=iter_range)
-
-    # Fit isotonic regression on the calibration split. clip handles
-    # the rare deploy-time prediction outside [min_calib, max_calib]
-    # by pinning to the closest knot rather than extrapolating.
-    calibrator = IsotonicRegression(out_of_bounds="clip", increasing=True)
-    calibrator.fit(p_calib, y[splits.calib].astype(float))
-
-    # Apply calibration to every split for metrics.
-    p_train_cal = calibrator.predict(p_train)
-    p_val_cal = calibrator.predict(p_val)
-    p_calib_cal = calibrator.predict(p_calib)
-    p_test_cal = calibrator.predict(p_test_uncalibrated)
+    p_test = booster.predict(dtest, iteration_range=iter_range)
 
     metadata = TrainingMetadata(
         feature_names=tuple(feature_names),
-        train=_compute_metrics(y[splits.train], p_train_cal),
-        val=_compute_metrics(y[splits.val], p_val_cal),
-        calibration=_compute_metrics(y[splits.calib], p_calib_cal),
-        test=_compute_metrics(y[splits.test], p_test_cal),
+        train=_compute_metrics(y[splits.train], p_train),
+        val=_compute_metrics(y[splits.val], p_val),
+        calibration=_compute_metrics(y[splits.calib], p_calib),
+        test=_compute_metrics(y[splits.test], p_test),
         best_iteration=best_iteration,
         seed=seed,
     )
@@ -508,7 +456,6 @@ def train_model(
     result = TrainResult(
         booster=booster,
         baseline=baseline,
-        calibrator=calibrator,
         metadata=metadata,
     )
 
@@ -521,20 +468,17 @@ def train_model(
 def save_train_result(result: TrainResult, output_dir: Path) -> None:
     """Write a :class:`TrainResult` to disk under ``output_dir``.
 
-    Four files:
+    Three files:
 
     * ``baseline.json`` — fitted :class:`BaselineModel` coefficients.
     * ``xgboost.json`` — XGBoost booster (its native JSON format).
-    * ``calibrator.json`` — isotonic-regression knots.
     * ``metadata.json`` — feature names + per-split metrics.
 
-    Inference in PR 5 reads the same four files via
-    :meth:`ModelBundle.load`.
+    Inference reads the same three files via :meth:`ModelBundle.load`.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     result.baseline.save(output_dir / "baseline.json")
     result.booster.save_model(str(output_dir / "xgboost.json"))
-    _save_calibrator(result.calibrator, output_dir / "calibrator.json")
     _save_metadata(result.metadata, output_dir / "metadata.json")
     log.info("Saved model artifacts to %s", output_dir)
 
@@ -542,13 +486,12 @@ def save_train_result(result: TrainResult, output_dir: Path) -> None:
 def load_train_result(model_dir: Path) -> TrainResult:
     """Inverse of :func:`save_train_result`.
 
-    Used by PR 5's :meth:`ModelBundle.load`; exposed here so tests
-    can round-trip a fitted model through disk.
+    Used by :meth:`ModelBundle.load`; exposed here so tests can
+    round-trip a fitted model through disk.
     """
     baseline = BaselineModel.load(model_dir / "baseline.json")
     booster = xgb.Booster()
     booster.load_model(str(model_dir / "xgboost.json"))
-    calibrator = _load_calibrator(model_dir / "calibrator.json")
     metadata_path = model_dir / "metadata.json"
     payload = json.loads(metadata_path.read_text())
 
@@ -572,6 +515,5 @@ def load_train_result(model_dir: Path) -> TrainResult:
     return TrainResult(
         booster=booster,
         baseline=baseline,
-        calibrator=calibrator,
         metadata=metadata,
     )
