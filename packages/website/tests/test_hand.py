@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import random
 
+# Absolute import — see test_app.py for the namespace-collision rationale.
+from _website_factories import goblin_decklist, make_store  # type: ignore[import-not-found]
 from mulligan_coach_website.data import CardStore
 from mulligan_coach_website.decklist import ParseResult, parse_mtga_decklist
 from mulligan_coach_website.hand import (
@@ -19,8 +21,6 @@ from mulligan_coach_website.hand import (
     remove_at,
     resolve_hand,
 )
-
-from ._factories import goblin_decklist, make_store
 
 
 def _parsed() -> tuple[CardStore, ParseResult]:

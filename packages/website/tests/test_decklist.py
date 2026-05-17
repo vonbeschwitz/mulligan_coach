@@ -7,13 +7,17 @@ simulation stack. They run on a clean checkout in milliseconds.
 
 from __future__ import annotations
 
+# Absolute import — see test_app.py for the namespace-collision rationale.
+from _website_factories import (  # type: ignore[import-not-found]
+    goblin_decklist,
+    goblin_decklist_with_one_bad_line,
+    make_store,
+)
 from mulligan_coach_website.decklist import (
     expand_deck,
     parse_mtga_decklist,
     unique_card_names,
 )
-
-from ._factories import goblin_decklist, goblin_decklist_with_one_bad_line, make_store
 
 
 def test_parses_simple_decklist() -> None:

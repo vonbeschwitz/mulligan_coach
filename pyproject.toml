@@ -158,7 +158,25 @@ disable_error_code = ["no-untyped-call"]
 # ---------------------------------------------------------------------------
 [tool.pytest.ini_options]
 testpaths = ["packages", "utilities"]
-addopts = "-ra --strict-markers"
+# `--import-mode=importlib` is required because the workspace has
+# multiple `tests/` directories. The default "prepend" importer
+# collapses them into a single `tests` namespace (only one
+# `tests/__init__.py` wins), and even fails on basename collisions
+# like `test_app.py` existing in both `packages/website/tests/` and
+# `utilities/card_viewer/tests/`. importlib mode imports each test
+# module under its full path-derived name.
+#
+# `pythonpath` adds the directories that hold sibling helper
+# modules (per-package factory fixtures). importlib mode does NOT
+# add the test file's own directory to sys.path the way prepend
+# mode did, so absolute imports of those helpers (`import
+# _factories`, `import _website_factories`) would otherwise fail
+# with ModuleNotFoundError.
+pythonpath = [
+    "packages/features/tests",
+    "packages/website/tests",
+]
+addopts = "-ra --strict-markers --import-mode=importlib"
 markers = [
     "integration: end-to-end tests that hit the live network (skipped by default)",
 ]
