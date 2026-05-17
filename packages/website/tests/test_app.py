@@ -14,13 +14,20 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
+
+# Absolute import (not `from .`) so the test module doesn't depend on
+# packages/website/tests/ being a Python package. Two packages
+# (simulation, website) used to declare a `tests/__init__.py` and
+# pytest's prepend importer was collapsing both into a single `tests`
+# namespace — only one could win, the other's relative imports broke.
+# Renaming the factories file to `_website_factories.py` keeps it
+# unambiguous on sys.path.
+from _website_factories import goblin_decklist, make_store  # type: ignore[import-not-found]
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from mulligan_coach_recommend import RecommendationService, ServiceStatus
 from mulligan_coach_website.app import app
-from mulligan_coach_website.recommendation import RecommendationService, ServiceStatus
 from mulligan_coach_website.scryfall import ScryfallImages
-
-from ._factories import goblin_decklist, make_store
 
 
 @pytest.fixture

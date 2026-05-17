@@ -22,8 +22,6 @@ src/mulligan_coach_website/
 ├── data.py                 # CardStore: load parsed_cards + synth basics
 ├── decklist.py             # MTGA decklist parser -> ParseResult + ParseIssue
 ├── hand.py                 # Hand-state helpers (random / add / remove / resolve)
-├── recommendation.py       # ModelBundle + asymmetric recommend + mulligan
-│                           # prefetch cache + deeper-mulligan floor heuristic
 ├── scryfall.py             # Async Scryfall image-URL cache for hand thumbnails
 ├── templates/
 │   ├── base.html
@@ -42,6 +40,14 @@ tests/
 The skeleton mirrors `utilities/simulation_viewer` (FastAPI + HTMX
 + ParsedCard store + decklist parser) but the website is in
 `packages/`, not `utilities/` — it's part of the shipped product.
+
+The recommendation service that used to live as `recommendation.py`
+in this package moved to `packages/recommend/` so the overlay can
+share it without dragging in FastAPI. The design rationale (asymmetric
+sims, prefetch cache, +4 pp mulligan bias, deeper-mulligan floor)
+still lives in this file's "Recommendation pipeline" section below,
+since that's where it was first proven; `packages/recommend/CLAUDE.md`
+points back here for the why.
 
 ## How it works
 
@@ -102,8 +108,8 @@ a Plains would fail to resolve.
 
 ## Recommendation pipeline
 
-The pipeline in `recommendation.py` is the heart of the package.
-Four pieces compose:
+The pipeline (now in `packages/recommend/src/mulligan_coach_recommend/service.py`)
+is the heart of the system. Four pieces compose:
 
 ### 0. Arena BO1 hand smoother
 
@@ -137,7 +143,7 @@ mulligan arm : 50  hands × 40   sims = 2000 sims
 ```
 
 (See `DEFAULT_N_SIMS_KEEP` / `DEFAULT_N_SIMS_PER_MULLIGAN` /
-`DEFAULT_N_MULLIGAN_SAMPLES` in `recommendation.py`.)
+`DEFAULT_N_MULLIGAN_SAMPLES` in `mulligan_coach_recommend.service`.)
 
 ### 2. Mulligan-arm prefetch cache
 
@@ -182,7 +188,7 @@ each percentage point of bias have below-format-average WR out
 to about 5 pp, beyond which the bias starts pulling in
 ordinary keeps.
 
-`recommendation.py` applies a **+4 pp bias** (`MULLIGAN_BIAS =
+The recommend service applies a **+4 pp bias** (`MULLIGAN_BIAS =
 0.04`) to the mulligan arm before the verdict comparison. At
 that cutoff the website's marginal mulligan frequency lines up
 with skilled-player behaviour (predicted 8.3% vs actual 8.7%
@@ -292,15 +298,16 @@ instead. Deeper end-to-end model coverage lives in
 
 ## A note on importing model-package privates
 
-`recommendation.py` imports two underscore-prefixed names from
-the model package — `_library_from_deck` (from
-`feature_matrix`) and `_predict_proba` (from `inference`). They're
-not part of the model package's documented public surface but are
-stable helpers we deliberately reuse to inline a *shared-simulate*
-multi-level predict path (`_predict_levels_for_hand`). If those
-names ever move or change shape, this package must follow the
-model package — or we promote them to the public API and the
-import line above becomes a clean re-export.
+The recommend service (`packages/recommend/.../service.py`) imports
+two underscore-prefixed names from the model package —
+`_library_from_deck` (from `feature_matrix`) and `_predict_proba`
+(from `inference`). They're not part of the model package's
+documented public surface but are stable helpers we deliberately
+reuse to inline a *shared-simulate* multi-level predict path
+(`_predict_levels_for_hand`). If those names ever move or change
+shape, the recommend package must follow the model package — or we
+promote them to the public API and the import becomes a clean
+re-export.
 
 ## Out of scope
 

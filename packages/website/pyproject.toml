@@ -21,12 +21,15 @@ license = { text = "MIT" }
 authors = [{ name = "Bastian von Beschwitz", email = "bastian.vonbeschwitz@gmail.com" }]
 
 dependencies = [
-    # The four upstream packages we drive. Resolved against the workspace
-    # via the root pyproject's `[tool.uv.sources]` block.
+    # The five upstream packages we drive. Resolved against the workspace
+    # via the root pyproject's `[tool.uv.sources]` block. `recommend` owns
+    # the keep/mulligan service; the website is just a route + template
+    # layer over it.
     "mulligan-coach-cards",
     "mulligan-coach-features",
     "mulligan-coach-simulation",
     "mulligan-coach-model",
+    "mulligan-coach-recommend",
     # Same web stack the sibling utilities use — keeps the learning
     # surface small. uvicorn[standard] adds the C-accelerated event loop.
     "fastapi>=0.115",

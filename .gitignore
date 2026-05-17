@@ -66,3 +66,7 @@ packages/cards/*-parse-demo.json
 # output shape; they're meant to be regenerated locally before any
 # perf-tuning PR, not version-controlled.
 packages/simulation/baseline*.json
+
+# Ad-hoc debugging screenshots dropped by the user/Claude during overlay
+# iteration. Useful in the moment, not worth versioning.
+packages/overlay/screenshots/

@@ -46,7 +46,7 @@ import os
 import random
 import threading
 from collections import Counter, OrderedDict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -337,7 +337,7 @@ class _MulliganArmCache:
     def get_or_submit(
         self,
         key: _MulliganCacheKey,
-        compute_fn,
+        compute_fn: Callable[[], MulliganArmResult],
         executor: ThreadPoolExecutor,
     ) -> tuple[Future[MulliganArmResult], bool]:
         """Return the future for *key*; submit *compute_fn* on miss.

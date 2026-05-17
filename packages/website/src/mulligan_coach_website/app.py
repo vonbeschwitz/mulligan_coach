@@ -32,6 +32,13 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from mulligan_coach_recommend import (
+    DEFAULT_N_MULLIGAN_SAMPLES,
+    DEFAULT_N_SIMS_KEEP,
+    DEFAULT_N_SIMS_PER_MULLIGAN,
+    RecommendationService,
+    load_service,
+)
 from starlette.datastructures import URL, URLPath
 
 from .data import CardStore
@@ -43,13 +50,6 @@ from .hand import (
     random_hand,
     remove_at,
     resolve_hand,
-)
-from .recommendation import (
-    DEFAULT_N_MULLIGAN_SAMPLES,
-    DEFAULT_N_SIMS_KEEP,
-    DEFAULT_N_SIMS_PER_MULLIGAN,
-    RecommendationService,
-    load_service,
 )
 from .scryfall import ScryfallImages
 
