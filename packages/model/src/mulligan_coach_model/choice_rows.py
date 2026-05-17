@@ -56,7 +56,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pyarrow.parquet as pq
 from mulligan_coach_cards import ParsedCard
@@ -308,11 +308,13 @@ def _materialise_hand(
     return cards, missing
 
 
-def _coerce_optional_int(value: object) -> int | None:
+def _coerce_optional_int(value: Any) -> int | None:
     """Return ``int(value)`` or ``None`` for NULL / NaN inputs.
 
     The pyarrow / pandas round-trip preserves NaN for nullable float
     columns and ``None`` for nullable int columns; we accept both.
+    ``Any`` rather than ``object`` because the value originates from a
+    parquet RecordBatch where the per-cell type is dynamic.
     """
     if value is None:
         return None
@@ -321,7 +323,7 @@ def _coerce_optional_int(value: object) -> int | None:
     return int(value)
 
 
-def _coerce_optional_float(value: object) -> float | None:
+def _coerce_optional_float(value: Any) -> float | None:
     """Return ``float(value)`` or ``None`` for NULL / NaN inputs."""
     if value is None:
         return None
@@ -402,7 +404,9 @@ def iter_choice_rows(
     deck_cache: dict[tuple[str, int, int, int], tuple[ParsedCard, ...] | None] = {}
 
     emitted = 0
-    for batch in pf.iter_batches(batch_size=batch_size, columns=list(_REQUIRED_COLUMNS)):
+    for batch in pf.iter_batches(  # type: ignore[no-untyped-call]
+        batch_size=batch_size, columns=list(_REQUIRED_COLUMNS)
+    ):
         records = batch.to_pylist()
         for record in records:
             if limit is not None and emitted >= limit:
@@ -447,7 +451,7 @@ def _log_summary(stats: ChoiceRowStats, set_code: str, event_type: str) -> None:
 
 
 def _record_to_choice_row(
-    record: dict[str, object],
+    record: dict[str, Any],
     *,
     set_code_upper: str,
     event_type: str,
