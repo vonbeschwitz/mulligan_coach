@@ -486,14 +486,18 @@ def test_simulation_mana_availability_from_game_level() -> None:
 
 
 def test_simulation_p_any_with_two_independent_cards() -> None:
-    """Two hand cards each with P(castable T2) = 0.5 → P(any) = 0.75.
+    """Two distinct deck names each with per-game-marginal P(castable
+    in T2 snapshot) = 0.5 → P(any) = 1 - 0.5*0.5 = 0.75 across deck.
 
     Builds an aggregate with hand-crafted CardStats so we can verify
-    the 1 - prod(1-p) formula on a clean two-card case.
+    the 1 - prod(1-p) formula on a clean two-name case. The feature
+    iterates over the DECK (not the hand) and reads
+    ``p_castable_in_snapshot_by_turn`` — the per-game marginal that
+    includes drawn cards as well as opening-hand cards.
     """
     bear_a = f.vanilla_creature("Bear A", "{1}{G}")
     bear_b = f.vanilla_creature("Bear B", "{1}{G}")
-    hand = [bear_a, bear_b]
+    deck = [bear_a, bear_b]
     aggregate = AggregateStats(
         n_runs=100,
         seed=None,
@@ -503,33 +507,69 @@ def test_simulation_p_any_with_two_independent_cards() -> None:
                 name="Bear A",
                 oracle_id=bear_a.oracle_id,
                 n_copies_in_deck=1,
-                p_in_hand_by_turn=[1.0, 1.0, 1.0, 1.0],
-                p_castable_by_turn=[0.0, 0.5, 0.7, 0.9],
+                p_castable_in_snapshot_by_turn=[0.0, 0.5, 0.7, 0.9],
             ),
             "Bear B": CardStats(
                 name="Bear B",
                 oracle_id=bear_b.oracle_id,
                 n_copies_in_deck=1,
-                p_in_hand_by_turn=[1.0, 1.0, 1.0, 1.0],
-                p_castable_by_turn=[0.0, 0.5, 0.7, 0.9],
+                p_castable_in_snapshot_by_turn=[0.0, 0.5, 0.7, 0.9],
             ),
         },
     )
     out = build_simulation_features(
-        hand, deck=[], aggregate_stats=aggregate, zscores=_empty_zscores()
+        hand=[], deck=deck, aggregate_stats=aggregate, zscores=_empty_zscores()
     )
     # P(any creature castable T2) = 1 - 0.5*0.5 = 0.75
     assert out["p_any_creature_t2"] == pytest.approx(0.75)
-    # avg count = 0.5 + 0.5 = 1.0
+    # avg count (sum of per-name marginals) = 0.5 + 0.5 = 1.0
     assert out["avg_count_creature_t2"] == pytest.approx(1.0)
 
 
+def test_simulation_features_count_drawn_creatures_not_in_hand() -> None:
+    """Regression: ``p_any_creature_t2`` must NOT be zero when the
+    opening hand has no creatures but the deck does — the simulator's
+    per-snapshot aggregate already counts drawn instances, and the
+    feature builder must read that deck-wide marginal rather than
+    the hand-only one. Prior to this fix this returned 0.0 and the
+    website surfaced a misleading "0% chance of casting a creature
+    on T2"."""
+    forest_hand = [f.forest()] * 7  # zero creatures in hand
+    bear = f.vanilla_creature("Bear", "{1}{G}")
+    deck = forest_hand + [bear] * 5  # 5 deck creatures, none in hand
+    aggregate = AggregateStats(
+        n_runs=100,
+        seed=None,
+        on_the_play=True,
+        by_card_name={
+            "Bear": CardStats(
+                name="Bear",
+                oracle_id=bear.oracle_id,
+                n_copies_in_deck=5,
+                # 30% per-game chance ≥1 Bear was castable in the T2
+                # snapshot (drawn on T1 / T2 from the library).
+                p_castable_in_snapshot_by_turn=[0.0, 0.3, 0.5, 0.7],
+            ),
+        },
+    )
+    out = build_simulation_features(
+        hand=forest_hand,
+        deck=deck,
+        aggregate_stats=aggregate,
+        zscores=_empty_zscores(),
+    )
+    # Zero creatures in hand, but the deck-wide marginal is 0.3.
+    assert out["p_any_creature_t2"] == pytest.approx(0.3)
+    # Same for T3 / T4: features track the simulator marginal.
+    assert out["p_any_creature_mv_0_2_t3"] == pytest.approx(0.5)
+
+
 def test_simulation_high_oh_split_filters_correctly() -> None:
-    """high_oh restricts to z-OH > 0.5. Build a hand where only one
-    spell qualifies and confirm the high_oh feature collapses to it."""
+    """high_oh restricts to z-OH > 0.5. Build a deck where only one
+    name qualifies and confirm the high_oh feature collapses to it."""
     bomb = f.vanilla_creature("Bomb", "{1}{G}", arena_id=1)  # z = 1.5
     filler = f.vanilla_creature("Filler", "{1}{G}", arena_id=2)  # z = 0.2
-    hand = [bomb, filler]
+    deck = [bomb, filler]
     aggregate = AggregateStats(
         n_runs=100,
         seed=None,
@@ -539,15 +579,13 @@ def test_simulation_high_oh_split_filters_correctly() -> None:
                 name="Bomb",
                 oracle_id=bomb.oracle_id,
                 n_copies_in_deck=1,
-                p_in_hand_by_turn=[1.0, 1.0, 1.0, 1.0],
-                p_castable_by_turn=[0.0, 0.5, 0.7, 0.9],
+                p_castable_in_snapshot_by_turn=[0.0, 0.5, 0.7, 0.9],
             ),
             "Filler": CardStats(
                 name="Filler",
                 oracle_id=filler.oracle_id,
                 n_copies_in_deck=1,
-                p_in_hand_by_turn=[1.0, 1.0, 1.0, 1.0],
-                p_castable_by_turn=[0.0, 0.5, 0.7, 0.9],
+                p_castable_in_snapshot_by_turn=[0.0, 0.5, 0.7, 0.9],
             ),
         },
     )
@@ -555,7 +593,7 @@ def test_simulation_high_oh_split_filters_correctly() -> None:
         1: f.make_zscores(arena_id=1, z_oh=1.5),
         2: f.make_zscores(arena_id=2, z_oh=0.2),
     }
-    out = build_simulation_features(hand, deck=[], aggregate_stats=aggregate, zscores=zscores)
+    out = build_simulation_features(hand=[], deck=deck, aggregate_stats=aggregate, zscores=zscores)
     # high_oh: only the bomb counts. avg_count = 0.5, p_any = 0.5.
     assert out["avg_count_creature_high_oh_t2"] == pytest.approx(0.5)
     assert out["p_any_creature_high_oh_t2"] == pytest.approx(0.5)

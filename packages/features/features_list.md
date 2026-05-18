@@ -175,12 +175,19 @@ Sourced from a new game-level aggregator over the simulator trace
 
 For each turn 1–4, we ask:
 - `p_any_castable[category]` — P(at least one card in the matching
-  category is castable on this turn).
-- `avg_count_castable[category]` — expected number of castable cards
-  matching the category.
+  category is castable on this turn), averaged across simulated
+  games.
+- `avg_count_castable[category]` — expected number of distinct
+  matching names castable in this turn's snapshot, averaged across
+  games.
 
-Both come from the simulator's per-card `p_castable_by_turn[T]`,
-filtered down to the matching subset of the hand.
+Both come from the simulator's per-name
+`p_castable_in_snapshot_by_turn[T]` aggregate (the per-game
+marginal that already includes drawn cards), filtered to the
+matching subset of **the deck**. This is what makes "P(any 2-drop
+castable on T2)" reflect the game the simulator actually played —
+including cards drawn on T1 / T2 — rather than collapsing to 0
+whenever the opening hand happens to lack the category.
 
 For three "broad" buckets — **any spell**, **creature**, **removal** —
 each turn produces both an `all` version (over every card matching

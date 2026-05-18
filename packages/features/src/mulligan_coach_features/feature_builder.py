@@ -510,8 +510,13 @@ def build_simulation_features(
     out["expected_mana_count_turn_4"] = float(gl.expected_mana_count_turn[2])
 
     # --- Per-turn castability (96) -------------------------------------
+    # Operates over the whole deck via the simulator's per-snapshot
+    # aggregate, so drawn cards count toward "P(any creature castable
+    # on T2)" etc. — matching the simulator's semantics rather than
+    # showing 0 just because the opening hand happens to lack the
+    # category. See _build_castability_features for details.
     hand_list = list(hand)
-    out.update(_build_castability_features(hand_list, aggregate_stats, zscores))
+    out.update(_build_castability_features(hand_list, list(deck), aggregate_stats, zscores))
 
     # --- Additional castability (2) ------------------------------------
     # Average over deck spells / hand spells of P(castable by turn 4).
@@ -561,20 +566,44 @@ def _p_castable_for(card: ParsedCard, stats: AggregateStats, turn: int) -> float
     return float(cs.p_castable_by_turn[turn - 1])
 
 
-def _p_any_and_avg_count(
-    cards: Sequence[ParsedCard], stats: AggregateStats, turn: int
-) -> tuple[float, float]:
-    """Compute (P(any castable), expected count castable) for a subset.
+def _p_snapshot_castable_for(name: str, stats: AggregateStats, turn: int) -> float:
+    """Per-game marginal: fraction of sim runs where ≥1 instance of
+    ``name`` was castable in the turn-``turn`` snapshot.
 
-    ``P(any)`` uses the independence approximation
-    ``1 - prod(1 - p_i)``. ``avg_count`` is just the sum of per-card
-    probabilities (linearity of expectation, no independence assumed).
+    Defensively returns 0.0 for unknown names. ``turn`` is 1-indexed.
+    """
+    cs = stats.by_card_name.get(name)
+    if cs is None:
+        return 0.0
+    return float(cs.p_castable_in_snapshot_by_turn[turn - 1])
+
+
+def _deck_p_any_and_avg_count(
+    deck_cards: Sequence[ParsedCard], stats: AggregateStats, turn: int
+) -> tuple[float, float]:
+    """Compute (P(any castable), expected count of distinct names
+    castable) for a deck-wide subset, using the simulator's per-game
+    snapshot marginal.
+
+    Iterates over **distinct names** in the input (not instances): two
+    copies of the same card share one marginal because the underlying
+    aggregate already collapses copies (it counts "did any copy of
+    name X show up castable this turn?" per game). Independence across
+    *different* names is the same approximation used by the prior
+    hand-only path.
+
+    ``avg_count`` is the sum of per-name marginals — the expected
+    number of *distinct* matching names castable in the snapshot,
+    averaged across games. This loses the multi-copy contribution to
+    "count of castable cards" but stays consistent with the per-name
+    aggregation that drives ``p_any``.
 
     Both return 0.0 for an empty subset — XGBoost convention.
     """
-    if not cards:
+    if not deck_cards:
         return 0.0, 0.0
-    ps = [_p_castable_for(c, stats, turn) for c in cards]
+    unique_names = {c.name for c in deck_cards}
+    ps = [_p_snapshot_castable_for(name, stats, turn) for name in unique_names]
     p_any = 1.0 - prod(1.0 - p for p in ps)
     avg_count = sum(ps)
     return p_any, avg_count
@@ -593,10 +622,20 @@ _BROAD_REMOVAL = "removal"
 
 def _build_castability_features(
     hand: Sequence[ParsedCard],
+    deck: Sequence[ParsedCard],
     stats: AggregateStats,
     zscores: dict[int, CardZScores],
 ) -> dict[str, float]:
     """Build all 96 per-turn castability features.
+
+    Iterates over deck *spells* — the simulator's per-snapshot
+    aggregate (``p_castable_in_snapshot_by_turn``) is a per-game
+    marginal that already captures both opening-hand and drawn
+    instances, so the right "did I have a creature castable on T2?"
+    feature averages across the whole deck, not just the opening
+    seven. ``hand`` is no longer read here (kept in the signature
+    for callsite stability; reserved for hand-only summaries we
+    haven't yet folded in).
 
     Turn 1 emits ``p_any`` only (``avg_count`` is uninformative for
     T1 — only one card can be cast, so it equals ``p_any``). Turns
@@ -604,9 +643,9 @@ def _build_castability_features(
     introduces narrower MV-stratified buckets per the spec's growing
     castability surface.
     """
+    del hand  # currently unused — see docstring.
     out: dict[str, float] = {}
-    hand_list = list(hand)
-    spells = [c for c in hand_list if cat.is_spell(c)]
+    spells = [c for c in deck if cat.is_spell(c)]
 
     # Pre-compute the high-OH-WR subset so the per-bucket filter is a
     # cheap id-set membership check. ``id()`` keys are stable for the
@@ -718,13 +757,19 @@ def _emit_turn_features(
     ``all`` variant. ``include_avg_count`` is False on turn 1 (the
     spec drops it there because P(any) == avg_count when at most one
     card can be cast).
+
+    Uses :func:`_deck_p_any_and_avg_count`, which keys the simulator
+    aggregate by *card name* rather than per-instance — multiple
+    copies of one card name in the deck collapse to a single per-game
+    marginal, which is the correct interpretation of "did ≥1 copy
+    show up castable in this turn's snapshot?"
     """
     # Broad: all + high_oh
     for cat_name, pred in broad:
         matching = [c for c in spells if pred(c)]
         for is_high_oh, suffix in ((False, ""), (True, "_high_oh")):
             subset = restrict(matching, is_high_oh)
-            p_any, avg_count = _p_any_and_avg_count(subset, stats, turn=turn)
+            p_any, avg_count = _deck_p_any_and_avg_count(subset, stats, turn=turn)
             out[f"p_any_{cat_name}{suffix}_t{turn}"] = p_any
             if include_avg_count:
                 out[f"avg_count_{cat_name}{suffix}_t{turn}"] = avg_count
@@ -732,7 +777,7 @@ def _emit_turn_features(
     # Narrow: all only
     for cat_name, pred in narrow:
         matching = [c for c in spells if pred(c)]
-        p_any, avg_count = _p_any_and_avg_count(matching, stats, turn=turn)
+        p_any, avg_count = _deck_p_any_and_avg_count(matching, stats, turn=turn)
         out[f"p_any_{cat_name}_t{turn}"] = p_any
         if include_avg_count:
             out[f"avg_count_{cat_name}_t{turn}"] = avg_count
