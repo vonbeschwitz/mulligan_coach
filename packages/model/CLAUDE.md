@@ -471,6 +471,50 @@ directory plus the source data. Not part of the package's public
 import surface — invoke via the workspace's `python.exe`
 (`.venv/Scripts/python.exe packages/model/scripts/<name>.py`).
 
+### `materialize_feature_matrix.py`
+
+Thin CLI over
+`mulligan_coach_model.feature_matrix.materialize_feature_matrix`.
+Materialises the win-model feature parquet for one or more sets,
+writing chunked output under
+`data/processed/model_training/<SET>/<EVENT>/`. Use
+`--overwrite` after a simulator-semantics change to wipe the
+existing cache (the chunk-level resume otherwise treats existing
+chunks as authoritative).
+
+Typical use:
+
+```
+.venv/Scripts/python.exe packages/model/scripts/materialize_feature_matrix.py \
+  --sets TLA TMT ECL --n-workers 8 --overwrite
+```
+
+### `retrain_all.py`
+
+Chain script that runs all four steps end-to-end:
+materialise win cache -> train win model -> materialise choice
+cache -> train choice model. Designed for unattended overnight
+runs: each sub-step logs to a timestamped directory under
+`logs/retrain_all_<timestamp>/`. `--skip-existing` skips whole
+steps whose output directory already exists (so a mid-chain
+crash can be picked up). `--overwrite-caches` forces re-
+materialisation (use after a simulator-semantics change).
+
+Typical use:
+
+```
+.venv/Scripts/python.exe packages/model/scripts/retrain_all.py \
+  --win-sets TLA TMT ECL \
+  --choice-sets TLA TMT \
+  --win-output-dir models/all3_v2 \
+  --choice-output-dir models/choice_v3 \
+  --overwrite-caches \
+  --n-workers 8
+```
+
+Wall-clock on TLA + TMT + ECL with 8 workers: ~28 hours of
+materialisation + ~1 hour of training. Plan accordingly.
+
 ### `validate_bottoming.py`
 
 Empirical validation of the bottoming heuristic in
