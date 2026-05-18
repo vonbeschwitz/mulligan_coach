@@ -46,13 +46,27 @@ for first-castable-turn distributions but not for downstream
 "did I have a creature castable on T2?" questions, because it
 excludes cases where the card wasn't in the opening hand at all.
 
-`p_castable_in_snapshot_by_turn[t]` is the *per-game marginal*:
-fraction of simulated games where at least one instance of the
-name appeared as castable in turn T's snapshot. The aggregator
-builds it by scanning each game's per-turn `CastabilityRecord`s
-(which already include drawn cards — the snapshot is taken after
-the draw step), so a 2-drop the engine drew on T2 contributes to
-this name's T2 entry whether or not the opening hand had a copy.
+`p_castable_in_snapshot_by_turn[t]` is the *per-game monotonic
+marginal*: fraction of simulated games where at least one instance
+of the name appeared as castable in some turn-≤T snapshot. The
+aggregator scans each game's per-turn `CastabilityRecord`s in
+order (these include drawn cards — the snapshot is taken after
+the draw step), records the first turn each name appears as
+castable, then rolls that name forward to every later turn in
+the same game.
+
+Why monotonic carry-forward matters: the spell-casting policy
+casts and removes from hand any mana dork, ramp spell, or card-
+draw spell on the turn it first becomes castable. A vanilla
+creature in opening hand stays in hand all four turns and
+naturally shows up in every snapshot; a mana dork in opening
+hand shows up in T1, gets cast on T1, and is gone from T2+
+snapshots — even though both equally "could have been a creature
+on T2". Carrying the first-castable turn forward keeps the two
+card types on equal footing for downstream "did I have access
+to a card of this type by T?" features. The gameplay simulation
+is unchanged — we never recast the dork or double-count its
+mana; only the aggregate's bookkeeping changes.
 
 This is the metric the feature builder's deck-wide per-turn
 castability features read; see `packages/features/CLAUDE.md`.

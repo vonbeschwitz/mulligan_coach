@@ -41,12 +41,19 @@ class CardStats(BaseModel):
 
     ``p_castable_by_turn`` is *per-instance, conditional on being in
     hand by turn T*. ``p_castable_in_snapshot_by_turn`` is the
-    *per-game marginal*: fraction of simulated games where at least
-    one instance of this name appeared as castable in the turn-T
-    castability snapshot. The latter is what downstream "did I have
-    a creature castable on T2?" rollups want, because it implicitly
-    averages over how often the card was drawn rather than just
-    the kept-it-from-the-opening-hand case.
+    *per-game monotonic marginal*: fraction of simulated games where
+    at least one instance of this name appeared as castable in some
+    turn-≤T snapshot. The monotonic ("once castable, stays counted")
+    interpretation gives cross-card-type parity: a vanilla creature
+    in opening hand stays in hand and shows up castable in every
+    turn's snapshot through T4, but a mana dork in opening hand gets
+    cast on T1 and disappears from later snapshots — even though
+    both equally "could have been a creature on T2". Treating each
+    card as castable from the turn it first became playable onward
+    matches what a "did I have access to a card of this type by T?"
+    feature should measure, and tracks the same shape as the
+    `first_castable_turn_distribution` summary just keyed at the
+    per-name marginal level.
     """
 
     name: str
@@ -123,18 +130,36 @@ def aggregate(
         for instance in games_list[0].instances:
             n_in_deck[instance.name] += 1
 
-    # Per-name per-turn "≥1 instance of this name was castable in this
-    # turn's snapshot in this game" counter. Built by scanning each
-    # game's snapshots; covers both opening-hand cards and cards drawn
-    # during the simulation (the snapshot is taken AFTER the draw step,
-    # so a 2-drop drawn on T2 shows up in the T2 castability records).
-    # The normalisation denominator is the number of games (n_runs),
-    # not the per-name in-hand count, so this is a per-game marginal
-    # rather than a conditional probability.
-    snap_castable_games: dict[str, list[int]] = defaultdict(lambda: [0] * 4)
+    # Per-name per-turn "≥1 instance of this name was castable in some
+    # turn-≤T snapshot in this game" counter. Built by scanning each
+    # game's snapshots in order and recording the FIRST turn (1..4)
+    # any instance of each name appeared as castable; that name then
+    # contributes to every later turn's count too.
+    #
+    # The monotonic interpretation matters for cards the spell-casting
+    # policy removes from hand on a later turn — mana dorks, draw
+    # spells, ramp. A vanilla creature in opening hand stays in hand
+    # all four turns and naturally shows up in every snapshot, so the
+    # naive per-snapshot count would already give 1.0 for all turns.
+    # A mana dork in opening hand shows up in T1, gets cast on T1,
+    # and disappears from T2+ snapshots — even though it was
+    # "available as a creature" exactly as much as the vanilla one.
+    # Forwarding the first-castable turn keeps the two card types on
+    # equal footing for the downstream "did I have access to a card
+    # of this type by T?" feature.
+    #
+    # The snapshot is taken AFTER the draw step, so a 2-drop drawn on
+    # T2 still appears in the T2 castability records before any
+    # spells go off. The normalisation denominator is n_games, so
+    # this is a per-game marginal rather than a conditional probability.
     n_games = len(games_list)
+    snap_castable_games: dict[str, list[int]] = defaultdict(lambda: [0] * 4)
 
     for game in games_list:
+        # Per-name "first turn 1..4 where any instance was castable in
+        # the snapshot in THIS game". Sentinel `None` = never castable
+        # in window.
+        first_turn: dict[str, int] = {}
         for snap in game.turns:
             # Turn 5 is a partial snapshot (draw + land drop only) with
             # an empty castability list; the `if 1 <= snap.turn <= 4`
@@ -142,9 +167,16 @@ def aggregate(
             # promises.
             if not 1 <= snap.turn <= 4:
                 continue
-            castable_names = {r.card_name for r in snap.castability if r.castable}
-            for name in castable_names:
-                snap_castable_games[name][snap.turn - 1] += 1
+            for r in snap.castability:
+                if not r.castable:
+                    continue
+                if r.card_name not in first_turn:
+                    first_turn[r.card_name] = snap.turn
+        # Roll each name forward: ft = 1 -> contribute to T1..T4;
+        # ft = 3 -> contribute to T3..T4 only; etc.
+        for name, ft in first_turn.items():
+            for t in range(ft - 1, 4):
+                snap_castable_games[name][t] += 1
 
     for game in games_list:
         for inst in game.instances:
