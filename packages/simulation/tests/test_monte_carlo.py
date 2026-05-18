@@ -149,12 +149,13 @@ def test_aggregate_serialises_to_json() -> None:
 
 
 # ----------------------------------------------------------------------
-# p_castable_in_snapshot_by_turn — per-game marginal that includes
-# drawn cards. Distinct from p_castable_by_turn (per-instance,
-# conditional on being in hand). This is the metric downstream
-# rollups want for "did I have a 2-drop castable on T2?" because
-# it also captures the case where the 2-drop wasn't in the opening
-# hand but was drawn on T1 / T2.
+# p_castable_in_snapshot_by_turn — per-game monotonic marginal that
+# includes drawn cards. Distinct from p_castable_by_turn (per-instance,
+# conditional on being in hand). Monotonic in turn: once a name first
+# appeared as castable in any snapshot in a game, it counts for every
+# later turn too. Gives cross-card-type parity so a mana dork (cast
+# turn 1, leaves hand) doesn't artificially disappear from the T2-T4
+# tally relative to a vanilla creature.
 # ----------------------------------------------------------------------
 
 
@@ -164,10 +165,8 @@ def test_snapshot_castable_captures_card_not_in_opening_hand() -> None:
 
     Opening hand: 7 Forests. Library: 20 vanilla 1-drops + 13 Forests.
     Across 300 sims we'll draw a 1-drop into hand on T2 / T3 / T4 in
-    most games, and with 6+ Forests already on the battlefield the
-    1-drop will be castable in that turn's snapshot. Using a vanilla
-    creature (not a mana dork) so the spell-casting policy leaves it
-    in hand and it shows up in later snapshots too.
+    most games. With 6+ Forests already on the battlefield it's
+    castable the moment it enters hand.
     """
     parsed_hand = [f.forest()] * 7
     one_drop = f.vanilla_creature("Goblin", "{G}", 1, 1)
@@ -175,27 +174,61 @@ def test_snapshot_castable_captures_card_not_in_opening_hand() -> None:
     stats = simulate(parsed_hand, parsed_library, n_runs=300, seed=7)
 
     g = stats.by_card_name["Goblin"]
-    # On the play we don't draw on T1, so the snapshot can't see a
-    # card that started in the library. On T2/T3/T4 we've drawn
-    # 1/2/3 cards from a 33-card library with 20 Goblins — most
-    # games will see at least one castable copy in that turn's
-    # snapshot.
+    # On the play we don't draw on T1, so first castable in window is
+    # T2 at the earliest. The monotonic carry-forward then keeps every
+    # later turn counted too.
     assert g.p_castable_in_snapshot_by_turn[0] == 0.0  # T1: never drawn
     assert g.p_castable_in_snapshot_by_turn[1] >= 0.4  # T2: one draw
     assert g.p_castable_in_snapshot_by_turn[2] >= 0.7  # T3: two draws
     assert g.p_castable_in_snapshot_by_turn[3] >= 0.85  # T4: three draws
-    # Monotonic non-decreasing across turns: once a vanilla creature
-    # is in hand and castable on turn T (Forests don't go away), at
-    # least one stays castable on later turns too.
+    # Monotonic non-decreasing across turns — by construction of the
+    # aggregate, every game that first hits castable on Tk contributes
+    # to Tk, Tk+1, ..., T4.
     for t in range(3):
         assert g.p_castable_in_snapshot_by_turn[t] <= g.p_castable_in_snapshot_by_turn[t + 1] + 1e-9
 
 
+def test_snapshot_castable_mana_dork_stays_counted_after_being_cast() -> None:
+    """Mana dorks (and other cards the policy casts on T1) must stay
+    counted in the monotonic metric — they had access to "being a
+    creature" from T1 onward exactly like a vanilla 1-drop that stayed
+    in hand. The naive per-snapshot count would only see them on T1
+    (because the policy casts them off the hand on T1); the monotonic
+    carry-forward keeps them in the T2 / T3 / T4 buckets too.
+
+    Opening hand: 3 Forests + 4 Llanowar Elves. Across 100 sims the
+    T1 castability snapshot virtually always sees ≥1 Elf castable;
+    the snapshot is taken BEFORE the spell-casting phase that then
+    casts one of them.
+    """
+    parsed_hand = [f.forest()] * 3 + [f.llanowar_elves()] * 4
+    parsed_library = [f.forest()] * 33
+    stats = simulate(parsed_hand, parsed_library, n_runs=100, seed=11)
+
+    elves = stats.by_card_name["Llanowar Elves"]
+    # ~1.0 on T1, and the monotonic property pins T2 / T3 / T4 at
+    # ≥ T1 — every game that ever saw an Elf castable counts on every
+    # later turn. The actual snapshot on T2+ might or might not still
+    # have an Elf in hand, but the aggregate doesn't care: this is
+    # the "by turn T, did this name ever appear castable?" rollup.
+    assert elves.p_castable_in_snapshot_by_turn[0] >= 0.95
+    for t in range(3):
+        assert (
+            elves.p_castable_in_snapshot_by_turn[t]
+            <= elves.p_castable_in_snapshot_by_turn[t + 1] + 1e-9
+        )
+    # And specifically: T4 should match T1 because every game that
+    # cast the dork on T1 also "had it castable by T4" under the
+    # carry-forward semantic.
+    assert elves.p_castable_in_snapshot_by_turn[3] == elves.p_castable_in_snapshot_by_turn[0]
+
+
 def test_snapshot_castable_for_opening_hand_card_matches_simple_case() -> None:
     """A 1-drop IN the opening hand with abundant Forests: the snapshot
-    metric should be ~1.0 on every turn (the card never leaves hand
-    because the simulator's spell-casting policy skips vanilla
-    creatures, so it stays castable in every turn's snapshot)."""
+    metric should be ~1.0 on every turn. (Vanilla creature; the
+    spell-casting policy doesn't cast it, so it stays in hand and the
+    snapshot keeps seeing it — but the monotonic semantic also
+    would've held had it been cast.)"""
     parsed_hand = [f.forest()] * 3 + [f.vanilla_creature("Elf", "{G}", 1, 1)] * 4
     parsed_library = [f.forest()] * 33
     stats = simulate(parsed_hand, parsed_library, n_runs=100, seed=11)
