@@ -113,6 +113,13 @@
       <h2>3. Game context</h2>
       <fieldset class="context-grid">
         <label class="check">
+          {# Hidden companion sends "false" when the checkbox is unchecked.
+             HTML forms omit a checkbox entirely when unchecked, so without
+             this the FastAPI route falls back to its `= True` default and
+             "on the play" is sticky-on. Starlette's FormData keeps the
+             last value for duplicate keys, so when the box IS checked
+             both fields submit and the checkbox's "true" wins. #}
+          <input type="hidden" name="on_the_play" value="false">
           <input type="checkbox" name="on_the_play" value="true" checked>
           On the play
         </label>

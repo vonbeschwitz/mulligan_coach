@@ -83,6 +83,26 @@ def test_index_renders(client: TestClient) -> None:
     assert "Model not loaded" in resp.text
 
 
+def test_index_has_hidden_on_the_play_companion(client: TestClient) -> None:
+    """The On-the-play checkbox needs a hidden ``=false`` companion.
+
+    HTML forms drop unchecked checkboxes from the POST body, so
+    without the companion the FastAPI route's ``= True`` default
+    sticks and the user can never actually pick "on the draw" from
+    the website. Render the page and confirm both inputs are wired.
+    """
+    resp = client.get("/")
+    assert resp.status_code == 200
+    # Hidden field always sends "false"; checkbox overrides with
+    # "true" only when checked. Order matters — Starlette keeps the
+    # last value for duplicate keys.
+    hidden_pos = resp.text.find('<input type="hidden" name="on_the_play" value="false">')
+    checkbox_pos = resp.text.find('<input type="checkbox" name="on_the_play" value="true"')
+    assert hidden_pos != -1, "hidden on_the_play=false companion missing"
+    assert checkbox_pos != -1, "on_the_play checkbox missing"
+    assert hidden_pos < checkbox_pos, "hidden field must come BEFORE checkbox"
+
+
 def test_validate_returns_validation_partial(client: TestClient) -> None:
     """``POST /validate`` parses the deck and returns a 200 HTML fragment."""
     resp = client.post("/validate", data={"decklist": goblin_decklist()})
