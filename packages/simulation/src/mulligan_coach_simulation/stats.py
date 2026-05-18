@@ -37,7 +37,17 @@ class ModeStats(BaseModel):
 
 
 class CardStats(BaseModel):
-    """Per-card aggregate, keyed by ``name`` in :class:`AggregateStats`."""
+    """Per-card aggregate, keyed by ``name`` in :class:`AggregateStats`.
+
+    ``p_castable_by_turn`` is *per-instance, conditional on being in
+    hand by turn T*. ``p_castable_in_snapshot_by_turn`` is the
+    *per-game marginal*: fraction of simulated games where at least
+    one instance of this name appeared as castable in the turn-T
+    castability snapshot. The latter is what downstream "did I have
+    a creature castable on T2?" rollups want, because it implicitly
+    averages over how often the card was drawn rather than just
+    the kept-it-from-the-opening-hand case.
+    """
 
     name: str
     oracle_id: str
@@ -46,6 +56,7 @@ class CardStats(BaseModel):
     )
     p_in_hand_by_turn: list[float] = Field(default_factory=lambda: [0.0] * 4)
     p_castable_by_turn: list[float] = Field(default_factory=lambda: [0.0] * 4)
+    p_castable_in_snapshot_by_turn: list[float] = Field(default_factory=lambda: [0.0] * 4)
     first_castable_turn_distribution: list[float] = Field(default_factory=lambda: [0.0] * 5)
     by_mode: list[ModeStats] = Field(default_factory=list)
 
@@ -112,6 +123,29 @@ def aggregate(
         for instance in games_list[0].instances:
             n_in_deck[instance.name] += 1
 
+    # Per-name per-turn "≥1 instance of this name was castable in this
+    # turn's snapshot in this game" counter. Built by scanning each
+    # game's snapshots; covers both opening-hand cards and cards drawn
+    # during the simulation (the snapshot is taken AFTER the draw step,
+    # so a 2-drop drawn on T2 shows up in the T2 castability records).
+    # The normalisation denominator is the number of games (n_runs),
+    # not the per-name in-hand count, so this is a per-game marginal
+    # rather than a conditional probability.
+    snap_castable_games: dict[str, list[int]] = defaultdict(lambda: [0] * 4)
+    n_games = len(games_list)
+
+    for game in games_list:
+        for snap in game.turns:
+            # Turn 5 is a partial snapshot (draw + land drop only) with
+            # an empty castability list; the `if 1 <= snap.turn <= 4`
+            # guard keeps us inside the 4-turn window the aggregate
+            # promises.
+            if not 1 <= snap.turn <= 4:
+                continue
+            castable_names = {r.card_name for r in snap.castability if r.castable}
+            for name in castable_names:
+                snap_castable_games[name][snap.turn - 1] += 1
+
     for game in games_list:
         for inst in game.instances:
             n_total[inst.name] += 1
@@ -157,6 +191,13 @@ def aggregate(
         for t in range(4):
             denom = n_in_hand_by_turn[name][t]
             cs.p_castable_by_turn[t] = castable_by_turn[name][t] / denom if denom > 0 else 0.0
+
+        # Per-game marginal: fraction of games where ≥1 instance of
+        # this name appeared in the turn-T snapshot AS castable.
+        # Includes drawn cards; doesn't condition on in-hand count.
+        cs.p_castable_in_snapshot_by_turn = [
+            snap_castable_games[name][t] / n_games if n_games > 0 else 0.0 for t in range(4)
+        ]
 
         # Per-mode rollup.
         per_mode: list[ModeStats] = []

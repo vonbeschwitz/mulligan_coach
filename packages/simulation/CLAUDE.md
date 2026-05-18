@@ -38,6 +38,25 @@ land / mana counts after each turn's land drop:
 These feed the XGBoost feature stage's "mana availability" feature
 family — see `packages/features/features_list.md`.
 
+### Per-card snapshot castability (`CardStats.p_castable_in_snapshot_by_turn`)
+
+`p_castable_by_turn[t]` is a *per-instance* probability conditional
+on the card having been in hand by turn T. That's the right shape
+for first-castable-turn distributions but not for downstream
+"did I have a creature castable on T2?" questions, because it
+excludes cases where the card wasn't in the opening hand at all.
+
+`p_castable_in_snapshot_by_turn[t]` is the *per-game marginal*:
+fraction of simulated games where at least one instance of the
+name appeared as castable in turn T's snapshot. The aggregator
+builds it by scanning each game's per-turn `CastabilityRecord`s
+(which already include drawn cards — the snapshot is taken after
+the draw step), so a 2-drop the engine drew on T2 contributes to
+this name's T2 entry whether or not the opening hand had a copy.
+
+This is the metric the feature builder's deck-wide per-turn
+castability features read; see `packages/features/CLAUDE.md`.
+
 ## Game model
 
 ### Turn structure (simplified)

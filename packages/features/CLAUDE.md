@@ -202,11 +202,33 @@ the three context one-hot families counted as one feature each):
   both an `all` and a `high_oh` variant; narrow buckets are `all`
   only) + 2 additional castability summaries.
 
-Castability uses `aggregate_stats.by_card_name[name].p_castable_by_turn`
-joined to each hand spell by name. Duplicate hand copies of the same
-card share one per-name probability; the `p_any` aggregator treats
-them as independent given that probability (1 - prod(1 - p_i)) — the
-natural approximation for per-name aggregate output.
+Per-turn castability iterates over **deck spells** (not hand
+spells) keyed by name, reading
+`aggregate_stats.by_card_name[name].p_castable_in_snapshot_by_turn`
+— the simulator's per-game marginal that already counts both
+opening-hand and drawn instances. Two copies of the same name in
+the deck collapse to a single per-name marginal because the
+underlying simulator aggregate is per-name; the `p_any` aggregator
+treats different names as independent (`1 - prod(1 - p)`), the
+same natural approximation the prior hand-only path used.
+
+The previous semantics — iterating only over opening-hand cards
+using `p_castable_by_turn` (the per-instance conditional-on-in-hand
+probability) — surfaced a misleading 0 for "P(any creature
+castable on T2)" whenever the opening hand happened to lack a
+matching card, even when the deck was full of them. The simulator
+already knew the answer was nonzero (drawn cards are evaluated in
+the snapshot); the feature builder just wasn't reading the right
+aggregate. The shift to deck-wide marginal answers the user-visible
+question "did the simulation have a 2-drop to cast on T2?" honestly.
+
+**Note on model retraining:** the keys (`p_any_creature_t2`,
+`avg_count_creature_t2`, etc.) didn't change, but their
+*distribution* did — deck-wide values are typically much higher
+than the old hand-only values. A model trained on the old feature
+distribution will produce subtly miscalibrated predictions on
+these features until retrained. Retraining is a separate step;
+the simulator and feature row are correct as of this change.
 
 The `high_oh` filter restricts a broad-bucket category to hand cards
 with shrunken OH WR z-score > 0.5, using the `zscores` map keyed on
