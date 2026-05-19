@@ -251,13 +251,11 @@ class TailerWorker(QObject):
 # next event-loop iteration rather than inside the hook callback.
 
 
-_WH_KEYBOARD_LL = 13
-_WM_KEYDOWN = 0x0100
-_WM_SYSKEYDOWN = 0x0104
-_VK_MENU = 0x12  # any Alt (handy with GetAsyncKeyState)
-
-
 if sys.platform == "win32":
+    _WH_KEYBOARD_LL = 13
+    _WM_KEYDOWN = 0x0100
+    _WM_SYSKEYDOWN = 0x0104
+    _VK_MENU = 0x12  # any Alt (handy with GetAsyncKeyState)
 
     class _KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = (
@@ -275,96 +273,98 @@ if sys.platform == "win32":
         ctypes.c_ssize_t,
         ctypes.POINTER(_KBDLLHOOKSTRUCT),
     )
+
+    class _KeyboardHook(QObject):
+        """Low-level Win32 keyboard hook; emits ``triggered`` on Alt+E.
+
+        The hook callback runs on the thread that installed the hook
+        — the Qt main thread — so the connected slot fires
+        synchronously inside the callback. Keep slots fast (the
+        layout toggle is well under 50 ms) so we don't trip Windows'
+        ``LowLevelHooksTimeout`` watchdog and get un-hooked.
+        """
+
+        triggered = pyqtSignal()
+
+        def __init__(self, parent: QObject | None = None) -> None:
+            super().__init__(parent)
+            self._handle: int | None = None
+            # Strong reference to the ctypes-wrapped callback so
+            # Windows never sees a dangling function pointer.
+            self._proc = _LowLevelKeyboardProc(self._callback)
+
+        def install(self) -> bool:
+            user32 = ctypes.windll.user32
+            kernel32 = ctypes.windll.kernel32
+            user32.SetWindowsHookExW.argtypes = [
+                ctypes.c_int,
+                _LowLevelKeyboardProc,
+                ctypes.c_void_p,
+                ctypes.c_uint,
+            ]
+            user32.SetWindowsHookExW.restype = ctypes.c_void_p
+            kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+            kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+            # For WH_KEYBOARD_LL the hMod arg must be the module
+            # handle of the EXE/DLL containing the proc — the
+            # main EXE handle is the standard idiom for in-process
+            # hooks.
+            h_module = kernel32.GetModuleHandleW(None)
+            handle = user32.SetWindowsHookExW(_WH_KEYBOARD_LL, self._proc, h_module, 0)
+            if not handle:
+                return False
+            self._handle = int(handle)
+            return True
+
+        def uninstall(self) -> None:
+            if self._handle is None:
+                return
+            user32 = ctypes.windll.user32
+            user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+            user32.UnhookWindowsHookEx.restype = ctypes.c_int
+            user32.UnhookWindowsHookEx(self._handle)
+            self._handle = None
+
+        def _callback(self, n_code: int, w_param: int, l_param: Any) -> int:
+            # Always chain to ``CallNextHookEx`` unless we explicitly
+            # swallow the key (return 1) — and we only swallow the
+            # matched Alt+E down stroke.
+            try:
+                if n_code >= 0 and w_param in (_WM_KEYDOWN, _WM_SYSKEYDOWN):
+                    evt = l_param.contents
+                    if evt.vkCode == _VK_E:
+                        user32 = ctypes.windll.user32
+                        user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+                        user32.GetAsyncKeyState.restype = ctypes.c_short
+                        if user32.GetAsyncKeyState(_VK_MENU) & 0x8000:
+                            self.triggered.emit()
+                            return 1
+            except Exception:
+                log.exception("keyboard hook raised; passing event through")
+            user32 = ctypes.windll.user32
+            user32.CallNextHookEx.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_int,
+                ctypes.c_ssize_t,
+                ctypes.c_void_p,
+            ]
+            user32.CallNextHookEx.restype = ctypes.c_ssize_t
+            return int(
+                user32.CallNextHookEx(0, n_code, w_param, ctypes.cast(l_param, ctypes.c_void_p))
+            )
+
 else:
 
-    class _KBDLLHOOKSTRUCT(ctypes.Structure):  # pragma: no cover - non-Windows stub
-        _fields_ = ()
+    class _KeyboardHook(QObject):  # type: ignore[no-redef]
+        """Non-Windows stub. ``install`` is a no-op returning False."""
 
-    _LowLevelKeyboardProc = None  # type: ignore[assignment]
+        triggered = pyqtSignal()
 
-
-class _KeyboardHook(QObject):
-    """Low-level Win32 keyboard hook that emits ``triggered`` on Alt+E.
-
-    Bound from the Qt main thread; emits a Qt signal which is then
-    delivered on the main thread's event loop (via a queued
-    connection at the call site) so the actual layout toggle doesn't
-    happen inside the hook callback.
-
-    No-op on non-Windows platforms — :meth:`install` returns ``False``
-    and :meth:`uninstall` does nothing.
-    """
-
-    triggered = pyqtSignal()
-
-    def __init__(self, parent: QObject | None = None) -> None:
-        super().__init__(parent)
-        self._handle: int | None = None
-        # Strong reference to the ctypes-wrapped callback so Windows
-        # never sees a dangling function pointer if the Python frame
-        # holding the bound method would otherwise be GC'd.
-        self._proc = _LowLevelKeyboardProc(self._callback) if sys.platform == "win32" else None
-
-    def install(self) -> bool:
-        if sys.platform != "win32":
+        def install(self) -> bool:  # pragma: no cover
             return False
-        user32 = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        user32.SetWindowsHookExW.argtypes = [
-            ctypes.c_int,
-            _LowLevelKeyboardProc,
-            ctypes.c_void_p,
-            ctypes.c_uint,
-        ]
-        user32.SetWindowsHookExW.restype = ctypes.c_void_p
-        kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
-        kernel32.GetModuleHandleW.restype = ctypes.c_void_p
-        # For WH_KEYBOARD_LL the hMod argument must be the module
-        # handle of the EXE/DLL containing the proc — passing the
-        # main EXE handle is the standard idiom for in-process hooks.
-        h_module = kernel32.GetModuleHandleW(None)
-        handle = user32.SetWindowsHookExW(_WH_KEYBOARD_LL, self._proc, h_module, 0)
-        if not handle:
-            return False
-        self._handle = int(handle)
-        return True
 
-    def uninstall(self) -> None:
-        if self._handle is None or sys.platform != "win32":
-            return
-        user32 = ctypes.windll.user32
-        user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
-        user32.UnhookWindowsHookEx.restype = ctypes.c_int
-        user32.UnhookWindowsHookEx(self._handle)
-        self._handle = None
-
-    def _callback(self, n_code: int, w_param: int, l_param: Any) -> int:
-        # We must always chain to ``CallNextHookEx`` unless we return
-        # a non-zero value to deliberately swallow the key (which we
-        # do only for the matched Alt+E down stroke). Anything else
-        # — a different key, an error parsing the struct, a non-hook
-        # nCode — flows through unmodified.
-        try:
-            if n_code >= 0 and w_param in (_WM_KEYDOWN, _WM_SYSKEYDOWN):
-                evt = l_param.contents
-                if evt.vkCode == _VK_E:
-                    user32 = ctypes.windll.user32
-                    user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
-                    user32.GetAsyncKeyState.restype = ctypes.c_short
-                    if user32.GetAsyncKeyState(_VK_MENU) & 0x8000:
-                        self.triggered.emit()
-                        return 1
-        except Exception:
-            log.exception("keyboard hook raised; passing event through")
-        user32 = ctypes.windll.user32
-        user32.CallNextHookEx.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_ssize_t,
-            ctypes.c_void_p,
-        ]
-        user32.CallNextHookEx.restype = ctypes.c_ssize_t
-        return int(user32.CallNextHookEx(0, n_code, w_param, ctypes.cast(l_param, ctypes.c_void_p)))
+        def uninstall(self) -> None:  # pragma: no cover
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -947,16 +947,12 @@ def main(argv: list[str] | None = None) -> int:
     watcher = ArenaWindowWatcher()
     watcher.state_changed.connect(window.on_arena_state_changed)
 
-    # Global hotkey: Alt+E to toggle compact / expanded. Queued
-    # connection so the layout toggle runs on the next event-loop
-    # tick rather than inside the hook callback (which must return
-    # quickly or Windows un-hooks us).
+    # Global hotkey: Alt+E to toggle compact / expanded. The hook
+    # callback runs on the Qt main thread, so the slot fires
+    # synchronously inside the callback; ``toggle_compact`` is well
+    # under Windows' LowLevelHooksTimeout watchdog so this is safe.
     hotkey_hook = _KeyboardHook()
-    # PyQt6 stubs only expose ``connect(slot)`` even though the
-    # runtime accepts the optional connection-type second arg.
-    hotkey_hook.triggered.connect(  # type: ignore[call-arg]
-        window.toggle_compact, Qt.ConnectionType.QueuedConnection
-    )
+    hotkey_hook.triggered.connect(window.toggle_compact)
 
     def _on_app_quit() -> None:
         # IMPORTANT: don't rely on a queued ``worker.stopped → thread.quit``
