@@ -128,7 +128,29 @@ class MatchResetOutput:
     kind: Literal["match_reset"] = "match_reset"
 
 
-CoordinatorOutput = DeckLoadedOutput | RecommendationOutput | MissingDataOutput | MatchResetOutput
+@dataclass(frozen=True)
+class ComputingOutput:
+    """Sentinel: a mulligan-decision request is being processed.
+
+    Emitted by the tailer worker the moment a
+    :class:`MulliganDecisionRequest` arrives, *before* the blocking
+    ``recommend_asymmetric`` call. Lets the UI render a "computing"
+    state so the user can tell when latency comes from sim time
+    vs. when the Arena log delivery itself was slow.
+
+    Not produced by :meth:`OverlayCoordinator.handle_event` — the
+    coordinator's call into the service is what we're waiting on,
+    so it can't emit this itself. The worker is the right place.
+    """
+
+    kind: Literal["computing"] = "computing"
+    mulligan_count: int = 0
+    on_the_play: bool = True
+
+
+CoordinatorOutput = (
+    DeckLoadedOutput | RecommendationOutput | MissingDataOutput | MatchResetOutput | ComputingOutput
+)
 
 
 # ---------------------------------------------------------------------------
