@@ -10,7 +10,7 @@ Typical use:
 
     .venv/Scripts/python.exe packages/model/scripts/train_multi_set.py \\
         --sets TLA ECL TMT \\
-        --output-dir models/all3_v1
+        --output-dir models/all3_v2
 """
 
 from __future__ import annotations
