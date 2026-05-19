@@ -53,11 +53,10 @@ import logging
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from mulligan_coach_recommend import RecommendationExplanation, load_service
 from PyQt6.QtCore import (
-    QAbstractNativeEventFilter,
     QObject,
     QPoint,
     QRect,
@@ -126,15 +125,12 @@ _KEEP_COLOR = "#7be57b"  # green
 _MULL_COLOR = "#e57b7b"  # red
 _MARGINAL_COLOR = "#e5c87b"  # amber
 
-# Win32 hotkey constants. We use Alt+E (MOD_ALT + VK_E) for the
-# collapse / expand toggle. Previously bound to Ctrl+Shift+M but
-# Arena's full-control toggle conflicts on the Ctrl modifier — the
-# overlay's binding was eating Ctrl combos the player needed in-game.
-# Alt+E is unbound in Arena's default keymap and is mnemonic for
-# "Expand / Collapse."
-_HOTKEY_MOD_ALT = 0x0001
+# Alt+E is the collapse / expand toggle (see the
+# :class:`_KeyboardHook` block below for the binding). Picked over
+# the previous Ctrl+Shift+M because Arena binds Ctrl combos
+# (full-control / pile-selection / etc.) — leaving the toggle on
+# Ctrl was eating combos the player needed in-game.
 _VK_E = 0x45
-_WM_HOTKEY = 0x0312
 
 
 # ---------------------------------------------------------------------------
@@ -233,104 +229,142 @@ class TailerWorker(QObject):
 
 
 # ---------------------------------------------------------------------------
-# Global hotkey filter
+# Global hotkey: low-level Win32 keyboard hook
 # ---------------------------------------------------------------------------
+#
+# Why a low-level hook instead of ``RegisterHotKey`` + a Qt native
+# event filter (the previous implementation): on this build of PyQt6
+# the ``WM_HOTKEY`` message was not reliably reaching the application-
+# wide ``QAbstractNativeEventFilter`` when the registration was tied
+# to a ``Qt.Tool`` + ``WindowDoesNotAcceptFocus`` window. The
+# registration would succeed, but the toggle never fired in practice.
+#
+# ``SetWindowsHookEx(WH_KEYBOARD_LL)`` sees every keystroke before
+# any window receives it, regardless of focus or window style, and
+# delivers it via a plain C callback we control directly. It also
+# lets us *swallow* the key (return 1) so Alt+E doesn't reach Arena's
+# accelerator handler.
+#
+# The hook callback runs on the thread that called
+# ``SetWindowsHookEx``. We install on the Qt main thread and use a
+# queued signal connection so the actual layout toggle happens on the
+# next event-loop iteration rather than inside the hook callback.
 
 
-class _HotkeyFilter(QObject, QAbstractNativeEventFilter):
-    """Catches Win32 ``WM_HOTKEY`` messages and re-emits as a Qt signal.
-
-    Installed via :meth:`QApplication.installNativeEventFilter`, which
-    routes every native event through us regardless of which window
-    is the recipient. That's important here because ``Qt.Tool``
-    windows don't accept keyboard focus, so :class:`QShortcut`
-    bindings wouldn't fire.
-
-    On non-Windows platforms the filter still installs but never
-    receives a matching event (the platform's native message format
-    differs); :func:`register_global_hotkey` is the actual Win32
-    binding step.
-    """
-
-    triggered = pyqtSignal(int)
-
-    def __init__(self, parent: QObject | None = None) -> None:
-        QObject.__init__(self, parent)
-        QAbstractNativeEventFilter.__init__(self)
-
-    def nativeEventFilter(  # type: ignore[override]
-        self, eventType: bytes | bytearray, message: int
-    ) -> tuple[bool, int]:
-        # PyQt passes ``message`` as a sip.voidptr; ``int(message)``
-        # gives us the address of the underlying Win32 MSG struct.
-        if sys.platform == "win32" and eventType == b"windows_generic_MSG":
-            try:
-                msg_struct = _MSG.from_address(int(message))
-            except (ValueError, OSError):
-                return False, 0
-            if msg_struct.message == _WM_HOTKEY:
-                self.triggered.emit(int(msg_struct.wParam))
-                return True, 0
-        return False, 0
+_WH_KEYBOARD_LL = 13
+_WM_KEYDOWN = 0x0100
+_WM_SYSKEYDOWN = 0x0104
+_VK_MENU = 0x12  # any Alt (handy with GetAsyncKeyState)
 
 
 if sys.platform == "win32":
-    # Layout of the Win32 ``MSG`` struct. ``wParam`` is platform-width
-    # (32-bit on x86, 64-bit on x64); we use the c_uintptr alias that
-    # ctypes provides via wintypes to stay correct on both. PyQt6 only
-    # ships 64-bit on Windows so c_void_p sizes match in practice, but
-    # we don't bake that assumption in.
-    class _MSG(ctypes.Structure):
+
+    class _KBDLLHOOKSTRUCT(ctypes.Structure):
         _fields_ = (
-            ("hwnd", ctypes.c_void_p),
-            ("message", ctypes.c_uint),
-            ("wParam", ctypes.c_void_p),
-            ("lParam", ctypes.c_void_p),
+            ("vkCode", ctypes.c_uint),
+            ("scanCode", ctypes.c_uint),
+            ("flags", ctypes.c_uint),
             ("time", ctypes.c_uint),
-            ("pt_x", ctypes.c_long),
-            ("pt_y", ctypes.c_long),
+            ("dwExtraInfo", ctypes.c_void_p),
         )
 
-    def register_global_hotkey(hwnd: int, hotkey_id: int) -> bool:
-        """Ask Windows to send ``WM_HOTKEY`` to *hwnd* when Alt+E fires.
-
-        Returns ``True`` on success, ``False`` if Windows rejected the
-        registration (most often because another app already owns the
-        same key combination — the overlay should keep working without
-        the hotkey rather than refuse to start).
-        """
-        user32 = ctypes.windll.user32
-        user32.RegisterHotKey.argtypes = [
-            ctypes.c_void_p,
-            ctypes.c_int,
-            ctypes.c_uint,
-            ctypes.c_uint,
-        ]
-        user32.RegisterHotKey.restype = ctypes.c_int
-        ok = user32.RegisterHotKey(
-            hwnd,
-            hotkey_id,
-            _HOTKEY_MOD_ALT,
-            _VK_E,
-        )
-        return bool(ok)
-
-    def unregister_global_hotkey(hwnd: int, hotkey_id: int) -> None:
-        user32 = ctypes.windll.user32
-        user32.UnregisterHotKey.argtypes = [ctypes.c_void_p, ctypes.c_int]
-        user32.UnregisterHotKey.restype = ctypes.c_int
-        user32.UnregisterHotKey(hwnd, hotkey_id)
-
+    # LRESULT (LONG_PTR) is platform-width — c_ssize_t on both x86/x64.
+    _LowLevelKeyboardProc = ctypes.WINFUNCTYPE(
+        ctypes.c_ssize_t,
+        ctypes.c_int,
+        ctypes.c_ssize_t,
+        ctypes.POINTER(_KBDLLHOOKSTRUCT),
+    )
 else:
 
-    class _MSG(ctypes.Structure):  # pragma: no cover - non-Windows stub
+    class _KBDLLHOOKSTRUCT(ctypes.Structure):  # pragma: no cover - non-Windows stub
         _fields_ = ()
 
-    def register_global_hotkey(hwnd: int, hotkey_id: int) -> bool:  # pragma: no cover
-        return False
+    _LowLevelKeyboardProc = None  # type: ignore[assignment]
 
-    def unregister_global_hotkey(hwnd: int, hotkey_id: int) -> None:  # pragma: no cover
-        pass
+
+class _KeyboardHook(QObject):
+    """Low-level Win32 keyboard hook that emits ``triggered`` on Alt+E.
+
+    Bound from the Qt main thread; emits a Qt signal which is then
+    delivered on the main thread's event loop (via a queued
+    connection at the call site) so the actual layout toggle doesn't
+    happen inside the hook callback.
+
+    No-op on non-Windows platforms — :meth:`install` returns ``False``
+    and :meth:`uninstall` does nothing.
+    """
+
+    triggered = pyqtSignal()
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._handle: int | None = None
+        # Strong reference to the ctypes-wrapped callback so Windows
+        # never sees a dangling function pointer if the Python frame
+        # holding the bound method would otherwise be GC'd.
+        self._proc = _LowLevelKeyboardProc(self._callback) if sys.platform == "win32" else None
+
+    def install(self) -> bool:
+        if sys.platform != "win32":
+            return False
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        user32.SetWindowsHookExW.argtypes = [
+            ctypes.c_int,
+            _LowLevelKeyboardProc,
+            ctypes.c_void_p,
+            ctypes.c_uint,
+        ]
+        user32.SetWindowsHookExW.restype = ctypes.c_void_p
+        kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
+        kernel32.GetModuleHandleW.restype = ctypes.c_void_p
+        # For WH_KEYBOARD_LL the hMod argument must be the module
+        # handle of the EXE/DLL containing the proc — passing the
+        # main EXE handle is the standard idiom for in-process hooks.
+        h_module = kernel32.GetModuleHandleW(None)
+        handle = user32.SetWindowsHookExW(_WH_KEYBOARD_LL, self._proc, h_module, 0)
+        if not handle:
+            return False
+        self._handle = int(handle)
+        return True
+
+    def uninstall(self) -> None:
+        if self._handle is None or sys.platform != "win32":
+            return
+        user32 = ctypes.windll.user32
+        user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
+        user32.UnhookWindowsHookEx.restype = ctypes.c_int
+        user32.UnhookWindowsHookEx(self._handle)
+        self._handle = None
+
+    def _callback(self, n_code: int, w_param: int, l_param: Any) -> int:
+        # We must always chain to ``CallNextHookEx`` unless we return
+        # a non-zero value to deliberately swallow the key (which we
+        # do only for the matched Alt+E down stroke). Anything else
+        # — a different key, an error parsing the struct, a non-hook
+        # nCode — flows through unmodified.
+        try:
+            if n_code >= 0 and w_param in (_WM_KEYDOWN, _WM_SYSKEYDOWN):
+                evt = l_param.contents
+                if evt.vkCode == _VK_E:
+                    user32 = ctypes.windll.user32
+                    user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+                    user32.GetAsyncKeyState.restype = ctypes.c_short
+                    if user32.GetAsyncKeyState(_VK_MENU) & 0x8000:
+                        self.triggered.emit()
+                        return 1
+        except Exception:
+            log.exception("keyboard hook raised; passing event through")
+        user32 = ctypes.windll.user32
+        user32.CallNextHookEx.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_ssize_t,
+            ctypes.c_void_p,
+        ]
+        user32.CallNextHookEx.restype = ctypes.c_ssize_t
+        return int(user32.CallNextHookEx(0, n_code, w_param, ctypes.cast(l_param, ctypes.c_void_p)))
 
 
 # ---------------------------------------------------------------------------
@@ -913,10 +947,16 @@ def main(argv: list[str] | None = None) -> int:
     watcher = ArenaWindowWatcher()
     watcher.state_changed.connect(window.on_arena_state_changed)
 
-    # Global hotkey: Alt+E to toggle compact / expanded.
-    hotkey_filter = _HotkeyFilter()
-    hotkey_filter.triggered.connect(window.toggle_compact)
-    app.installNativeEventFilter(hotkey_filter)
+    # Global hotkey: Alt+E to toggle compact / expanded. Queued
+    # connection so the layout toggle runs on the next event-loop
+    # tick rather than inside the hook callback (which must return
+    # quickly or Windows un-hooks us).
+    hotkey_hook = _KeyboardHook()
+    # PyQt6 stubs only expose ``connect(slot)`` even though the
+    # runtime accepts the optional connection-type second arg.
+    hotkey_hook.triggered.connect(  # type: ignore[call-arg]
+        window.toggle_compact, Qt.ConnectionType.QueuedConnection
+    )
 
     def _on_app_quit() -> None:
         # IMPORTANT: don't rely on a queued ``worker.stopped → thread.quit``
@@ -927,8 +967,7 @@ def main(argv: list[str] | None = None) -> int:
         # Calling thread.quit() directly posts the quit event to the
         # QThread's own event loop, where it does run.
         watcher.stop()
-        if sys.platform == "win32":
-            unregister_global_hotkey(int(window.winId()), 1)
+        hotkey_hook.uninstall()
         worker.request_stop()
         thread.quit()
         if not thread.wait(2000):
@@ -947,15 +986,12 @@ def main(argv: list[str] | None = None) -> int:
     if sys.platform == "win32":
         hwnd = int(window.winId())
         watcher.set_overlay_hwnd(hwnd)
-        # Register the global hotkey under the window's HWND so the
-        # WM_HOTKEY message routes through our event filter.
-        if register_global_hotkey(hwnd, 1):
-            log.info("global hotkey registered: Alt+E toggles compact mode")
+        if hotkey_hook.install():
+            log.info("global hotkey installed: Alt+E toggles compact mode")
         else:
             log.warning(
-                "could not register Alt+E global hotkey "
-                "(another app may already own it); use the title-bar "
-                "collapse button or double-click instead"
+                "could not install Alt+E low-level keyboard hook; "
+                "use the title-bar collapse button or double-click instead"
             )
 
     watcher.start()
