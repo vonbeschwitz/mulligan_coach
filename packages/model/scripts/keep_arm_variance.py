@@ -49,9 +49,10 @@ from mulligan_coach_model.inference import predict_win_probability
 from mulligan_coach_recommend import FormatStats, RecommendationService
 
 # Reuse the existing parsing helpers — same code path the replay
-# benchmark exercises, so we know the hands resolve cleanly.
+# benchmark exercises, so we know the hands resolve cleanly. The
+# ``sys.path.insert`` trick is invisible to mypy, hence the ignore.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from replay_mulligan_benchmark import (
+from replay_mulligan_benchmark import (  # type: ignore[import-not-found]
     DECISIONS_PATH,
     EVENT_TYPE,
     load_skilled_decisions,
