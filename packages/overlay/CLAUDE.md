@@ -159,13 +159,27 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
 
 ## GUI surface
 
-* Two layouts on the same widget: an expanded panel (verdict +
-  keep%/mull% + resolved hand + a debug footer) and a compact pill
-  (verdict + keep%/mull% only). Toggle via the title-bar collapse
-  button, a left double-click anywhere on the panel, or the global
-  hotkey **Ctrl+Shift+M** (Win32 `RegisterHotKey`; registered under
-  the overlay's HWND and routed through a
-  `QAbstractNativeEventFilter`).
+* Two layouts on the same widget:
+  * **Expanded panel** — verdict, keep% / mull% (bias-adjusted),
+    resolved hand, a "Why this hand plays out the way it does"
+    block mirroring the website's playability panel
+    (mana base, curve hits, per-card playability table), and a
+    debug footer.
+  * **Compact pill** — single line: ``verdict · keep% vs mull%``
+    at 12 px font (e.g. "Clear keep · 62.5% vs 47.3%"). No labels
+    on the percentages — context conveys which is which once the
+    user has seen the expanded panel.
+  Toggle via the title-bar collapse button, a left double-click
+  anywhere on the panel, or the global hotkey **Alt+E** (Win32
+  `RegisterHotKey`; registered under the overlay's HWND and routed
+  through a `QAbstractNativeEventFilter`). Avoid Ctrl-based
+  combos here — Arena's full-control binds Ctrl, and a global
+  hotkey on Ctrl+anything ate combos the player needed in-game.
+* While the keep arm runs, the worker emits a synthetic
+  ``ComputingOutput`` (before the blocking
+  ``recommend_asymmetric`` call) so the panel can flash a
+  "Running simulation…" amber state. Lets the user tell the
+  difference between Arena-log delivery delay and sim time.
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as

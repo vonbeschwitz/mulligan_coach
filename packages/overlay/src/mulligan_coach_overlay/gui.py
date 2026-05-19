@@ -36,7 +36,7 @@ Window behaviour
   work around when doing anything outside Arena.
 * **Collapse / expand**: a compact pill (verdict + keep%/mull% only)
   vs. the full panel (adds the resolved hand + a debug footer).
-  Click the title's collapse button or hit ``Ctrl+Shift+M`` (a Win32
+  Click the title's collapse button or hit ``Alt+E`` (a Win32
   global hotkey) to toggle. The user doesn't have to close + relaunch
   the overlay every game — collapse it and it stays out of the way.
 * **Deck persistence**: each fully-resolved ``DeckSubmitted`` is
@@ -55,7 +55,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
-from mulligan_coach_recommend import load_service
+from mulligan_coach_recommend import RecommendationExplanation, load_service
 from PyQt6.QtCore import (
     QAbstractNativeEventFilter,
     QObject,
@@ -88,6 +88,7 @@ from .arena_paths import default_log_path
 from .arena_window import ArenaWindowWatcher
 from .card_index import ArenaCardIndex
 from .coordinator import (
+    ComputingOutput,
     CoordinatorOutput,
     DeckLoadedOutput,
     MatchResetOutput,
@@ -96,17 +97,21 @@ from .coordinator import (
     RecommendationOutput,
 )
 from .deck_persistence import default_persistence_path, load_last_deck, save_last_deck
-from .events import DeckSubmitted
+from .events import DeckSubmitted, MulliganDecisionRequest
 from .log_tailer import LogTailer
 
 log = logging.getLogger(__name__)
 
 # Two layouts: full panel and compact pill. The window is the same
 # widget — we just toggle child widget visibility and shrink it.
-_NORMAL_WIDTH = 360
-_NORMAL_HEIGHT = 200
-_COMPACT_WIDTH = 220
-_COMPACT_HEIGHT = 64
+# Normal panel is taller now that it surfaces playability stats
+# (mana base, curve hits, per-card grid) alongside the verdict.
+_NORMAL_WIDTH = 380
+_NORMAL_HEIGHT = 540
+# Compact pill: verdict + raw arms on one line. Width sized to fit
+# "Marginal mull · 47.3% vs 51.8%" without truncation at 12px.
+_COMPACT_WIDTH = 260
+_COMPACT_HEIGHT = 32
 _CORNER_RADIUS = 12
 
 # Colour palette — kept in lockstep with the website's dark theme so
@@ -121,13 +126,14 @@ _KEEP_COLOR = "#7be57b"  # green
 _MULL_COLOR = "#e57b7b"  # red
 _MARGINAL_COLOR = "#e5c87b"  # amber
 
-# Win32 hotkey constants. Ctrl+Shift+M = MOD_CONTROL | MOD_SHIFT, VK_M.
-# Picked because (1) no common app I know of binds Ctrl+Shift+M
-# globally and (2) "M for Mulligan" is mnemonic.
+# Win32 hotkey constants. We use Alt+E (MOD_ALT + VK_E) for the
+# collapse / expand toggle. Previously bound to Ctrl+Shift+M but
+# Arena's full-control toggle conflicts on the Ctrl modifier — the
+# overlay's binding was eating Ctrl combos the player needed in-game.
+# Alt+E is unbound in Arena's default keymap and is mnemonic for
+# "Expand / Collapse."
 _HOTKEY_MOD_ALT = 0x0001
-_HOTKEY_MOD_CONTROL = 0x0002
-_HOTKEY_MOD_SHIFT = 0x0004
-_VK_M = 0x4D
+_VK_E = 0x45
 _WM_HOTKEY = 0x0312
 
 
@@ -183,6 +189,17 @@ class TailerWorker(QObject):
             for event in self._tailer.tail(follow=True, stop_event=self._stop_event):
                 if self._stop_requested:
                     break
+                # Mulligan decision = blocking recommend call. Push a
+                # "Computing" state before it so the user sees the UI
+                # acknowledge the request immediately, separating
+                # simulator latency from Arena-log-delivery latency.
+                if isinstance(event, MulliganDecisionRequest):
+                    self.output.emit(
+                        ComputingOutput(
+                            mulligan_count=event.mulligan_count,
+                            on_the_play=event.on_the_play,
+                        )
+                    )
                 try:
                     out = self._coordinator.handle_event(event)
                 except Exception:
@@ -275,7 +292,7 @@ if sys.platform == "win32":
         )
 
     def register_global_hotkey(hwnd: int, hotkey_id: int) -> bool:
-        """Ask Windows to send ``WM_HOTKEY`` to *hwnd* when Ctrl+Shift+M fires.
+        """Ask Windows to send ``WM_HOTKEY`` to *hwnd* when Alt+E fires.
 
         Returns ``True`` on success, ``False`` if Windows rejected the
         registration (most often because another app already owns the
@@ -293,8 +310,8 @@ if sys.platform == "win32":
         ok = user32.RegisterHotKey(
             hwnd,
             hotkey_id,
-            _HOTKEY_MOD_CONTROL | _HOTKEY_MOD_SHIFT,
-            _VK_M,
+            _HOTKEY_MOD_ALT,
+            _VK_E,
         )
         return bool(ok)
 
@@ -346,6 +363,11 @@ class OverlayWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._compact = False
         self._drag_offset: QPoint | None = None
+        # Cached payload from the last RecommendationOutput so the
+        # compact <-> expanded toggle can re-render without waiting on
+        # a fresh sim. Reset on any state-changing event other than
+        # a successful recommendation.
+        self._last_rec: RecommendationOutput | None = None
         self._build_ui()
         self._apply_layout()
         self._position_top_right()
@@ -392,7 +414,9 @@ class OverlayWindow(QWidget):
         title_row.addWidget(close_btn)
         outer.addWidget(self._title_row_widget)
 
-        # Verdict line — replaced as state updates land.
+        # Verdict line — replaced as state updates land. In compact
+        # mode this single label carries everything (verdict + arms);
+        # in expanded mode the arms move to their own row below.
         self._verdict_label = QLabel("Waiting for deck…")
         self._verdict_label.setStyleSheet(
             f"color: {_TEXT_PRIMARY}; font-size: 22px; font-weight: 700;"
@@ -400,7 +424,8 @@ class OverlayWindow(QWidget):
         self._verdict_label.setWordWrap(True)
         outer.addWidget(self._verdict_label)
 
-        # Arms row: keep% / mull%.
+        # Arms row: keep% / mull%. Expanded mode only — the compact
+        # pill folds the percentages into the verdict label.
         self._arms_row_widget = QWidget()
         arms_row = QHBoxLayout(self._arms_row_widget)
         arms_row.setContentsMargins(0, 0, 0, 0)
@@ -414,13 +439,24 @@ class OverlayWindow(QWidget):
         arms_row.addStretch(1)
         outer.addWidget(self._arms_row_widget)
 
-        # Hand summary (full layout only).
+        # Hand summary (expanded layout only).
         self._hand_label = QLabel("")
         self._hand_label.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 11px;")
         self._hand_label.setWordWrap(True)
-        outer.addWidget(self._hand_label, stretch=1)
+        outer.addWidget(self._hand_label)
 
-        # Context footer (full layout only).
+        # Playability stats (expanded layout only). Mirror of the
+        # website's "Why this hand plays out the way it does" panel —
+        # mana base + curve hits + per-card playability table — but
+        # rendered as a single QLabel with rich-text HTML so we don't
+        # have to build a dozen child widgets here.
+        self._stats_label = QLabel("")
+        self._stats_label.setTextFormat(Qt.TextFormat.RichText)
+        self._stats_label.setStyleSheet(f"color: {_TEXT_PRIMARY}; font-size: 11px;")
+        self._stats_label.setWordWrap(True)
+        outer.addWidget(self._stats_label, stretch=1)
+
+        # Context footer (expanded layout only).
         self._context_label = QLabel("")
         self._context_label.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 10px;")
         outer.addWidget(self._context_label)
@@ -447,24 +483,34 @@ class OverlayWindow(QWidget):
 
     def _apply_layout(self) -> None:
         if self._compact:
-            # Compact pill: just the verdict + arms. Title bar (and
-            # therefore the close X) hides. The user can re-expand
-            # via the hotkey or by clicking; once expanded, the X is
-            # back.
+            # Compact pill: a single line carrying verdict + both
+            # percentages. Title bar, arms row, hand summary, stats
+            # panel, and context footer all hide. Re-expand via the
+            # hotkey, the title-bar button (once title is back), or
+            # a double-click anywhere on the panel.
             self._title_row_widget.setVisible(False)
+            self._arms_row_widget.setVisible(False)
             self._hand_label.setVisible(False)
+            self._stats_label.setVisible(False)
             self._context_label.setVisible(False)
             self._verdict_label.setStyleSheet(
-                f"color: {_TEXT_PRIMARY}; font-size: 16px; font-weight: 700;"
+                f"color: {_TEXT_PRIMARY}; font-size: 12px; font-weight: 700;"
             )
             self.setFixedSize(_COMPACT_WIDTH, _COMPACT_HEIGHT)
             self._collapse_btn.setText("▢")
         else:
             self._title_row_widget.setVisible(True)
+            self._arms_row_widget.setVisible(True)
             self._hand_label.setVisible(True)
+            self._stats_label.setVisible(True)
             self._context_label.setVisible(True)
             self.setFixedSize(_NORMAL_WIDTH, _NORMAL_HEIGHT)
             self._collapse_btn.setText("-")
+        # Re-render the verdict label so its text matches the new
+        # layout — the compact format is single-line "verdict ·
+        # X% vs Y%", the expanded one is just the verdict alone.
+        if self._last_rec is not None:
+            self._render_recommendation_from_cached()
         # Keep the top-right anchor when shrinking so the pill doesn't
         # appear to drift across the screen on toggle. (Position is in
         # the *primary* screen's coordinate space — fine for our
@@ -563,40 +609,92 @@ class OverlayWindow(QWidget):
         output = cast(CoordinatorOutput, payload)
         if isinstance(output, RecommendationOutput):
             self._render_recommendation(output)
+        elif isinstance(output, ComputingOutput):
+            self._render_computing(output)
         elif isinstance(output, DeckLoadedOutput):
+            self._last_rec = None
             self._render_deck_loaded(output)
         elif isinstance(output, MissingDataOutput):
+            self._last_rec = None
             self._render_missing(output)
         elif isinstance(output, MatchResetOutput):
+            self._last_rec = None
             self._render_reset()
 
     def _render_recommendation(self, output: RecommendationOutput) -> None:
+        """Render a finalised recommendation in either layout."""
+        self._last_rec = output
+        self._render_recommendation_from_cached()
+
+    def _render_recommendation_from_cached(self) -> None:
+        """Re-render the cached recommendation. Used on layout toggle
+        so the verdict text picks up the compact / expanded format
+        without waiting on a fresh sim."""
+        output = self._last_rec
+        if output is None:
+            return
         rec = output.recommendation
         assert rec is not None  # invariant of RecommendationOutput
-        verdict_label, verdict_color = _verdict_display(rec.verdict)
-        self._verdict_label.setText(verdict_label)
-        # In compact mode, font is smaller; in normal mode, larger.
-        font_size = 16 if self._compact else 22
-        self._verdict_label.setStyleSheet(
-            f"color: {verdict_color}; font-size: {font_size}px; font-weight: 700;"
-        )
+        short_verdict, verdict_color = _verdict_display(rec.verdict)
         keep_pct = rec.keep_win_probability * 100
-        # Display the bias-adjusted mulligan WR so the user sees the
-        # number that actually drives the verdict (raw P(win) at the
-        # mulligan level + the empirical 4 pp correction; see
-        # MULLIGAN_BIAS in mulligan_coach_recommend.service).
+        # Display the bias-adjusted mulligan WR so the number on
+        # screen matches what drives the verdict (raw mulligan-arm
+        # P(win) + the 4 pp empirical correction; see MULLIGAN_BIAS
+        # in mulligan_coach_recommend.service).
         mull_pct = (rec.mulligan_win_probability + rec.mulligan_bias) * 100
-        self._keep_label.setText(f"Keep <b>{keep_pct:.1f}%</b>")
-        self._mull_label.setText(f"Mull <b>{mull_pct:.1f}%</b>")
-        names = ", ".join(c.name for c in output.hand)
-        self._hand_label.setText(f"Hand: {names}")
+        if self._compact:
+            # Single line: "Clear keep · 62.5% vs 47.3%". Numbers are
+            # always keep first, then mull — context conveys which is
+            # which once the user has seen the expanded panel once.
+            text = f"{short_verdict} · {keep_pct:.1f}% vs {mull_pct:.1f}%"
+            self._verdict_label.setText(text)
+            self._verdict_label.setStyleSheet(
+                f"color: {verdict_color}; font-size: 12px; font-weight: 700;"
+            )
+        else:
+            self._verdict_label.setText(short_verdict)
+            self._verdict_label.setStyleSheet(
+                f"color: {verdict_color}; font-size: 22px; font-weight: 700;"
+            )
+            self._keep_label.setText(f"Keep <b>{keep_pct:.1f}%</b>")
+            self._mull_label.setText(f"Mull <b>{mull_pct:.1f}%</b>")
+            names = ", ".join(c.name for c in output.hand)
+            self._hand_label.setText(f"Hand: {names}")
+            self._stats_label.setText(_build_stats_html(rec.explanation))
+            play_draw = "play" if output.on_the_play else "draw"
+            self._context_label.setText(
+                f"mull #{output.mulligan_count} · on the {play_draw} · "
+                f"set {output.primary_set or '?'}"
+            )
+
+    def _render_computing(self, output: ComputingOutput) -> None:
+        """Render the "running simulation" placeholder."""
+        # The recommendation that's about to be produced doesn't exist
+        # yet, so the layout-toggle re-render shouldn't bring back a
+        # stale verdict either.
+        self._last_rec = None
         play_draw = "play" if output.on_the_play else "draw"
-        self._context_label.setText(
-            f"mull #{output.mulligan_count} · on the {play_draw} · set {output.primary_set or '?'}"
-        )
+        msg = "Running simulation…"
+        if self._compact:
+            self._verdict_label.setText(msg)
+            self._verdict_label.setStyleSheet(
+                f"color: {_MARGINAL_COLOR}; font-size: 12px; font-weight: 700;"
+            )
+        else:
+            self._verdict_label.setText(msg)
+            self._verdict_label.setStyleSheet(
+                f"color: {_MARGINAL_COLOR}; font-size: 22px; font-weight: 700;"
+            )
+            self._keep_label.setText("Keep —")
+            self._mull_label.setText("Mull —")
+            self._hand_label.setText("")
+            self._stats_label.setText("")
+            self._context_label.setText(
+                f"mull #{output.mulligan_count} · on the {play_draw} · computing…"
+            )
 
     def _render_deck_loaded(self, output: DeckLoadedOutput) -> None:
-        font_size = 14 if self._compact else 18
+        font_size = 12 if self._compact else 18
         if output.n_unresolved:
             self._verdict_label.setText("Deck partially loaded")
             self._verdict_label.setStyleSheet(
@@ -614,12 +712,13 @@ class OverlayWindow(QWidget):
             self._hand_label.setText("")
         self._keep_label.setText("Keep —")
         self._mull_label.setText("Mull —")
+        self._stats_label.setText("")
         self._context_label.setText(
             f"deck loaded · {output.n_cards} cards · set {output.primary_set or '?'}"
         )
 
     def _render_missing(self, output: MissingDataOutput) -> None:
-        font_size = 14 if self._compact else 18
+        font_size = 12 if self._compact else 18
         self._verdict_label.setText("Can't recommend")
         self._verdict_label.setStyleSheet(
             f"color: {_MARGINAL_COLOR}; font-size: {font_size}px; font-weight: 700;"
@@ -627,10 +726,11 @@ class OverlayWindow(QWidget):
         self._keep_label.setText("Keep —")
         self._mull_label.setText("Mull —")
         self._hand_label.setText(output.reason)
+        self._stats_label.setText("")
         self._context_label.setText(f"({output.what})")
 
     def _render_reset(self) -> None:
-        font_size = 14 if self._compact else 18
+        font_size = 12 if self._compact else 18
         self._verdict_label.setText("Waiting for next match…")
         self._verdict_label.setStyleSheet(
             f"color: {_TEXT_PRIMARY}; font-size: {font_size}px; font-weight: 700;"
@@ -638,6 +738,7 @@ class OverlayWindow(QWidget):
         self._keep_label.setText("Keep —")
         self._mull_label.setText("Mull —")
         self._hand_label.setText("")
+        self._stats_label.setText("")
         self._context_label.setText("")
 
     def _close_clicked(self) -> None:
@@ -658,16 +759,98 @@ _TITLE_BTN_STYLE = (
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Stats panel HTML — mirror of the website's "Why this hand plays out"
+# block, but flattened into a single QLabel rich-text string so we
+# don't have to manage two dozen child widgets.
+# ---------------------------------------------------------------------------
+
+
+def _build_stats_html(exp: RecommendationExplanation) -> str:
+    """Render the keep-arm playability stats as a QLabel-safe HTML string.
+
+    QLabel's rich-text rendering supports a small HTML subset
+    (paragraphs, basic tables, inline ``<b>`` / ``<span>``, percent
+    widths). Stick to that — no CSS in style attributes other than
+    ``color`` / ``font-size`` / ``text-align`` / ``padding``.
+    """
+
+    def pct(p: float) -> str:
+        return f"{round(p * 100):d}%"
+
+    # Mana base + curve hits: two-column key/value tables stacked.
+    mana_rows = [
+        ("2nd land by T2", pct(exp.p_make_2nd_land_by_t2)),
+        ("3rd land by T3", pct(exp.p_make_3rd_land_by_t3)),
+        ("4th land by T4", pct(exp.p_make_4th_land_by_t4)),
+        ("Avg mana at T4", f"{exp.expected_mana_at_t4:.1f}"),
+    ]
+    curve_rows = [
+        ("Cast any spell T1", pct(exp.p_cast_any_spell_t1)),
+        ("Cast a creature T2", pct(exp.p_cast_any_creature_t2)),
+        ("Cast removal T2", pct(exp.p_cast_any_removal_t2)),
+        ("Cast 2-drop by T3", pct(exp.p_cast_small_creature_by_t3)),
+        ("Cast 3-drop by T4", pct(exp.p_cast_3drop_by_t4)),
+        ("Colors fixed by T4", pct(exp.color_fix_by_t4)),
+    ]
+
+    def kv_table(title: str, rows: list[tuple[str, str]]) -> str:
+        body = "".join(
+            f"<tr><td style='color:{_TEXT_MUTED};'>{k}</td><td align='right'>{v}</td></tr>"
+            for k, v in rows
+        )
+        return (
+            f"<p style='margin-top:4px;margin-bottom:2px;'>"
+            f"<b>{title}</b></p>"
+            f"<table width='100%' cellspacing='0' cellpadding='1'>{body}</table>"
+        )
+
+    # Per-card playability table: card name | MV | T1..T4 columns.
+    card_header = (
+        "<tr>"
+        f"<th align='left' style='color:{_TEXT_MUTED};font-weight:600;'>Card</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>MV</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T1</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T2</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T3</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T4</th>"
+        "</tr>"
+    )
+    card_rows: list[str] = []
+    for hc in exp.hand_cards:
+        if hc.is_land:
+            cells = [f"<td align='center' style='color:{_TEXT_MUTED};'>&mdash;</td>"] * 5
+        else:
+            mv_cell = f"<td align='center'>{hc.mana_value}</td>"
+            turn_cells = "".join(f"<td align='center'>{pct(p)}</td>" for p in hc.p_castable_by_turn)
+            cells = [mv_cell + turn_cells]
+        name_color = _TEXT_MUTED if hc.is_land else _TEXT_PRIMARY
+        card_rows.append(f"<tr><td style='color:{name_color};'>{hc.name}</td>{''.join(cells)}</tr>")
+    card_table = (
+        f"<p style='margin-top:6px;margin-bottom:2px;'><b>Per-card playability</b></p>"
+        f"<table width='100%' cellspacing='0' cellpadding='1'>"
+        f"{card_header}{''.join(card_rows)}"
+        f"</table>"
+    )
+
+    return kv_table("Mana base", mana_rows) + kv_table("Curve hits", curve_rows) + card_table
+
+
 def _verdict_display(verdict: str) -> tuple[str, str]:
-    """Human label + colour for one of the four verdict tags."""
+    """Human label + colour for one of the four verdict tags.
+
+    Labels use "mull" rather than "mulligan" so they fit on a single
+    line in the compact pill at 12px and don't need to wrap in the
+    expanded panel either.
+    """
     if verdict == "clear_keep":
         return "CLEAR KEEP", _KEEP_COLOR
     if verdict == "marginal_keep":
         return "Marginal keep", _MARGINAL_COLOR
     if verdict == "marginal_mulligan":
-        return "Marginal mulligan", _MARGINAL_COLOR
+        return "Marginal mull", _MARGINAL_COLOR
     if verdict == "clear_mulligan":
-        return "CLEAR MULLIGAN", _MULL_COLOR
+        return "CLEAR MULL", _MULL_COLOR
     return verdict, _TEXT_PRIMARY
 
 
@@ -730,7 +913,7 @@ def main(argv: list[str] | None = None) -> int:
     watcher = ArenaWindowWatcher()
     watcher.state_changed.connect(window.on_arena_state_changed)
 
-    # Global hotkey: Ctrl+Shift+M to toggle compact / expanded.
+    # Global hotkey: Alt+E to toggle compact / expanded.
     hotkey_filter = _HotkeyFilter()
     hotkey_filter.triggered.connect(window.toggle_compact)
     app.installNativeEventFilter(hotkey_filter)
@@ -767,10 +950,10 @@ def main(argv: list[str] | None = None) -> int:
         # Register the global hotkey under the window's HWND so the
         # WM_HOTKEY message routes through our event filter.
         if register_global_hotkey(hwnd, 1):
-            log.info("global hotkey registered: Ctrl+Shift+M toggles compact mode")
+            log.info("global hotkey registered: Alt+E toggles compact mode")
         else:
             log.warning(
-                "could not register Ctrl+Shift+M global hotkey "
+                "could not register Alt+E global hotkey "
                 "(another app may already own it); use the title-bar "
                 "collapse button or double-click instead"
             )
