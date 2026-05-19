@@ -581,7 +581,11 @@ class OverlayWindow(QWidget):
             f"color: {verdict_color}; font-size: {font_size}px; font-weight: 700;"
         )
         keep_pct = rec.keep_win_probability * 100
-        mull_pct = rec.mulligan_win_probability * 100
+        # Display the bias-adjusted mulligan WR so the user sees the
+        # number that actually drives the verdict (raw P(win) at the
+        # mulligan level + the empirical 4 pp correction; see
+        # MULLIGAN_BIAS in mulligan_coach_recommend.service).
+        mull_pct = (rec.mulligan_win_probability + rec.mulligan_bias) * 100
         self._keep_label.setText(f"Keep <b>{keep_pct:.1f}%</b>")
         self._mull_label.setText(f"Mull <b>{mull_pct:.1f}%</b>")
         names = ", ".join(c.name for c in output.hand)

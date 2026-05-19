@@ -163,7 +163,8 @@ def _format_output(output: CoordinatorOutput) -> str:
         rec = output.recommendation
         assert rec is not None  # RecommendationOutput always carries one
         keep_pct = rec.keep_win_probability * 100
-        mull_pct = rec.mulligan_win_probability * 100
+        # Bias-adjusted mulligan WR — see gui.py for rationale.
+        mull_pct = (rec.mulligan_win_probability + rec.mulligan_bias) * 100
         verdict_label = {
             "clear_keep": "CLEAR KEEP",
             "marginal_keep": "marginal keep",

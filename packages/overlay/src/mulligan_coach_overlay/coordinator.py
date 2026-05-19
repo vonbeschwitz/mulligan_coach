@@ -54,6 +54,15 @@ log = logging.getLogger(__name__)
 # overlay doesn't have to import a private website name.
 _REQUIRED_DECK_SIZE = 40
 
+# Keep-arm sim count for the overlay. The shared service defaults to
+# 1000 (what the website uses), but the variance benchmark
+# ``packages/model/scripts/keep_arm_variance.py`` showed that dropping
+# to 200 only inflates within-hand run-to-run std on P(win) from
+# ~0.0038 -> ~0.0060 (well below the 3 pp marginal-verdict band), in
+# exchange for a ~5x cut in keep-arm wall time. Overlay UX benefits
+# from the lower latency more than from the extra precision.
+_OVERLAY_N_SIMS_KEEP = 200
+
 
 # ---------------------------------------------------------------------------
 # Output types
@@ -261,6 +270,7 @@ class OverlayCoordinator:
                 on_the_play=event.on_the_play,
                 mulligan_number=event.mulligan_count,
                 opp_mulligan_number=event.opp_mulligan_count,
+                n_sims_keep=_OVERLAY_N_SIMS_KEEP,
             )
         except Exception as exc:
             # Surface unexpected failures inline rather than letting
