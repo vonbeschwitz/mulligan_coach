@@ -40,7 +40,7 @@ uv run uvicorn mulligan_coach_website.app:app --reload   # autoreload
 ```
 
 A trained model directory is required to make recommendations. By
-default the app looks for `models/all3_v1/` under the repo root —
+default the app looks for `models/all3_v2/` under the repo root —
 the current multi-set Premier-Draft model (TLA + ECL + TMT).
 Override with `MULLIGAN_COACH_MODEL_DIR=/path/to/model_dir`.
 

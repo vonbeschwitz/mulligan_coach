@@ -79,12 +79,12 @@ log = logging.getLogger(__name__)
 # Default model directory — checked relative to the workspace root
 # (the parent of `packages/`). Override via env var.
 #
-# ``all3_v1`` is the current multi-set Premier-Draft model: trained on
-# TLA + ECL + TMT (1.07M rows). Feature vocabulary is identical to the
-# previous ``tla_v2`` (set/event-type one-hots were already in the
-# spec), so this swap is a pure path change — no inference-side code
-# needs to know which model is loaded.
-_DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "all3_v1"
+# ``all3_v2`` is the current multi-set Premier-Draft model: trained on
+# TLA + ECL + TMT (1.07M rows) with the deck-wide + monotonic
+# castability features. Feature vocabulary is identical to the
+# previous ``all3_v1``, so this swap is a pure path change — no
+# inference-side code needs to know which model is loaded.
+_DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "all3_v2"
 _DEFAULT_EVENT_TYPE = "PremierDraft"
 
 # Default sim budgets for the asymmetric path. The keep arm runs once;
@@ -240,7 +240,7 @@ class RecommendationExplanation:
     extra simulation cost.
 
     Three sections, picked to cover the top of the trained model's
-    feature-importance ranking (see ``models/all3_v1`` feature
+    feature-importance ranking (see ``models/all3_v2`` feature
     importance dump) while staying readable to a non-technical user:
 
     * **Mana base** — ``p_land_drop_by_turn_{2,3,4}`` plus

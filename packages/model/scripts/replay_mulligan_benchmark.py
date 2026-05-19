@@ -77,7 +77,7 @@ from mulligan_coach_recommend import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_MODEL_DIR = REPO_ROOT / "models" / "all3_v1"
+DEFAULT_MODEL_DIR = REPO_ROOT / "models" / "all3_v2"
 DECISIONS_PATH = (
     REPO_ROOT
     / "data"

@@ -17,7 +17,7 @@ How it mirrors the website
   the materialised parquet. That row was built by the same
   ``build_feature_row`` the website uses at runtime (just at a
   different sim count), so the column vocabulary matches the
-  ``all3_v1`` model exactly. Skipping the re-simulation here saves
+  ``all3_v2`` model exactly. Skipping the re-simulation here saves
   ~5000 simulate() calls (~10 minutes) without changing the model's
   in-distribution behaviour for kept-7 rows.
 
@@ -75,7 +75,7 @@ from mulligan_coach_recommend import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_MODEL_DIR = REPO_ROOT / "models" / "all3_v1"
+DEFAULT_MODEL_DIR = REPO_ROOT / "models" / "all3_v2"
 DUCKDB_PATH = REPO_ROOT / "data" / "processed" / "games.duckdb"
 TRAINING_DIR = REPO_ROOT / "data" / "processed" / "model_training"
 
