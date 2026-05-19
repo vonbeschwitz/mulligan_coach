@@ -355,7 +355,7 @@ if sys.platform == "win32":
 
 else:
 
-    class _KeyboardHook(QObject):  # type: ignore[no-redef]
+    class _KeyboardHook(QObject):
         """Non-Windows stub. ``install`` is a no-op returning False."""
 
         triggered = pyqtSignal()
