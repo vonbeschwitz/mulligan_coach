@@ -84,7 +84,9 @@ def main() -> None:
     log.info("==== Choice-model long-run follow-up sweep ====")
     log.info("Output dir: %s", OUTPUT_DIR)
     log.info("Configs to run: %d", len(CONFIGS))
-    log.info("n_estimators=%d  early_stopping=%d  seed=%d", N_ESTIMATORS, EARLY_STOPPING_ROUNDS, SEED)
+    log.info(
+        "n_estimators=%d  early_stopping=%d  seed=%d", N_ESTIMATORS, EARLY_STOPPING_ROUNDS, SEED
+    )
 
     log.info("\nLoading data...")
     parts: list[pd.DataFrame] = []
@@ -143,8 +145,8 @@ def main() -> None:
     best_idx = -1
     best_booster: xgb.Booster | None = None
     best_best_iter = -1
-    best_config: dict | None = None
-    results: list[dict] = []
+    best_config: dict[str, float] | None = None
+    results: list[dict[str, object]] = []
 
     t_all = time.time()
     for i, cfg in enumerate(CONFIGS):
@@ -235,13 +237,25 @@ def main() -> None:
     t_t = _compute_metrics(y_test[mt_t], p_test[mt_t])
     log.info("\nTest metrics for best model:")
     log.info(
-        "  ALL     n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f", t_a.n_rows, t_a.log_loss, t_a.brier, t_a.accuracy
+        "  ALL     n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f",
+        t_a.n_rows,
+        t_a.log_loss,
+        t_a.brier,
+        t_a.accuracy,
     )
     log.info(
-        "  Premier n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f", t_p.n_rows, t_p.log_loss, t_p.brier, t_p.accuracy
+        "  Premier n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f",
+        t_p.n_rows,
+        t_p.log_loss,
+        t_p.brier,
+        t_p.accuracy,
     )
     log.info(
-        "  Trad    n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f", t_t.n_rows, t_t.log_loss, t_t.brier, t_t.accuracy
+        "  Trad    n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f",
+        t_t.n_rows,
+        t_t.log_loss,
+        t_t.brier,
+        t_t.accuracy,
     )
 
     metadata = ChoiceTrainingMetadata(

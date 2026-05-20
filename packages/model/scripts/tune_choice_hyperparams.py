@@ -25,14 +25,13 @@ import logging
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
-import numpy as np
 import pandas as pd
 import xgboost as xgb
 from mulligan_coach_model.choice_train import (
     ChoiceTrainingMetadata,
     ChoiceTrainResult,
-    SplitMetrics,
     _compute_metrics,
     _feature_columns,
     _grouped_split,
@@ -55,10 +54,14 @@ N_ESTIMATORS = 2000
 EARLY_STOPPING_ROUNDS = 30
 
 # Grid. Kept modest: 3*3*2*2 = 36 configs at ~30s each ~ 18 min.
-GRID = {
-    "max_depth": [4, 6, 8],
+# Explicit ``list[float]`` per slot so mypy can resolve
+# ``itertools.product(*grid.values())`` against its variadic overloads
+# — otherwise GRID is inferred as ``dict[str, list[int] | list[float]]``
+# and the per-key values come out typed as ``object``.
+GRID: dict[str, list[float]] = {
+    "max_depth": [4.0, 6.0, 8.0],
     "learning_rate": [0.03, 0.05, 0.08],
-    "min_child_weight": [1, 5],
+    "min_child_weight": [1.0, 5.0],
     "subsample": [1.0, 0.8],
 }
 
@@ -105,7 +108,9 @@ def main() -> None:
     log.info("Log: %s", LOG_PATH)
     log.info("Sets: %s, Events: %s", SETS, EVENT_TYPES)
     log.info("Grid: %s", GRID)
-    log.info("Fixed: n_estimators=%d, early_stop=%d, seed=%d", N_ESTIMATORS, EARLY_STOPPING_ROUNDS, SEED)
+    log.info(
+        "Fixed: n_estimators=%d, early_stop=%d, seed=%d", N_ESTIMATORS, EARLY_STOPPING_ROUNDS, SEED
+    )
 
     log.info("\nLoading data...")
     df = load_data(log)
@@ -142,13 +147,23 @@ def main() -> None:
     log.info("\nSweeping %d configs...", len(configs))
     log.info(
         "%-3s | %-7s %-5s %-3s %-6s | %5s | %9s %9s %9s | %9s %9s %9s | best_it",
-        "id", "lr", "depth", "mcw", "subs", "secs",
-        "val_ll", "val_p_ll", "val_t_ll", "test_ll", "test_p_ll", "test_t_ll",
+        "id",
+        "lr",
+        "depth",
+        "mcw",
+        "subs",
+        "secs",
+        "val_ll",
+        "val_p_ll",
+        "val_t_ll",
+        "test_ll",
+        "test_p_ll",
+        "test_t_ll",
     )
 
-    results: list[dict] = []
+    results: list[dict[str, object]] = []
     best_premier_val_ll = float("inf")
-    best_config: dict | None = None
+    best_config: dict[str, float] | None = None
     best_booster: xgb.Booster | None = None
     best_best_iter: int = -1
     best_idx: int = -1
@@ -240,17 +255,29 @@ def main() -> None:
     log.info("\n==== Top 10 by Premier-val log_loss ====")
     log.info(
         "%-3s %-7s %-5s %-3s %-6s %9s %9s %9s %9s",
-        "id", "lr", "depth", "mcw", "subs",
-        "v_p_ll", "v_t_ll", "t_p_ll", "t_t_ll",
+        "id",
+        "lr",
+        "depth",
+        "mcw",
+        "subs",
+        "v_p_ll",
+        "v_t_ll",
+        "t_p_ll",
+        "t_t_ll",
     )
-    for r in sorted(results, key=lambda r: r["val_premier_log_loss"])[:10]:
-        c = r["config"]
+    for r in sorted(results, key=lambda r: float(r["val_premier_log_loss"]))[:10]:  # type: ignore[arg-type]
+        c = cast("dict[str, float]", r["config"])
         log.info(
             "%-3d %-7.3f %-5d %-3d %-6.2f %9.4f %9.4f %9.4f %9.4f",
-            r["id"], c["learning_rate"], int(c["max_depth"]), int(c["min_child_weight"]),
+            r["id"],
+            c["learning_rate"],
+            int(c["max_depth"]),
+            int(c["min_child_weight"]),
             c["subsample"],
-            r["val_premier_log_loss"], r["val_trad_log_loss"],
-            r["test_premier_log_loss"], r["test_trad_log_loss"],
+            r["val_premier_log_loss"],
+            r["val_trad_log_loss"],
+            r["test_premier_log_loss"],
+            r["test_trad_log_loss"],
         )
 
     # Final eval on test split using the best booster
@@ -262,15 +289,27 @@ def main() -> None:
     test_t = _compute_metrics(y_test[mask_test_trad], p_test[mask_test_trad])
     log.info(
         "  ALL     n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f  keep_rate=%.4f",
-        test_all.n_rows, test_all.log_loss, test_all.brier, test_all.accuracy, test_all.keep_rate,
+        test_all.n_rows,
+        test_all.log_loss,
+        test_all.brier,
+        test_all.accuracy,
+        test_all.keep_rate,
     )
     log.info(
         "  Premier n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f  keep_rate=%.4f",
-        test_p.n_rows, test_p.log_loss, test_p.brier, test_p.accuracy, test_p.keep_rate,
+        test_p.n_rows,
+        test_p.log_loss,
+        test_p.brier,
+        test_p.accuracy,
+        test_p.keep_rate,
     )
     log.info(
         "  Trad    n=%d  log_loss=%.4f  brier=%.4f  acc=%.4f  keep_rate=%.4f",
-        test_t.n_rows, test_t.log_loss, test_t.brier, test_t.accuracy, test_t.keep_rate,
+        test_t.n_rows,
+        test_t.log_loss,
+        test_t.brier,
+        test_t.accuracy,
+        test_t.keep_rate,
     )
 
     # Persist the best booster as choice_v5.

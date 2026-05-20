@@ -74,7 +74,9 @@ def main() -> None:
         print(f"  {b:<14s}  n={c:>6d}  {c / n * 100:5.2f}%")
 
     print("\n==== By event_type x mulligan_number ====")
-    print(f"  {'event':<13s} {'mn':>3s}  {'n':>7s}  {'CK%':>6s} {'MK%':>6s} {'MM%':>6s} {'CM%':>6s}  {'kept%':>6s}")
+    print(
+        f"  {'event':<13s} {'mn':>3s}  {'n':>7s}  {'CK%':>6s} {'MK%':>6s} {'MM%':>6s} {'CM%':>6s}  {'kept%':>6s}"
+    )
     for (ev, mn), sub in test_df.groupby(["event_type", "mulligan_number"], observed=True):
         n = len(sub)
         counts = sub["bucket"].value_counts()
@@ -83,10 +85,14 @@ def main() -> None:
         mm = counts.get("marginal_mull", 0) / n * 100
         cm = counts.get("clear_mull", 0) / n * 100
         kept = float(sub["was_kept"].astype(int).mean()) * 100
-        print(f"  {ev:<13s} {int(mn):>3d}  {n:>7d}  {ck:>5.1f}% {mk:>5.1f}% {mm:>5.1f}% {cm:>5.1f}%  {kept:>5.1f}%")
+        print(
+            f"  {ev:<13s} {int(mn):>3d}  {n:>7d}  {ck:>5.1f}% {mk:>5.1f}% {mm:>5.1f}% {cm:>5.1f}%  {kept:>5.1f}%"
+        )
 
     print("\n==== Bucket vs observed keep behaviour ====")
-    print(f"  {'bucket':<14s}  {'n':>7s}  {'mean p_keep':>11s}  {'obs kept%':>9s}  {'agreement%':>10s}")
+    print(
+        f"  {'bucket':<14s}  {'n':>7s}  {'mean p_keep':>11s}  {'obs kept%':>9s}  {'agreement%':>10s}"
+    )
     for b in ("clear_keep", "marginal_keep", "marginal_mull", "clear_mull"):
         sub = test_df[test_df["bucket"] == b]
         if sub.empty:
@@ -94,7 +100,9 @@ def main() -> None:
         mean_p = float(sub["p_keep"].mean())
         kept = float(sub["was_kept"].astype(int).mean())
         agree = kept if b.endswith("keep") else (1 - kept)
-        print(f"  {b:<14s}  {len(sub):>7d}  {mean_p:>11.4f}  {kept * 100:>8.2f}%  {agree * 100:>9.2f}%")
+        print(
+            f"  {b:<14s}  {len(sub):>7d}  {mean_p:>11.4f}  {kept * 100:>8.2f}%  {agree * 100:>9.2f}%"
+        )
 
     print("\n==== Mull-score percentiles (mulligan-display value, 0-100) ====")
     pct = test_df["mull_score_pct"]

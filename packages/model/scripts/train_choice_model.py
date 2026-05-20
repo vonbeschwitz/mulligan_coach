@@ -66,9 +66,7 @@ def main() -> None:
                     f"No choice-feature chunk parquets found under {set_dir}; "
                     f"run materialize_choice_features.py first."
                 )
-            logging.info(
-                "%s/%s: %d chunk(s) under %s", set_code, event_type, len(chunks), set_dir
-            )
+            logging.info("%s/%s: %d chunk(s) under %s", set_code, event_type, len(chunks), set_dir)
             parquet_paths.extend(chunks)
 
     logging.info(
