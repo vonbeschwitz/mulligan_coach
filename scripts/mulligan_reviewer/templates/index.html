@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Mulligan reviewer — {{ preset }}</title>
+  <style>
+    :root {
+      --bg: #1c1f24;
+      --panel: #262a31;
+      --muted: #8a93a4;
+      --text: #e6e8ec;
+      --accent-keep: #2e7d32;
+      --accent-keep-hover: #1b5e20;
+      --accent-mull: #c62828;
+      --accent-mull-hover: #8e0000;
+      --accent-skip: #455a64;
+      --accent-skip-hover: #2c3a40;
+      --divider: #353a44;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      max-width: 1280px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+    h1 { margin: 0 0 4px 0; font-weight: 600; font-size: 22px; }
+    .meta {
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-size: 14px;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--panel);
+      border: 1px solid var(--divider);
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-right: 6px;
+      font-size: 13px;
+    }
+    .badge.draw { background: #3a3d50; }
+    .badge.play { background: #4a3a2e; }
+    .hand {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .card-slot {
+      background: var(--panel);
+      border: 1px solid var(--divider);
+      border-radius: 8px;
+      padding: 6px;
+      overflow: hidden;
+      text-align: center;
+    }
+    .card-slot img {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 4px;
+    }
+    .card-slot .name {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    form.vote {
+      display: grid;
+      grid-template-columns: 1fr 1fr 0.6fr;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    button {
+      font-size: 19px;
+      font-weight: 600;
+      padding: 20px 0;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      color: white;
+    }
+    button.keep { background: var(--accent-keep); }
+    button.keep:hover { background: var(--accent-keep-hover); }
+    button.mull { background: var(--accent-mull); }
+    button.mull:hover { background: var(--accent-mull-hover); }
+    button.skip { background: var(--accent-skip); font-weight: 400; font-size: 16px; }
+    button.skip:hover { background: var(--accent-skip-hover); }
+    .progress {
+      color: var(--muted);
+      margin-bottom: 20px;
+      font-size: 13px;
+    }
+    details {
+      background: var(--panel);
+      border: 1px solid var(--divider);
+      border-radius: 6px;
+      padding: 8px 12px;
+    }
+    details summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    details[open] summary { margin-bottom: 8px; }
+    .pred-table { width: auto; border-collapse: collapse; font-size: 13px; }
+    .pred-table td { padding: 3px 18px 3px 0; }
+    .pred-table td.label { color: var(--muted); }
+    kbd {
+      background: var(--divider);
+      color: var(--text);
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-size: 12px;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>Would you keep this hand?</h1>
+  <div class="meta">
+    <span class="badge">{{ expansion }}</span>
+    <span class="badge {{ 'play' if on_play else 'draw' }}">
+      {{ "On the play" if on_play else "On the draw" }}
+    </span>
+    <span class="badge">mn{{ mulligan_number }}</span>
+    <span class="badge" title="Filter preset">{{ preset }}</span>
+  </div>
+
+  <div class="hand">
+    {% for card in hand %}
+    <div class="card-slot">
+      <img src="{{ card.image }}" alt="{{ card.name }}" referrerpolicy="no-referrer" loading="eager" />
+      <div class="name">{{ card.name }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <form class="vote" action="/vote" method="post">
+    <input type="hidden" name="decision_key" value="{{ decision_key }}" />
+    <button class="keep" name="choice" value="keep" accesskey="k">Keep <kbd>K</kbd></button>
+    <button class="mull" name="choice" value="mulligan" accesskey="m">Mulligan <kbd>M</kbd></button>
+    <button class="skip" name="choice" value="skip" accesskey="s">Skip <kbd>S</kbd></button>
+  </form>
+
+  <div class="progress">{{ reviewed }} / {{ total }} reviewed</div>
+
+  <details>
+    <summary>Show what the models / player did (open after voting)</summary>
+    <table class="pred-table">
+      <tr><td class="label">P(keep) — win model</td><td>{{ "%.3f"|format(p_keep_win) }}</td></tr>
+      <tr><td class="label">P(mull) — win model</td><td>{{ "%.3f"|format(p_mull_win) }}</td></tr>
+      <tr><td class="label">P(keep) — choice model</td><td>{{ "%.3f"|format(p_keep_choice) }}</td></tr>
+      <tr><td class="label">Player kept?</td><td>{{ "yes" if was_kept else "no (mulled)" }}</td></tr>
+      {% if won is not none %}
+      <tr><td class="label">Game won?</td><td>{{ "yes" if won else "no" }}</td></tr>
+      {% endif %}
+    </table>
+  </details>
+
+  <script>
+    // Keyboard shortcuts: K = keep, M = mulligan, S = skip.
+    // accesskey on the buttons works on most browsers but the modifier
+    // varies (Alt vs Ctrl+Opt); a simple keydown handler is more
+    // predictable for one-handed review.
+    document.addEventListener("keydown", (ev) => {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      const target = ev.target;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
+      let btn = null;
+      if (ev.key === "k" || ev.key === "K") btn = document.querySelector("button.keep");
+      else if (ev.key === "m" || ev.key === "M") btn = document.querySelector("button.mull");
+      else if (ev.key === "s" || ev.key === "S") btn = document.querySelector("button.skip");
+      if (btn) {
+        ev.preventDefault();
+        btn.click();
+      }
+    });
+  </script>
+</body>
+</html>
