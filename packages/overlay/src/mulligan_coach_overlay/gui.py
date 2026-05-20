@@ -34,7 +34,7 @@ Window behaviour
   Arena exits, the overlay hides. This is the behaviour
   untapped.gg's overlay has; without it the panel is annoying to
   work around when doing anything outside Arena.
-* **Collapse / expand**: a compact pill (verdict + keep%/mull% only)
+* **Collapse / expand**: a compact pill (verdict + mulligan-% only)
   vs. the full panel (adds the resolved hand + a debug footer).
   Click the title's collapse button or hit ``Alt+E`` (a Win32
   global hotkey) to toggle. The user doesn't have to close + relaunch
@@ -107,9 +107,11 @@ log = logging.getLogger(__name__)
 # (mana base, curve hits, per-card grid) alongside the verdict.
 _NORMAL_WIDTH = 380
 _NORMAL_HEIGHT = 540
-# Compact pill: verdict + raw arms on one line. Width sized to fit
-# "Marginal mull · 47.3% vs 51.8%" without truncation at 12px.
-_COMPACT_WIDTH = 260
+# Compact pill: verdict + single mulligan-% on one line. The choice
+# model collapses the keep/mull decision into one number, so the
+# pill only needs room for "Clear keep · mull 12%" rather than two
+# arm percentages.
+_COMPACT_WIDTH = 220
 _COMPACT_HEIGHT = 32
 _CORNER_RADIUS = 12
 
@@ -458,17 +460,18 @@ class OverlayWindow(QWidget):
         self._verdict_label.setWordWrap(True)
         outer.addWidget(self._verdict_label)
 
-        # Arms row: keep% / mull%. Expanded mode only — the compact
-        # pill folds the percentages into the verdict label.
+        # Score row: a single "Should mulligan: NN%" display. The
+        # choice model collapses the keep/mull decision into one
+        # probability (P(skilled player keeps)), so we show just the
+        # complementary mulligan percentage rather than two arms.
+        # Expanded mode only — the compact pill folds the number
+        # into the verdict label.
         self._arms_row_widget = QWidget()
         arms_row = QHBoxLayout(self._arms_row_widget)
         arms_row.setContentsMargins(0, 0, 0, 0)
-        arms_row.setSpacing(16)
-        self._keep_label = QLabel("Keep —")
-        self._keep_label.setStyleSheet(f"color: {_TEXT_PRIMARY}; font-size: 14px;")
-        self._mull_label = QLabel("Mull —")
+        arms_row.setSpacing(8)
+        self._mull_label = QLabel("Should mulligan —")
         self._mull_label.setStyleSheet(f"color: {_TEXT_PRIMARY}; font-size: 14px;")
-        arms_row.addWidget(self._keep_label)
         arms_row.addWidget(self._mull_label)
         arms_row.addStretch(1)
         outer.addWidget(self._arms_row_widget)
@@ -670,17 +673,16 @@ class OverlayWindow(QWidget):
         rec = output.recommendation
         assert rec is not None  # invariant of RecommendationOutput
         short_verdict, verdict_color = _verdict_display(rec.verdict)
-        keep_pct = rec.keep_win_probability * 100
-        # Display the bias-adjusted mulligan WR so the number on
-        # screen matches what drives the verdict (raw mulligan-arm
-        # P(win) + the 4 pp empirical correction; see MULLIGAN_BIAS
-        # in mulligan_coach_recommend.service).
-        mull_pct = (rec.mulligan_win_probability + rec.mulligan_bias) * 100
+        # Single "should-mulligan" percentage in [0, 100]. The choice
+        # model predicts P(skilled player keeps); the displayed number
+        # is 100 - that, rounded to a single percent so the user reads
+        # one stable digit count rather than 47.3% vs 51.8%.
+        mull_pct = rec.mulligan_percent
         if self._compact:
-            # Single line: "Clear keep · 62.5% vs 47.3%". Numbers are
-            # always keep first, then mull — context conveys which is
-            # which once the user has seen the expanded panel once.
-            text = f"{short_verdict} · {keep_pct:.1f}% vs {mull_pct:.1f}%"
+            # Compact pill: "Clear keep · mull 12%". One signed number
+            # is enough once the user knows the model is reporting a
+            # mulligan tendency, not two arms.
+            text = f"{short_verdict} · mull {mull_pct:.0f}%"
             self._verdict_label.setText(text)
             self._verdict_label.setStyleSheet(
                 f"color: {verdict_color}; font-size: 12px; font-weight: 700;"
@@ -690,8 +692,7 @@ class OverlayWindow(QWidget):
             self._verdict_label.setStyleSheet(
                 f"color: {verdict_color}; font-size: 22px; font-weight: 700;"
             )
-            self._keep_label.setText(f"Keep <b>{keep_pct:.1f}%</b>")
-            self._mull_label.setText(f"Mull <b>{mull_pct:.1f}%</b>")
+            self._mull_label.setText(f"Should mulligan <b>{mull_pct:.0f}%</b>")
             names = ", ".join(c.name for c in output.hand)
             self._hand_label.setText(f"Hand: {names}")
             self._stats_label.setText(_build_stats_html(rec.explanation))
@@ -719,8 +720,7 @@ class OverlayWindow(QWidget):
             self._verdict_label.setStyleSheet(
                 f"color: {_MARGINAL_COLOR}; font-size: 22px; font-weight: 700;"
             )
-            self._keep_label.setText("Keep —")
-            self._mull_label.setText("Mull —")
+            self._mull_label.setText("Should mulligan —")
             self._hand_label.setText("")
             self._stats_label.setText("")
             self._context_label.setText(
@@ -744,8 +744,7 @@ class OverlayWindow(QWidget):
                 f"color: {_TEXT_PRIMARY}; font-size: {font_size}px; font-weight: 700;"
             )
             self._hand_label.setText("")
-        self._keep_label.setText("Keep —")
-        self._mull_label.setText("Mull —")
+        self._mull_label.setText("Should mulligan —")
         self._stats_label.setText("")
         self._context_label.setText(
             f"deck loaded · {output.n_cards} cards · set {output.primary_set or '?'}"
@@ -757,8 +756,7 @@ class OverlayWindow(QWidget):
         self._verdict_label.setStyleSheet(
             f"color: {_MARGINAL_COLOR}; font-size: {font_size}px; font-weight: 700;"
         )
-        self._keep_label.setText("Keep —")
-        self._mull_label.setText("Mull —")
+        self._mull_label.setText("Should mulligan —")
         self._hand_label.setText(output.reason)
         self._stats_label.setText("")
         self._context_label.setText(f"({output.what})")
@@ -769,8 +767,7 @@ class OverlayWindow(QWidget):
         self._verdict_label.setStyleSheet(
             f"color: {_TEXT_PRIMARY}; font-size: {font_size}px; font-weight: 700;"
         )
-        self._keep_label.setText("Keep —")
-        self._mull_label.setText("Mull —")
+        self._mull_label.setText("Should mulligan —")
         self._hand_label.setText("")
         self._stats_label.setText("")
         self._context_label.setText("")

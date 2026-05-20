@@ -4,14 +4,16 @@
    * Error mode (`error` truthy, `recommendation` None): inline error
      message in a warning box. Used for all preflight failures
      (model not loaded, wrong sizes, hand-resolve mismatches).
-   * Result mode: Keep/Mulligan verdict + both P(win) arms +
-     delta + context summary.
+   * Result mode: choice-model verdict (clear/marginal x keep/mull)
+     + the single "should mulligan" percentage + the playability
+     explanation panel from the same simulator pass.
 
-   The verdict label has four levels (clear vs marginal x keep vs
-   mulligan), driven by `adjusted_delta` after a +MULLIGAN_BIAS
-   shift on the mulligan arm. The raw P(win) numbers shown to the
-   user remain the model's actual predictions; the bias only moves
-   the verdict cutoff.
+   The verdict bucket comes from p_keep thresholds (see
+   ``CHOICE_*_THRESHOLD`` constants in mulligan_coach_recommend):
+   ``>0.75`` clear keep, ``>0.50`` marginal keep, ``>0.25`` marginal
+   mulligan, else clear mulligan. The displayed percentage is the
+   complementary mulligan probability — one number, not two arms —
+   so users read a single 0-100 signal instead of comparing arms.
 #}
 
 {% if error %}
@@ -21,19 +23,15 @@
 {% else %}
   {% set rec = recommendation %}
   {% set verdict = rec.verdict %}
-  {% set keep_pct = (rec.keep_win_probability * 100) | round(1) %}
-  {% set mull_pct = (rec.mulligan_win_probability * 100) | round(1) %}
-  {% set delta_pp = (rec.delta * 100) | round(1) %}
-  {% set adj_delta_pp = (rec.adjusted_delta * 100) | round(1) %}
-  {% set bias_pp = (rec.mulligan_bias * 100) | round(1) %}
-  {% set threshold_pp = (rec.margin_threshold * 100) | round(1) %}
+  {% set p_keep = rec.p_keep %}
+  {% set mull_pct = rec.mulligan_percent | round(0, 'common') | int %}
+  {% set keep_pct = (p_keep * 100) | round(1) %}
   {% set verdict_label = {
       'clear_keep': 'Clear keep',
       'marginal_keep': 'Marginal keep',
       'marginal_mulligan': 'Marginal mulligan',
       'clear_mulligan': 'Clear mulligan',
   }[verdict] %}
-  {% set keep_side = verdict in ('clear_keep', 'marginal_keep') %}
 
   <div class="rec-result">
     <div class="rec-verdict rec-verdict-{{ verdict.replace('_', '-') }}">
@@ -42,43 +40,33 @@
     </div>
 
     <div class="rec-comparison">
-      <div class="rec-arm {% if keep_side %}rec-arm-better{% endif %}">
-        <span class="rec-arm-label">Keep this hand</span>
-        <span class="rec-arm-value">{{ keep_pct }}%</span>
-        <span class="muted small">P(win) at mulligan number {{ rec.mulligan_number_from }}</span>
-      </div>
-      <div class="rec-vs">vs</div>
-      <div class="rec-arm {% if not keep_side %}rec-arm-better{% endif %}">
-        <span class="rec-arm-label">Mulligan to {{ 7 - rec.mulligan_number_to }}</span>
+      <div class="rec-arm rec-arm-better">
+        <span class="rec-arm-label">Should mulligan</span>
         <span class="rec-arm-value">{{ mull_pct }}%</span>
-        <span class="muted small">average P(win) over fresh draws</span>
+        <span class="muted small">P(skilled player would mull) = 100% &minus; P(keep)</span>
       </div>
     </div>
 
     <p class="rec-delta">
-      Keep minus mulligan: <strong>{{ '+' if rec.delta >= 0 else '' }}{{ delta_pp }} pp</strong>
-      &middot; after the {{ bias_pp }} pp mulligan bias:
-      <strong>{{ '+' if rec.adjusted_delta >= 0 else '' }}{{ adj_delta_pp }} pp</strong>
-      ({% if verdict.startswith('clear_') %}outside{% else %}inside{% endif %}
-      the &plusmn;{{ threshold_pp }} pp marginal band).
+      Model P(keep) = <strong>{{ keep_pct }}%</strong>.
+      Bucket thresholds: clear keep &gt; 75%, marginal keep &gt; 50%,
+      marginal mull &gt; 25%, clear mull at or below 25%.
       {% if verdict.startswith('marginal_') %}
-        Game context (matchup, mana base, opponent's plan) should drive the final call.
+        Marginal verdicts are close to a band edge &mdash; game context
+        (matchup, mana base, opponent's plan) should drive the final call.
       {% endif %}
     </p>
 
     {# ------------------------------------------------------------------ #}
-    {# Why the verdict — playability stats from the keep arm's sim.       #}
-    {# Three sections: mana base, curve hits, per-card playability.       #}
-    {# All values come directly from the AggregateStats / feature row     #}
-    {# the model consumed, so the user sees the same signal the           #}
-    {# prediction was built on.                                           #}
+    {# Why the verdict — playability stats from the same sim that fed     #}
+    {# the choice-model prediction.                                       #}
     {# ------------------------------------------------------------------ #}
     {% set exp = rec.explanation %}
     {% macro pct(p) %}{{ (p * 100) | round(0, 'common') | int }}%{% endmacro %}
     <div class="rec-explanation">
       <h3>Why this hand plays out the way it does</h3>
       <p class="muted small rec-explanation-blurb">
-        Averages across the keep arm's {{ rec.n_sims_keep }} simulated games.
+        Averages across {{ rec.n_sims }} simulated games on this hand.
         These are the same playability numbers the model reads.
       </p>
 
@@ -157,25 +145,7 @@
       &middot; came from mulligan number {{ mulligan_number }}.
     </p>
     <p class="muted small">
-      Keep arm: {{ rec.n_sims_keep }} sims &middot;
-      Mulligan arm: {{ rec.n_mulligan_samples }} samples × {{ rec.n_sims_per_mulligan }} sims
-      {% if rec.mulligan_arm_was_cached %}
-        &middot; <strong>mulligan arm prefetched</strong> (already done when you clicked)
-      {% endif %}
+      Choice model: {{ rec.n_sims }} sims (single pass — no separate mulligan arm).
     </p>
-    {% if rec.mulligan_arm_floor is not none %}
-      {% set raw_pct = (rec.mulligan_arm_raw_mean * 100) | round(1) %}
-      {% set floor_pct = (rec.mulligan_arm_floor * 100) | round(1) %}
-      <p class="muted small">
-        Deeper-mulligan floor: <strong>{{ floor_pct }}%</strong>
-        (average P(win) at mulligan-to-{{ 7 - rec.mulligan_number_to - 1 }}).
-        {{ rec.n_samples_below_floor }} of {{ rec.n_mulligan_samples }} sampled hands scored below
-        the floor and were clamped &mdash; reflecting that the player would just mulligan again
-        rather than keep them.
-        {% if rec.n_samples_below_floor > 0 %}
-          Without the floor the mulligan arm would have been {{ raw_pct }}%.
-        {% endif %}
-      </p>
-    {% endif %}
   </div>
 {% endif %}

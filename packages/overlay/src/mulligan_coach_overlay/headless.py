@@ -162,9 +162,6 @@ def _format_output(output: CoordinatorOutput) -> str:
     if isinstance(output, RecommendationOutput):
         rec = output.recommendation
         assert rec is not None  # RecommendationOutput always carries one
-        keep_pct = rec.keep_win_probability * 100
-        # Bias-adjusted mulligan WR — see gui.py for rationale.
-        mull_pct = (rec.mulligan_win_probability + rec.mulligan_bias) * 100
         verdict_label = {
             "clear_keep": "CLEAR KEEP",
             "marginal_keep": "marginal keep",
@@ -174,8 +171,8 @@ def _format_output(output: CoordinatorOutput) -> str:
         play_draw = "play" if output.on_the_play else "draw"
         names = ", ".join(c.name for c in output.hand)
         return (
-            f"[verdict] {verdict_label:>18}  keep {keep_pct:5.1f}%  "
-            f"mull {mull_pct:5.1f}%  (mull#{output.mulligan_count}, on the {play_draw})\n"
+            f"[verdict] {verdict_label:>18}  mull {rec.mulligan_percent:5.1f}%  "
+            f"(mull#{output.mulligan_count}, on the {play_draw})\n"
             f"          hand: {names}"
         )
     if isinstance(output, MissingDataOutput):

@@ -33,9 +33,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from mulligan_coach_recommend import (
-    DEFAULT_N_MULLIGAN_SAMPLES,
-    DEFAULT_N_SIMS_KEEP,
-    DEFAULT_N_SIMS_PER_MULLIGAN,
+    DEFAULT_N_SIMS_CHOICE,
     RecommendationService,
     load_service,
 )
@@ -164,11 +162,11 @@ def validate(
 ) -> HTMLResponse:
     """Parse the pasted decklist; render the status panel + datalist.
 
-    Side effect: when the deck parses cleanly to the right size, fire
-    a background prefetch of the mulligan arm. The eventual
-    ``/recommend`` click usually hits the warm cache, so the user
-    only waits for the keep arm (~1.5 s) instead of both arms in
-    series (~5 s).
+    The choice-model path doesn't have a separate mulligan arm to
+    prefetch — the verdict comes from a single simulate +
+    feature-build + predict pass on the user's chosen hand. So
+    /validate is now purely parser feedback; the mulligan prefetch
+    that the old asymmetric flow used has been retired.
 
     Always returns 200 — the panel itself shows the result-and-issues
     split, and the ``<datalist>`` is populated even on partial success
@@ -176,16 +174,7 @@ def validate(
     the user fixes the broken lines.
     """
     store: CardStore = request.app.state.store
-    service: RecommendationService = request.app.state.service
     result = parse_mtga_decklist(decklist, store)
-
-    # Fire-and-forget the mulligan arm with the form's default context.
-    # If the user changes context (on/draw, mulligan number, sim depth)
-    # before clicking, the cache will miss and /recommend computes
-    # fresh — correct but slower. Worst case is wasted background CPU.
-    if result.is_valid and result.total_cards == _REQUIRED_DECK_SIZE and service.status.ready:
-        deck_cards = [entry.card for entry in result.cards for _ in range(entry.count)]
-        service.prefetch_mulligan(deck=deck_cards)
 
     return templates.TemplateResponse(
         request,
@@ -259,14 +248,12 @@ def recommend_route(
     # coercion — FastAPI's `int | None` Form converter raises a 422
     # on `""`. We accept it as a string and convert manually below.
     opp_mulligan_number: Annotated[str, Form()] = "",
-    # Asymmetric sim budget: keep arm = one hand at high precision;
-    # mulligan arm = many independent samples x few sims each
-    # (between-hand variance dominates within-hand sampling noise).
-    n_sims_keep: Annotated[int, Form()] = DEFAULT_N_SIMS_KEEP,
-    n_sims_per_mulligan: Annotated[int, Form()] = DEFAULT_N_SIMS_PER_MULLIGAN,
-    n_mulligan_samples: Annotated[int, Form()] = DEFAULT_N_MULLIGAN_SAMPLES,
+    # Sim budget for the choice-model recommendation. One pass of
+    # simulate + feature-build + predict feeds both the prediction
+    # and the explanation panel — no mulligan-arm Monte Carlo.
+    n_sims: Annotated[int, Form()] = DEFAULT_N_SIMS_CHOICE,
 ) -> HTMLResponse:
-    """Run keep vs. mulligan and render the recommendation.
+    """Run the choice-model recommendation and render the verdict panel.
 
     User-facing errors (model not loaded, deck wrong size, hand
     wrong size, hand id no longer matches deck) render inline in
@@ -323,15 +310,13 @@ def recommend_route(
             opp_mull = None
 
     try:
-        recommendation = service.recommend_asymmetric(
+        recommendation = service.recommend_choice(
             hand=hand_cards,
             deck=deck_cards,
             on_the_play=on_the_play,
             mulligan_number=mulligan_number,
             opp_mulligan_number=opp_mull,
-            n_sims_keep=n_sims_keep,
-            n_sims_per_mulligan=n_sims_per_mulligan,
-            n_mulligan_samples=n_mulligan_samples,
+            n_sims=n_sims,
         )
     except (ValueError, RuntimeError) as exc:
         return _render_recommendation_error(request, str(exc))
