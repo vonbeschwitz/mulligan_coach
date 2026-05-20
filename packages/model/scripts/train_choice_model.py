@@ -30,7 +30,12 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sets", nargs="+", required=True, help="Set codes to train on.")
-    ap.add_argument("--event-type", default="PremierDraft")
+    ap.add_argument(
+        "--event-types",
+        nargs="+",
+        default=["PremierDraft"],
+        help="One or more event types to combine (e.g. PremierDraft TradDraft).",
+    )
     ap.add_argument(
         "--choice-training-dir",
         type=Path,
@@ -53,20 +58,23 @@ def main() -> None:
 
     parquet_paths: list[Path] = []
     for set_code in args.sets:
-        set_dir = args.choice_training_dir / set_code / args.event_type
-        chunks = choice_parquet_paths(set_dir)
-        if not chunks:
-            raise SystemExit(
-                f"No choice-feature chunk parquets found under {set_dir}; "
-                f"run materialize_choice_features.py first."
-            )
-        logging.info("%s: %d chunk(s) under %s", set_code, len(chunks), set_dir)
-        parquet_paths.extend(chunks)
+        for event_type in args.event_types:
+            set_dir = args.choice_training_dir / set_code / event_type
+            chunks = choice_parquet_paths(set_dir)
+            if not chunks:
+                raise SystemExit(
+                    f"No choice-feature chunk parquets found under {set_dir}; "
+                    f"run materialize_choice_features.py first."
+                )
+            logging.info("%s/%s: %d chunk(s) under %s", set_code, event_type, len(chunks), set_dir)
+            parquet_paths.extend(chunks)
 
     logging.info(
-        "Training choice model on %d total chunk(s) across %d set(s); output -> %s",
+        "Training choice model on %d total chunk(s) across %d set(s) x %d event_type(s); "
+        "output -> %s",
         len(parquet_paths),
         len(args.sets),
+        len(args.event_types),
         args.output_dir,
     )
 

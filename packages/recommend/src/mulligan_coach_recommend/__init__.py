@@ -13,12 +13,17 @@ import path and nothing else.
 from __future__ import annotations
 
 from .service import (
+    CHOICE_CLEAR_KEEP_THRESHOLD,
+    CHOICE_MARGINAL_KEEP_THRESHOLD,
+    CHOICE_MARGINAL_MULL_THRESHOLD,
     DEFAULT_N_MULLIGAN_SAMPLES,
+    DEFAULT_N_SIMS_CHOICE,
     DEFAULT_N_SIMS_KEEP,
     DEFAULT_N_SIMS_PER_MULLIGAN,
     MARGIN_THRESHOLD,
     MULLIGAN_BIAS,
     AsymmetricRecommendation,
+    ChoiceRecommendation,
     FormatStats,
     HandCardPlayability,
     MulliganArmResult,
@@ -32,12 +37,17 @@ from .service import (
 )
 
 __all__ = [
+    "CHOICE_CLEAR_KEEP_THRESHOLD",
+    "CHOICE_MARGINAL_KEEP_THRESHOLD",
+    "CHOICE_MARGINAL_MULL_THRESHOLD",
     "DEFAULT_N_MULLIGAN_SAMPLES",
+    "DEFAULT_N_SIMS_CHOICE",
     "DEFAULT_N_SIMS_KEEP",
     "DEFAULT_N_SIMS_PER_MULLIGAN",
     "MARGIN_THRESHOLD",
     "MULLIGAN_BIAS",
     "AsymmetricRecommendation",
+    "ChoiceRecommendation",
     "FormatStats",
     "HandCardPlayability",
     "MulliganArmResult",

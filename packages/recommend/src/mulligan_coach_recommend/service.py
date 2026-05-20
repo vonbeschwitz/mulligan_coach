@@ -1,41 +1,38 @@
 """Model-loading and recommendation orchestration.
 
-The website's :mod:`app` calls into this module at three points:
+Production path (overlay + website)
+-----------------------------------
 
-1. At startup (inside the FastAPI ``lifespan``), :func:`load_service`
-   assembles a :class:`RecommendationService` — loads the trained
-   model bundle, builds per-format shrunk-WR / z-score dicts, and
-   spins up a small thread-pool + mulligan-arm cache.
-2. Per ``POST /validate`` request, the route calls
-   :meth:`RecommendationService.prefetch_mulligan` to fire-and-forget
-   compute the mulligan arm for the freshly-pasted deck in the
-   background. Result lands in the cache; the user's eventual
-   click on *Keep or mulligan?* awaits a Future that's usually
-   already done.
-3. Per ``POST /recommend`` request, the route calls
-   :meth:`RecommendationService.recommend_asymmetric` which runs the
-   keep arm inline while pulling the mulligan arm from the cache
-   (computing it on the spot if no prefetch covered this case).
+The shipped verdict comes from the **choice model** (``models/choice_v6``
+by default), via :meth:`RecommendationService.recommend_choice`. The
+choice model predicts ``P(skilled player would keep | hand)``; we
+bucket that into four levels using fixed thresholds
+(``CHOICE_*_THRESHOLD``):
 
-Why asymmetric sims
--------------------
+* ``p_keep > 0.75``   -> ``clear_keep``
+* ``p_keep > 0.50``   -> ``marginal_keep``
+* ``p_keep > 0.25``   -> ``marginal_mulligan``
+* otherwise           -> ``clear_mulligan``
 
-The keep arm evaluates a single specific hand; precision (per-hand
-``n_sims``) is the only dial. The mulligan arm averages predicted
-P(win) over ``n_mulligan_samples`` independent freshly-drawn hands;
-*between-hand* variance dominates the *within-hand* sampling noise.
-So a budget of M total mulligan-arm simulations is better spent on
-many samples x few sims-per-sample than the reverse. Defaults below
-reflect that: keep=1000 sims for one hand, mulligan=50 hands x 40
-sims each (=2000 sims total, 2x the keep budget, but spent on
-sample diversity rather than per-hand precision).
+Each call runs one simulate + build_feature_row + predict pass. The
+resulting :class:`ChoiceRecommendation` carries the verdict, the
+raw ``p_keep``, and the playability explanation built from the same
+simulator aggregate.
 
-Loading is best-effort: if the model directory doesn't exist (fresh
-checkout) or the ratings parquet is missing for a set, the affected
-piece is omitted and a clear human message is surfaced via
-:class:`ServiceStatus`. The route layer then renders that message
-instead of crashing — the website is usable for deck-paste / hand-
-building even before the model is trained.
+Legacy win-model path
+---------------------
+
+The older :meth:`recommend_asymmetric` / :class:`AsymmetricRecommendation`
+flow is retained for two callers:
+
+1. A few analysis scripts under ``packages/model/scripts`` that
+   reach into the cache machinery to benchmark the win-model.
+2. Any in-process consumer that hasn't migrated.
+
+It is **not** wired to the overlay or website any more.
+:func:`load_service` still loads the win bundle best-effort
+alongside the choice bundle so those scripts keep working; absence
+of either bundle is reported via :class:`ServiceStatus`.
 """
 
 from __future__ import annotations
@@ -68,7 +65,13 @@ from mulligan_coach_features import (
 )
 from mulligan_coach_features.categories import cmc as _card_cmc
 from mulligan_coach_features.categories import is_land as _card_is_land
-from mulligan_coach_model import ModelBundle, Recommendation, recommend
+from mulligan_coach_model import (
+    ChoiceModelBundle,
+    ModelBundle,
+    Recommendation,
+    predict_keep_probability_from_feature_row,
+    recommend,
+)
 from mulligan_coach_model.feature_matrix import _library_from_deck
 from mulligan_coach_model.inference import _predict_proba
 from mulligan_coach_simulation import AggregateStats, draw_smoothed_hand, simulate
@@ -76,16 +79,47 @@ from mulligan_coach_simulation.runtime import Card
 
 log = logging.getLogger(__name__)
 
-# Default model directory — checked relative to the workspace root
+# Default model directories — checked relative to the workspace root
 # (the parent of `packages/`). Override via env var.
 #
-# ``all3_v2`` is the current multi-set Premier-Draft model: trained on
-# TLA + ECL + TMT (1.07M rows) with the deck-wide + monotonic
-# castability features. Feature vocabulary is identical to the
-# previous ``all3_v1``, so this swap is a pure path change — no
-# inference-side code needs to know which model is loaded.
+# Two models, two paths:
+#
+# * ``choice_v6`` is the production keep/mull recommender — XGBoost
+#   trained on 17Lands replay-data mulligan decisions across
+#   PremierDraft + TradDraft, filtered to competent players. The
+#   overlay and website both read its P(keep) prediction and bucket
+#   into the four-level verdict (clear / marginal x keep / mull).
+#   This is the only model required for normal operation.
+# * ``all3_v2`` is the legacy win-model bundle (P(win | hand)).
+#   Optional and only consulted by a couple of analysis scripts
+#   (replay-mulligan benchmarks etc.) — the production verdict is
+#   choice-model only. Load is best-effort; missing is fine.
+_DEFAULT_CHOICE_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "choice_v6"
 _DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "all3_v2"
 _DEFAULT_EVENT_TYPE = "PremierDraft"
+
+# Choice-model verdict thresholds, applied to p_keep:
+#
+#   p_keep > 0.75            -> clear_keep         (mull% < 25)
+#   0.50 < p_keep <= 0.75    -> marginal_keep
+#   0.25 < p_keep <= 0.50    -> marginal_mulligan
+#   p_keep <= 0.25           -> clear_mulligan     (mull% >= 75)
+#
+# The thresholds map directly onto bucket boundaries the user picked
+# (clear keep > 75% chance of keeping, clear mull < 25%, two marginal
+# bands of equal width between). The displayed number in the overlay
+# is the *mulligan* percentage = round(100 * (1 - p_keep)), so a
+# `clear_mulligan` hand shows >=75% and a `clear_keep` hand shows <25%.
+CHOICE_CLEAR_KEEP_THRESHOLD = 0.75
+CHOICE_MARGINAL_KEEP_THRESHOLD = 0.50
+CHOICE_MARGINAL_MULL_THRESHOLD = 0.25
+
+# Default sims-per-decision for the choice-model recommendation. The
+# choice model reads simulator-derived playability features the same
+# way the win model does, so per-hand precision matters. 1000 matches
+# the website's historical keep-arm budget; the overlay overrides to
+# a lower value to keep latency under ~250 ms.
+DEFAULT_N_SIMS_CHOICE = 1000
 
 # Default sim budgets for the asymmetric path. The keep arm runs once;
 # the mulligan arm averages over many independent draws so precision
@@ -371,6 +405,58 @@ class AsymmetricRecommendation:
 
 
 @dataclass(frozen=True)
+class ChoiceRecommendation:
+    """Result of :meth:`RecommendationService.recommend_choice`.
+
+    The production keep/mull verdict, driven by the choice model
+    (``models/choice_v6``). The model predicts ``P(skilled player
+    would keep | hand)``; we bucket that into four levels using
+    fixed thresholds (see :data:`CHOICE_CLEAR_KEEP_THRESHOLD` etc.):
+
+    * ``p_keep > 0.75``            -> ``"clear_keep"``
+    * ``0.50 < p_keep <= 0.75``    -> ``"marginal_keep"``
+    * ``0.25 < p_keep <= 0.50``    -> ``"marginal_mulligan"``
+    * ``p_keep <= 0.25``           -> ``"clear_mulligan"``
+
+    ``mulligan_percent`` is the *display* number — the recommender
+    surfaces a single "should-mulligan" percentage in 0..100 rather
+    than two separate arms, since the choice model already collapses
+    the decision into one signal.
+    """
+
+    verdict: Literal["clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan"]
+    p_keep: float
+    mulligan_number_from: int
+    mulligan_number_to: int
+    n_sims: int
+    explanation: RecommendationExplanation
+
+    @property
+    def mulligan_percent(self) -> float:
+        """``round(100 * (1 - p_keep))`` — the number shown to the user."""
+        return (1.0 - self.p_keep) * 100.0
+
+
+def _classify_choice_verdict(
+    p_keep: float,
+) -> Literal["clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan"]:
+    """Map a ``p_keep`` in ``[0, 1]`` to one of the four verdict tags.
+
+    Boundaries are inclusive at the upper edge of each band: a value
+    of exactly 0.75 lands in ``marginal_keep`` (not ``clear_keep``)
+    so the bucket whose visible label is "75% or more" requires the
+    model to be strictly above 75%.
+    """
+    if p_keep > CHOICE_CLEAR_KEEP_THRESHOLD:
+        return "clear_keep"
+    if p_keep > CHOICE_MARGINAL_KEEP_THRESHOLD:
+        return "marginal_keep"
+    if p_keep > CHOICE_MARGINAL_MULL_THRESHOLD:
+        return "marginal_mulligan"
+    return "clear_mulligan"
+
+
+@dataclass(frozen=True)
 class _MulliganCacheKey:
     """Cache key for one mulligan-arm computation.
 
@@ -511,6 +597,12 @@ class RecommendationService:
     )
     executor: ThreadPoolExecutor | None = None
     mulligan_cache: _MulliganArmCache = field(default_factory=_MulliganArmCache)
+    # Choice-model bundle — predicts P(skilled player would keep this
+    # hand). The production overlay + website verdict come from this
+    # model; the win-model ``bundle`` above is legacy and only used by
+    # a few analysis scripts. ``status.model_loaded`` reflects the
+    # choice bundle's load state (since that's the production model).
+    choice_bundle: ChoiceModelBundle | None = None
 
     @staticmethod
     def primary_set_of(deck: list[ParsedCard]) -> str | None:
@@ -747,6 +839,135 @@ class RecommendationService:
             n_samples_below_floor=mull_result.n_samples_below_floor,
             explanation=explanation,
         )
+
+    # -----------------------------------------------------------------
+    # Choice-model recommendation (production path)
+    # -----------------------------------------------------------------
+
+    def recommend_choice(
+        self,
+        *,
+        hand: list[ParsedCard],
+        deck: list[ParsedCard],
+        on_the_play: bool,
+        mulligan_number: int,
+        opp_mulligan_number: int | None,
+        n_sims: int = DEFAULT_N_SIMS_CHOICE,
+        seed: int | None = None,
+    ) -> ChoiceRecommendation:
+        """Run the choice model on a single (hand, deck, context) input.
+
+        One ``simulate -> build_feature_row`` pass feeds both the
+        choice prediction and the playability-explanation panel —
+        no separate mulligan-arm simulation, unlike
+        :meth:`recommend_asymmetric`. Returns a verdict + p_keep +
+        explanation; the overlay / website display a single mulligan
+        percentage derived from ``1 - p_keep``.
+        """
+        if self.choice_bundle is None:
+            raise RuntimeError(
+                "Choice model not loaded. Train models/choice_v6 "
+                "(see packages/model/CLAUDE.md) or set "
+                "MULLIGAN_COACH_CHOICE_MODEL_DIR to its directory."
+            )
+        if mulligan_number >= 7:
+            raise ValueError(f"cannot mulligan from mulligan_number={mulligan_number}; max is 6")
+        if len(hand) != 7:
+            raise ValueError(f"expected hand=7 cards (London mulligan); got {len(hand)}")
+        if len(deck) != 40:
+            raise ValueError(f"expected deck=40 cards (Limited); got {len(deck)}")
+        set_code = self.primary_set_of(deck)
+        if set_code is None:
+            raise ValueError("Deck has no non-basic cards — cannot pick a format.")
+
+        # Reuse the seed derivation pattern from the asymmetric path so
+        # repeated calls on the same hand are reproducible if the
+        # caller doesn't pass an explicit seed. The keep arm only sees
+        # the hand-specific seed; no cache to bypass here.
+        if seed is None:
+            sig_key = _MulliganCacheKey(
+                deck_signature=_deck_signature(deck),
+                on_the_play=on_the_play,
+                mulligan_number_to=mulligan_number,  # not actually a "to" — just keying
+                opp_mulligan_number=opp_mulligan_number,
+                n_sims_per_mulligan=n_sims,
+                n_mulligan_samples=0,
+            )
+            seed = _stable_seed(sig_key)
+
+        p_keep, aggregate, feature_row = self._compute_choice_arm(
+            hand=hand,
+            deck=deck,
+            on_the_play=on_the_play,
+            mulligan_number=mulligan_number,
+            opp_mulligan_number=opp_mulligan_number,
+            set_code=set_code,
+            n_sims=n_sims,
+            seed=seed,
+        )
+        verdict = _classify_choice_verdict(p_keep)
+        explanation = _build_explanation(hand=hand, aggregate=aggregate, feature_row=feature_row)
+        return ChoiceRecommendation(
+            verdict=verdict,
+            p_keep=p_keep,
+            mulligan_number_from=mulligan_number,
+            mulligan_number_to=mulligan_number + 1,
+            n_sims=n_sims,
+            explanation=explanation,
+        )
+
+    def _compute_choice_arm(
+        self,
+        *,
+        hand: list[ParsedCard],
+        deck: list[ParsedCard],
+        on_the_play: bool,
+        mulligan_number: int,
+        opp_mulligan_number: int | None,
+        set_code: str,
+        n_sims: int,
+        seed: int,
+    ) -> tuple[float, AggregateStats, dict[str, float]]:
+        """Run simulate + feature build once, predict P(keep) from the row.
+
+        Returns the prediction plus the upstream aggregate and feature
+        row so the caller can build the explanation panel without a
+        second simulation pass.
+        """
+        assert self.choice_bundle is not None  # checked by caller
+        stats = self.stats_by_set.get(set_code)
+        shrunk = stats.shrunk if stats is not None else {}
+        zscores = stats.zscores if stats is not None else {}
+
+        library = _library_from_deck(tuple(hand), tuple(deck))
+        aggregate = simulate(
+            list(hand),
+            list(library),
+            on_the_play=on_the_play,
+            n_runs=n_sims,
+            seed=seed,
+        )
+        row = build_feature_row(
+            hand=list(hand),
+            deck=list(deck),
+            aggregate_stats=aggregate,
+            shrunk=shrunk,
+            zscores=zscores,
+            on_the_play=on_the_play,
+            mulligan_number=mulligan_number,
+            event_type=_DEFAULT_EVENT_TYPE,
+            set_code=set_code,
+        )
+        # Same conditional-feature shape the choice cache used during
+        # training: NaN on the play / when opp's count is unknown,
+        # the count itself on the draw.
+        if on_the_play or opp_mulligan_number is None:
+            row["opp_mulligan_count_if_known"] = float("nan")
+        else:
+            row["opp_mulligan_count_if_known"] = float(opp_mulligan_number)
+
+        p_keep = predict_keep_probability_from_feature_row(self.choice_bundle, row)
+        return p_keep, aggregate, row
 
     # -----------------------------------------------------------------
     # Internal compute helpers (called from cache workers + inline)
@@ -1011,37 +1232,60 @@ def _predict_levels_for_hand(
 
 
 def _model_dir() -> Path:
-    """Resolve the model directory from env var or the default path."""
+    """Resolve the legacy win-model directory from env var or default."""
     raw = os.environ.get("MULLIGAN_COACH_MODEL_DIR", "").strip()
     return Path(raw) if raw else _DEFAULT_MODEL_DIR
+
+
+def _choice_model_dir() -> Path:
+    """Resolve the production choice-model directory from env var or default."""
+    raw = os.environ.get("MULLIGAN_COACH_CHOICE_MODEL_DIR", "").strip()
+    return Path(raw) if raw else _DEFAULT_CHOICE_MODEL_DIR
 
 
 def load_service(set_codes: list[str]) -> RecommendationService:
     """Build the :class:`RecommendationService` for the given sets.
 
-    Best-effort: missing model directory → ``bundle=None`` and the
-    status reflects that. Missing per-set ratings parquet → that set
-    is omitted from ``stats_by_set`` and listed in
-    ``status.formats_missing_stats``. The website still loads either
-    way; ``/recommend`` returns a clear error message when ``bundle``
-    is None.
+    The **choice model** (``models/choice_v6`` by default) is the
+    production load target — ``status.model_loaded`` reflects whether
+    that bundle came up. The legacy **win model** (``models/all3_v2``)
+    is loaded best-effort alongside it but its absence doesn't fail
+    the service: the production recommendation path
+    (:meth:`RecommendationService.recommend_choice`) only needs the
+    choice bundle.
+
+    Missing per-set ratings parquet → that set is omitted from
+    ``stats_by_set`` and listed in ``status.formats_missing_stats``.
     """
+    # Choice model — the one the overlay and website actually call.
+    choice_model_dir = _choice_model_dir()
+    choice_bundle: ChoiceModelBundle | None = None
+    err: str | None = None
+    if choice_model_dir.exists():
+        try:
+            choice_bundle = ChoiceModelBundle.load(choice_model_dir)
+            log.info("loaded choice-model bundle from %s", choice_model_dir)
+        except Exception as exc:
+            err = f"Failed to load choice model from {choice_model_dir}: {exc}"
+            log.exception("choice model load failed")
+    else:
+        err = (
+            f"Choice-model directory {choice_model_dir} does not exist. "
+            "Train models/choice_v6 or set MULLIGAN_COACH_CHOICE_MODEL_DIR."
+        )
+        log.warning("%s", err)
+
+    # Legacy win model — optional, only consulted by analysis scripts.
+    # We swallow load failures silently here; an analysis script that
+    # needs the win bundle can re-check status / model_dir.
     model_dir = _model_dir()
     bundle: ModelBundle | None = None
-    err: str | None = None
     if model_dir.exists():
         try:
             bundle = ModelBundle.load(model_dir)
-            log.info("loaded model bundle from %s", model_dir)
-        except Exception as exc:
-            err = f"Failed to load model from {model_dir}: {exc}"
-            log.exception("model load failed")
-    else:
-        err = (
-            f"Model directory {model_dir} does not exist. "
-            "Train a model or set MULLIGAN_COACH_MODEL_DIR."
-        )
-        log.warning("%s", err)
+            log.info("loaded legacy win-model bundle from %s", model_dir)
+        except Exception:
+            log.exception("legacy win-model load failed (continuing without it)")
 
     stats_by_set: dict[str, FormatStats] = {}
     missing: list[str] = []
@@ -1053,8 +1297,8 @@ def load_service(set_codes: list[str]) -> RecommendationService:
             missing.append(set_code)
 
     status = ServiceStatus(
-        model_loaded=bundle is not None,
-        model_dir=model_dir,
+        model_loaded=choice_bundle is not None,
+        model_dir=choice_model_dir,
         formats_with_stats=sorted(stats_by_set.keys()),
         formats_missing_stats=sorted(missing),
         error=err,
@@ -1067,6 +1311,7 @@ def load_service(set_codes: list[str]) -> RecommendationService:
     executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="mc-rec")
     return RecommendationService(
         bundle=bundle,
+        choice_bundle=choice_bundle,
         stats_by_set=stats_by_set,
         status=status,
         executor=executor,

@@ -153,27 +153,16 @@
     <section class="card">
       <h2>4. Get recommendation</h2>
       <p class="muted small">
-        Asymmetric sim split: the keep arm runs once at high precision;
-        the mulligan arm averages over many independent fresh draws at
-        lower per-hand precision (between-hand variance dominates).
-        The mulligan arm also starts computing in the background the
-        moment you finish pasting a deck, so most clicks here only
-        need to compute the keep arm.
+        The choice model predicts how often a skilled player would keep
+        this hand; the verdict comes from one simulate + feature-build +
+        predict pass, no separate mulligan arm.
       </p>
       <details>
         <summary class="muted small">Advanced (simulation depth)</summary>
         <fieldset class="sim-options">
           <label>
-            Keep-arm sims
-            <input type="number" name="n_sims_keep" value="1000" min="100" max="10000" step="100">
-          </label>
-          <label>
-            Sims per mulligan sample
-            <input type="number" name="n_sims_per_mulligan" value="40" min="10" max="2000" step="10">
-          </label>
-          <label>
-            Mulligan-arm samples
-            <input type="number" name="n_mulligan_samples" value="50" min="5" max="500" step="5">
+            Sims per recommendation
+            <input type="number" name="n_sims" value="1000" min="100" max="10000" step="100">
           </label>
         </fieldset>
       </details>

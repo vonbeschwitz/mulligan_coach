@@ -41,7 +41,7 @@ from mulligan_coach_overlay.events import (
     MatchEnded,
     MulliganDecisionRequest,
 )
-from mulligan_coach_recommend import AsymmetricRecommendation, ServiceStatus
+from mulligan_coach_recommend import ChoiceRecommendation, ServiceStatus
 from mulligan_coach_recommend.service import RecommendationExplanation
 
 # ---------------------------------------------------------------------------
@@ -84,29 +84,23 @@ def _build_index(arena_ids: list[int]) -> ArenaCardIndex:
     )
 
 
-def _fake_asymmetric_recommendation(
+def _fake_choice_recommendation(
     *,
-    keep: float = 0.6,
-    mull: float = 0.5,
-) -> AsymmetricRecommendation:
-    """Hand-built AsymmetricRecommendation with sane field values."""
-    return AsymmetricRecommendation(
-        verdict="clear_keep",
-        keep_win_probability=keep,
-        mulligan_win_probability=mull,
-        delta=keep - mull,
-        adjusted_delta=keep - mull - 0.04,
-        mulligan_bias=0.04,
-        margin_threshold=0.03,
+    p_keep: float = 0.85,
+    verdict: str = "clear_keep",
+) -> ChoiceRecommendation:
+    """Hand-built ChoiceRecommendation with sane field values.
+
+    Default ``p_keep`` lands above the 0.75 clear-keep threshold, so
+    the verdict matches by default; tests that need a different
+    bucket pass both fields.
+    """
+    return ChoiceRecommendation(
+        verdict=verdict,  # type: ignore[arg-type]
+        p_keep=p_keep,
         mulligan_number_from=0,
         mulligan_number_to=1,
-        n_sims_keep=1000,
-        n_sims_per_mulligan=40,
-        n_mulligan_samples=50,
-        mulligan_arm_was_cached=False,
-        mulligan_arm_raw_mean=mull,
-        mulligan_arm_floor=None,
-        n_samples_below_floor=0,
+        n_sims=200,
         explanation=_fake_explanation(),
     )
 
@@ -132,17 +126,17 @@ def _fake_explanation() -> RecommendationExplanation:
 class _FakeService:
     """Minimal stand-in for RecommendationService.
 
-    Records calls and returns a pre-baked AsymmetricRecommendation
-    (or raises) so the coordinator's branches can be exercised
-    without booting the real model.
+    Records calls and returns a pre-baked ChoiceRecommendation (or
+    raises) so the coordinator's branches can be exercised without
+    booting the real choice model.
     """
 
     status: ServiceStatus
-    rec: AsymmetricRecommendation | None = None
+    rec: ChoiceRecommendation | None = None
     raise_on_recommend: Exception | None = None
     last_call_kwargs: dict[str, Any] | None = None
 
-    def recommend_asymmetric(self, **kwargs: Any) -> AsymmetricRecommendation:
+    def recommend_choice(self, **kwargs: Any) -> ChoiceRecommendation:
         self.last_call_kwargs = kwargs
         if self.raise_on_recommend is not None:
             raise self.raise_on_recommend
@@ -218,7 +212,7 @@ class TestMulliganRecommendation:
         index = _build_index(deck_ids)
         service = _FakeService(
             status=_ready_status(),
-            rec=_fake_asymmetric_recommendation(),
+            rec=_fake_choice_recommendation(),
         )
         coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
 
@@ -249,7 +243,7 @@ class TestMulliganRecommendation:
         index = _build_index(deck_ids)
         service = _FakeService(
             status=_ready_status(),
-            rec=_fake_asymmetric_recommendation(),
+            rec=_fake_choice_recommendation(),
         )
         coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
 
@@ -271,7 +265,7 @@ class TestMulliganRecommendation:
         index = _build_index(deck_ids)
         service = _FakeService(
             status=_ready_status(),
-            rec=_fake_asymmetric_recommendation(),
+            rec=_fake_choice_recommendation(),
         )
         coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
 
@@ -295,7 +289,7 @@ class TestMulliganRecommendation:
         index = _build_index(list(range(1, 21)))  # half the deck
         service = _FakeService(
             status=_ready_status(),
-            rec=_fake_asymmetric_recommendation(),
+            rec=_fake_choice_recommendation(),
         )
         coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
 
@@ -372,7 +366,7 @@ class TestMulliganRecommendation:
         index = _build_index(deck_ids)
         service = _FakeService(
             status=_ready_status(),
-            rec=_fake_asymmetric_recommendation(),
+            rec=_fake_choice_recommendation(),
         )
         coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
 
@@ -397,7 +391,7 @@ class TestMatchReset:
         index = _build_index(deck_ids)
         service = _FakeService(
             status=_ready_status(),
-            rec=_fake_asymmetric_recommendation(),
+            rec=_fake_choice_recommendation(),
         )
         coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
 

@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from mulligan_coach_cards import ParsedCard
-from mulligan_coach_recommend import AsymmetricRecommendation, RecommendationService
+from mulligan_coach_recommend import ChoiceRecommendation, RecommendationService
 
 from .card_index import ArenaCardIndex
 from .events import DeckSubmitted, LogEvent, MatchEnded, MulliganDecisionRequest
@@ -54,14 +54,14 @@ log = logging.getLogger(__name__)
 # overlay doesn't have to import a private website name.
 _REQUIRED_DECK_SIZE = 40
 
-# Keep-arm sim count for the overlay. The shared service defaults to
-# 1000 (what the website uses), but the variance benchmark
-# ``packages/model/scripts/keep_arm_variance.py`` showed that dropping
-# to 200 only inflates within-hand run-to-run std on P(win) from
-# ~0.0038 -> ~0.0060 (well below the 3 pp marginal-verdict band), in
-# exchange for a ~5x cut in keep-arm wall time. Overlay UX benefits
-# from the lower latency more than from the extra precision.
-_OVERLAY_N_SIMS_KEEP = 200
+# Sim count for the overlay's choice-model call. The shared service
+# defaults to 1000 (what the website uses). Dropping to 200 here
+# matches the previous overlay budget — the variance benchmark
+# (``packages/model/scripts/keep_arm_variance.py``) measured ~0.006
+# run-to-run std on the win-model P(win) at 200 sims, well below
+# any verdict-band width; the choice model reads the same simulator
+# features so the same trade-off applies.
+_OVERLAY_N_SIMS = 200
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ class RecommendationOutput:
     """Successful recommendation, ready to display."""
 
     kind: Literal["recommendation"] = "recommendation"
-    recommendation: AsymmetricRecommendation | None = None
+    recommendation: ChoiceRecommendation | None = None
     hand: tuple[ParsedCard, ...] = ()
     primary_set: str | None = None
     mulligan_count: int = 0
@@ -286,19 +286,19 @@ class OverlayCoordinator:
             )
 
         try:
-            recommendation = self.service.recommend_asymmetric(
+            recommendation = self.service.recommend_choice(
                 hand=hand,
                 deck=self._current_deck,
                 on_the_play=event.on_the_play,
                 mulligan_number=event.mulligan_count,
                 opp_mulligan_number=event.opp_mulligan_count,
-                n_sims_keep=_OVERLAY_N_SIMS_KEEP,
+                n_sims=_OVERLAY_N_SIMS,
             )
         except Exception as exc:
             # Surface unexpected failures inline rather than letting
             # the tail loop crash. The tailer keeps running and the
             # next decision gets a fresh attempt.
-            log.exception("recommend_asymmetric raised")
+            log.exception("recommend_choice raised")
             return MissingDataOutput(
                 reason=f"Recommendation failed: {type(exc).__name__}: {exc}",
                 what="service_error",
