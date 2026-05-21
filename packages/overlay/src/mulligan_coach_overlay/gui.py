@@ -928,10 +928,113 @@ _TITLE_BTN_STYLE = (
 
 
 # ---------------------------------------------------------------------------
-# Stats panel HTML — mirror of the website's "Why this hand plays out"
-# block, but flattened into a single QLabel rich-text string so we
-# don't have to manage two dozen child widgets.
+# Stats panel HTML
+#
+# Two stacked tables:
+#
+# 1. Turns-by-category grid (4 rows x 3 cols): per-turn P(land drop),
+#    P(cast any creature), P(cast any spell). Each cell is colour-coded
+#    green / yellow / red against fixed empirical thresholds — see
+#    ``_PROB_THRESHOLDS``. The thresholds are first-pass guesses;
+#    refine by sampling many real Premier Draft hands once we have a
+#    corpus on disk.
+#
+# 2. Per-card playability (lands excluded, sorted by mana value):
+#    Card | Cost | OH WR | T1..T4 castability percentages. The mana
+#    cost prints as a compact "1G" / "3WW" form; OH WR is the shrunk
+#    17Lands number the model itself reads.
 # ---------------------------------------------------------------------------
+
+# Per-(category, turn) (green_min, yellow_min) thresholds for the
+# turns-by-category grid. Cells ≥ green_min render green; ≥ yellow_min
+# render amber; below that render red. Numbers picked from intuition
+# about typical 17-land Premier-Draft hands — explicitly NOT calibrated
+# off a real distribution, since none of those summary stats exist in
+# the pipeline today. Treat as a first pass; revisit once we can
+# benchmark them against a sample of mulligan-decision rows.
+_PROB_THRESHOLDS: dict[str, tuple[tuple[float, float], ...]] = {
+    # (T1, T2, T3, T4) — each tuple (green_min, yellow_min).
+    "land": (
+        (0.98, 0.90),  # T1: nearly always a land drop in hand
+        (0.87, 0.75),  # T2
+        (0.78, 0.65),  # T3
+        (0.70, 0.55),  # T4
+    ),
+    "creature": (
+        (0.25, 0.10),  # T1: 1-drops are scarce
+        (0.80, 0.60),  # T2
+        (0.88, 0.75),  # T3
+        (0.93, 0.85),  # T4
+    ),
+    "spell": (
+        (0.40, 0.20),  # T1
+        (0.85, 0.70),  # T2
+        (0.92, 0.83),  # T3
+        (0.96, 0.90),  # T4
+    ),
+}
+
+# OH-WR colour bands. 17Lands Premier Draft averages ~0.53; we anchor
+# the bands a couple of points either side. Like the table thresholds
+# above, picked by intuition.
+_OH_WR_GREEN_MIN = 0.55
+_OH_WR_YELLOW_MIN = 0.50
+
+
+def _format_mana_cost(raw: str | None) -> str:
+    """Render Scryfall mana cost (``"{1}{G}"``) as a compact form (``"1G"``).
+
+    Drops braces around single-character pips (digits, single colors,
+    X / Y / Z, colorless / snow). Keeps braces for multi-character
+    pips so hybrid (``{2/W}``) and phyrexian (``{W/P}``) stay readable.
+    ``None`` and empty cost return an empty string.
+    """
+    if not raw:
+        return ""
+    out: list[str] = []
+    i = 0
+    n = len(raw)
+    while i < n:
+        if raw[i] != "{":
+            # Stray text outside braces — shouldn't happen for parsed
+            # Scryfall costs but pass through defensively so we never
+            # silently drop characters.
+            out.append(raw[i])
+            i += 1
+            continue
+        end = raw.find("}", i + 1)
+        if end == -1:
+            # Malformed cost; emit the remainder verbatim and stop.
+            out.append(raw[i:])
+            break
+        inner = raw[i + 1 : end]
+        if len(inner) == 1:
+            out.append(inner)
+        else:
+            out.append("{" + inner + "}")
+        i = end + 1
+    return "".join(out)
+
+
+def _prob_color(prob: float, thresholds: tuple[float, float]) -> str:
+    """Pick green/yellow/red for a probability against (green_min, yellow_min)."""
+    green_min, yellow_min = thresholds
+    if prob >= green_min:
+        return _KEEP_COLOR
+    if prob >= yellow_min:
+        return _MARGINAL_COLOR
+    return _MULL_COLOR
+
+
+def _oh_wr_color(oh_wr: float | None) -> str:
+    """Colour for a shrunk OH WR. ``None`` falls back to muted text."""
+    if oh_wr is None:
+        return _TEXT_MUTED
+    if oh_wr >= _OH_WR_GREEN_MIN:
+        return _KEEP_COLOR
+    if oh_wr >= _OH_WR_YELLOW_MIN:
+        return _MARGINAL_COLOR
+    return _MULL_COLOR
 
 
 def _build_stats_html(exp: RecommendationExplanation) -> str:
@@ -946,38 +1049,49 @@ def _build_stats_html(exp: RecommendationExplanation) -> str:
     def pct(p: float) -> str:
         return f"{round(p * 100):d}%"
 
-    # Mana base + curve hits: two-column key/value tables stacked.
-    mana_rows = [
-        ("2nd land by T2", pct(exp.p_make_2nd_land_by_t2)),
-        ("3rd land by T3", pct(exp.p_make_3rd_land_by_t3)),
-        ("4th land by T4", pct(exp.p_make_4th_land_by_t4)),
-        ("Avg mana at T4", f"{exp.expected_mana_at_t4:.1f}"),
-    ]
-    curve_rows = [
-        ("Cast any spell T1", pct(exp.p_cast_any_spell_t1)),
-        ("Cast a creature T2", pct(exp.p_cast_any_creature_t2)),
-        ("Cast removal T2", pct(exp.p_cast_any_removal_t2)),
-        ("Cast 2-drop by T3", pct(exp.p_cast_small_creature_by_t3)),
-        ("Cast 3-drop by T4", pct(exp.p_cast_3drop_by_t4)),
-        ("Colors fixed by T4", pct(exp.color_fix_by_t4)),
-    ]
-
-    def kv_table(title: str, rows: list[tuple[str, str]]) -> str:
-        body = "".join(
-            f"<tr><td style='color:{_TEXT_MUTED};'>{k}</td><td align='right'>{v}</td></tr>"
-            for k, v in rows
+    # --- 1. Turns by (Land / Creature / Spell) grid -------------------
+    turn_header = (
+        "<tr>"
+        f"<th align='left' style='color:{_TEXT_MUTED};font-weight:600;'>Turn</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>Land</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>Creature</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>Spell</th>"
+        "</tr>"
+    )
+    grid_rows: list[str] = []
+    for t_idx in range(4):
+        turn_label = f"T{t_idx + 1}"
+        land_p = exp.p_make_land_drop_by_turn[t_idx]
+        creature_p = exp.p_cast_any_creature_by_turn[t_idx]
+        spell_p = exp.p_cast_any_spell_by_turn[t_idx]
+        land_color = _prob_color(land_p, _PROB_THRESHOLDS["land"][t_idx])
+        creature_color = _prob_color(creature_p, _PROB_THRESHOLDS["creature"][t_idx])
+        spell_color = _prob_color(spell_p, _PROB_THRESHOLDS["spell"][t_idx])
+        grid_rows.append(
+            "<tr>"
+            f"<td style='color:{_TEXT_MUTED};'>{turn_label}</td>"
+            f"<td align='center' style='color:{land_color};font-weight:600;'>{pct(land_p)}</td>"
+            f"<td align='center' style='color:{creature_color};font-weight:600;'>{pct(creature_p)}</td>"
+            f"<td align='center' style='color:{spell_color};font-weight:600;'>{pct(spell_p)}</td>"
+            "</tr>"
         )
-        return (
-            f"<p style='margin-top:4px;margin-bottom:2px;'>"
-            f"<b>{title}</b></p>"
-            f"<table width='100%' cellspacing='0' cellpadding='1'>{body}</table>"
-        )
+    grid_table = (
+        "<table width='100%' cellspacing='0' cellpadding='2'>"
+        f"{turn_header}{''.join(grid_rows)}"
+        "</table>"
+    )
 
-    # Per-card playability table: card name | MV | T1..T4 columns.
+    # --- 2. Per-card playability (lands dropped, sorted by MV) --------
+    # Sort spells by ascending mana_value; cards without a numeric MV
+    # (shouldn't happen for non-lands, but defensive) sort last.
+    spells = [hc for hc in exp.hand_cards if not hc.is_land]
+    spells.sort(key=lambda hc: (hc.mana_value if hc.mana_value is not None else 99, hc.name))
+
     card_header = (
         "<tr>"
         f"<th align='left' style='color:{_TEXT_MUTED};font-weight:600;'>Card</th>"
-        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>MV</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>Cost</th>"
+        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>OH</th>"
         f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T1</th>"
         f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T2</th>"
         f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T3</th>"
@@ -985,23 +1099,33 @@ def _build_stats_html(exp: RecommendationExplanation) -> str:
         "</tr>"
     )
     card_rows: list[str] = []
-    for hc in exp.hand_cards:
-        if hc.is_land:
-            cells = [f"<td align='center' style='color:{_TEXT_MUTED};'>&mdash;</td>"] * 5
+    for hc in spells:
+        cost_str = _format_mana_cost(hc.mana_cost) or "—"
+        if hc.opening_hand_win_rate is None:
+            oh_cell = f"<td align='center' style='color:{_TEXT_MUTED};'>&mdash;</td>"
         else:
-            mv_cell = f"<td align='center'>{hc.mana_value}</td>"
-            turn_cells = "".join(f"<td align='center'>{pct(p)}</td>" for p in hc.p_castable_by_turn)
-            cells = [mv_cell + turn_cells]
-        name_color = _TEXT_MUTED if hc.is_land else _TEXT_PRIMARY
-        card_rows.append(f"<tr><td style='color:{name_color};'>{hc.name}</td>{''.join(cells)}</tr>")
+            oh_color = _oh_wr_color(hc.opening_hand_win_rate)
+            oh_cell = (
+                f"<td align='center' style='color:{oh_color};'>"
+                f"{round(hc.opening_hand_win_rate * 100):d}%</td>"
+            )
+        turn_cells = "".join(f"<td align='center'>{pct(p)}</td>" for p in hc.p_castable_by_turn)
+        card_rows.append(
+            "<tr>"
+            f"<td style='color:{_TEXT_PRIMARY};'>{hc.name}</td>"
+            f"<td align='center' style='color:{_TEXT_PRIMARY};'>{cost_str}</td>"
+            f"{oh_cell}"
+            f"{turn_cells}"
+            "</tr>"
+        )
     card_table = (
-        f"<p style='margin-top:6px;margin-bottom:2px;'><b>Per-card playability</b></p>"
-        f"<table width='100%' cellspacing='0' cellpadding='1'>"
+        "<p style='margin-top:6px;margin-bottom:2px;'><b>Per-card playability</b></p>"
+        "<table width='100%' cellspacing='0' cellpadding='1'>"
         f"{card_header}{''.join(card_rows)}"
-        f"</table>"
+        "</table>"
     )
 
-    return kv_table("Mana base", mana_rows) + kv_table("Curve hits", curve_rows) + card_table
+    return grid_table + card_table
 
 
 def _verdict_display(verdict: str) -> tuple[str, str]:
