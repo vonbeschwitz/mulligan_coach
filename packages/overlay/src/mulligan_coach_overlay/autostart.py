@@ -68,7 +68,11 @@ def is_enabled() -> bool:
     overlay elsewhere — counts as *not enabled* for this binary; the
     UI then correctly shows the toggle as off.
     """
-    if not supported():
+    # mypy on Linux CI doesn't narrow through ``supported()`` so we
+    # inline the platform check before the ``winreg`` import. The
+    # frozen check still uses ``supported()`` — it doesn't affect
+    # type narrowing.
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return False
     import winreg  # local import: stdlib module, Windows-only
 
@@ -95,7 +99,7 @@ def enable() -> None:
     gets written, and the stale registry entry is replaced rather
     than left orphaned.
     """
-    if not supported():
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return
     import winreg
 
@@ -114,7 +118,7 @@ def enable() -> None:
 
 def disable() -> None:
     """Remove the autostart entry. No-op if it isn't there."""
-    if not supported():
+    if sys.platform != "win32" or not getattr(sys, "frozen", False):
         return
     import winreg
 
