@@ -87,6 +87,12 @@ dev = [
     "pytest>=8.0",
     "pytest-httpx>=0.30",
     "pre-commit>=3.7",
+    # PyInstaller is used to freeze the overlay into a single-folder
+    # Windows distribution (see packages/overlay/packaging/). Dev-only:
+    # the shipped overlay package itself has no runtime dependency on
+    # PyInstaller, so this lives in the workspace-root dev group rather
+    # than in packages/overlay/pyproject.toml.
+    "pyinstaller>=6.10",
 ]
 
 # ---------------------------------------------------------------------------

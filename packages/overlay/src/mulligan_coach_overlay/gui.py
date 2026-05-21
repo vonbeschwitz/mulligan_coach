@@ -76,13 +76,15 @@ from PyQt6.QtWidgets import (
     QApplication,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-from . import arena_window
+from . import arena_window, autostart
+from ._frozen import configure_bundle_paths, configure_frozen_logging
 from .arena_paths import default_log_path
 from .arena_window import ArenaWindowWatcher
 from .card_index import ArenaCardIndex
@@ -437,6 +439,25 @@ class OverlayWindow(QWidget):
         self._collapse_btn.clicked.connect(self.toggle_compact)
         self._collapse_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         title_row.addWidget(self._collapse_btn)
+        # Settings (gear) button. Only present when the autostart
+        # registry helper is supported (Windows + frozen build); from
+        # source there's nothing useful to toggle, so we hide the
+        # whole control rather than offer a no-op. Adding a non-Windows
+        # / non-frozen settings surface is straightforward later — just
+        # drop the supported() guard and grow the menu.
+        self._settings_btn: QPushButton | None = None
+        if autostart.supported():
+            # GEAR (U+2699) as the glyph. Same visual register as the
+            # collapse / close buttons; the menu opens on click rather
+            # than hover so accidental triggers are rare.
+            self._settings_btn = QPushButton("⚙")
+            self._settings_btn.setFlat(True)
+            self._settings_btn.setFixedSize(18, 18)
+            self._settings_btn.setStyleSheet(_TITLE_BTN_STYLE)
+            self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._settings_btn.clicked.connect(self._open_settings_menu)
+            self._settings_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+            title_row.addWidget(self._settings_btn)
         # MULTIPLICATION SIGN (U+00D7) as the close-button glyph. Ruff
         # flags it as ambiguous-vs-lowercase-x; visually it's a clear
         # close icon at the rendered size, so we keep it.
@@ -775,6 +796,65 @@ class OverlayWindow(QWidget):
     def _close_clicked(self) -> None:
         QApplication.quit()
 
+    # -----------------------------------------------------------------
+    # Settings menu (gear button)
+    # -----------------------------------------------------------------
+
+    def _open_settings_menu(self) -> None:
+        """Pop the title-bar settings menu under the gear button.
+
+        Currently the menu holds a single checkable entry — "Start
+        with Windows" — but we reach for :class:`QMenu` rather than
+        a bare ``QCheckBox`` so adding more options later (window
+        position lock, font size, debug overlay) is a one-line action
+        addition rather than a layout rewrite.
+
+        The checked state is read from :func:`autostart.is_enabled`
+        *each time the menu opens* rather than cached, so an external
+        change to the registry (a manual edit, or another launch
+        flipping the entry) is reflected without restarting the
+        overlay.
+        """
+        if self._settings_btn is None:
+            return
+        menu = QMenu(self)
+        # Tool windows like ours need an explicit popup style or the
+        # menu inherits "no shadow / no border" from the parent's
+        # translucent background and looks broken. Standard Qt
+        # WindowType for menu popups handles this.
+        action = menu.addAction("Start with Windows")
+        # ``QMenu.addAction(str)`` is typed as ``QAction | None`` in
+        # PyQt6's stubs but never actually returns None for the
+        # text-only overload. Guard anyway so the type narrows.
+        assert action is not None
+        action.setCheckable(True)
+        action.setChecked(autostart.is_enabled())
+        action.triggered.connect(self._toggle_autostart)
+        # Anchor the menu's top-right corner under the gear button's
+        # bottom-right corner so it opens "into" the panel rather than
+        # off the right edge of the screen for top-right-anchored
+        # users (the default position).
+        button = self._settings_btn
+        anchor = button.mapToGlobal(button.rect().bottomRight())
+        # QMenu has no built-in "open with right edge here" helper, so
+        # we shift left by the menu's size hint after a preliminary
+        # show. Computing the size pre-show requires ``sizeHint()``.
+        menu_w = menu.sizeHint().width()
+        menu.exec(QPoint(anchor.x() - menu_w, anchor.y()))
+
+    @pyqtSlot(bool)
+    def _toggle_autostart(self, checked: bool) -> None:
+        """Apply the user's choice to the registry, ignoring read-back errors.
+
+        Failures already log via the helper. The UI state will catch
+        up on the next menu open (which re-reads ``is_enabled``), so
+        we don't need to roll the action's checked state back here.
+        """
+        if checked:
+            autostart.enable()
+        else:
+            autostart.disable()
+
 
 # Shared close / collapse button style. Defined once to avoid two
 # slightly-divergent copies drifting apart on tweaks.
@@ -904,6 +984,16 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # When frozen by PyInstaller, point the upstream data + model
+    # path resolvers at the bundled copies. No-op when running from
+    # source. See ``_frozen.configure_bundle_paths`` for details.
+    configure_bundle_paths()
+    # The frozen .exe is GUI-only (console=False in the spec), so
+    # stdout/stderr are dropped. Attach a rotating file handler under
+    # %LOCALAPPDATA%\MulliganCoach\logs so the user can inspect or
+    # report errors. No-op from source.
+    configure_frozen_logging()
+
     app = QApplication(argv if argv is not None else sys.argv)
 
     log.info("loading card index + recommendation service…")

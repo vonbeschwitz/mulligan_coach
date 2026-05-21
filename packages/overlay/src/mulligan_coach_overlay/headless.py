@@ -25,6 +25,7 @@ from threading import Event
 
 from mulligan_coach_recommend import load_service
 
+from ._frozen import configure_bundle_paths
 from .arena_paths import default_log_path
 from .card_index import ArenaCardIndex
 from .coordinator import (
@@ -86,6 +87,10 @@ def main(argv: list[str] | None = None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    # When frozen, route upstream path resolvers at the bundled copies
+    # before any of them are touched. No-op from source. See
+    # ``_frozen.configure_bundle_paths`` for details.
+    configure_bundle_paths()
 
     log_path = args.log or default_log_path()
     if not log_path.parent.exists() and not args.no_follow:
