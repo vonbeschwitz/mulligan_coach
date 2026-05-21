@@ -1,10 +1,14 @@
 """Tests for the overlay's stats panel HTML builder.
 
+The module under test (:mod:`stats_html`) is intentionally Qt-free so
+these tests run on headless CI — importing the gui module would pull
+in PyQt6 and fail to load libEGL on the Linux runner.
+
 Covers:
 
 * :func:`_format_mana_cost` — Scryfall mana-cost strings render
   compactly, with braces preserved only for multi-character pips.
-* :func:`_build_stats_html` — given a synthetic
+* :func:`build_stats_html` — given a synthetic
   :class:`RecommendationExplanation`, the produced HTML contains the
   4x3 turn grid, drops lands from the per-card table, sorts by mana
   value, and surfaces formatted mana cost + OH WR.
@@ -12,7 +16,7 @@ Covers:
 
 from __future__ import annotations
 
-from mulligan_coach_overlay.gui import _build_stats_html, _format_mana_cost
+from mulligan_coach_overlay.stats_html import _format_mana_cost, build_stats_html
 from mulligan_coach_recommend import RecommendationExplanation
 from mulligan_coach_recommend.service import HandCardPlayability
 
@@ -110,25 +114,25 @@ def _make_explanation() -> RecommendationExplanation:
     )
 
 
-def test_build_stats_html_has_turn_grid_with_all_turns() -> None:
+def testbuild_stats_html_has_turn_grid_with_all_turns() -> None:
     """The 4x3 grid surfaces T1..T4 rows and Land/Creature/Spell cols."""
-    html = _build_stats_html(_make_explanation())
+    html = build_stats_html(_make_explanation())
     for label in ("T1", "T2", "T3", "T4", "Land", "Creature", "Spell"):
         assert label in html, f"missing {label!r} in stats HTML"
 
 
-def test_build_stats_html_drops_lands_from_per_card_table() -> None:
+def testbuild_stats_html_drops_lands_from_per_card_table() -> None:
     """Lands never appear in the per-card playability table."""
-    html = _build_stats_html(_make_explanation())
+    html = build_stats_html(_make_explanation())
     # "Forest" appears nowhere — neither as a row in the grid (only
     # turn labels) nor in the per-card section.
     assert "Forest" not in html
 
 
-def test_build_stats_html_sorts_spells_by_mana_value_ascending() -> None:
+def testbuild_stats_html_sorts_spells_by_mana_value_ascending() -> None:
     """Cheapest spell appears before the most expensive one in the HTML."""
     html = _make_explanation()
-    rendered = _build_stats_html(html)
+    rendered = build_stats_html(html)
     pos_one = rendered.find("One-Drop")
     pos_two = rendered.find("Cheap Creature")
     pos_big = rendered.find("Big Threat")
@@ -136,25 +140,25 @@ def test_build_stats_html_sorts_spells_by_mana_value_ascending() -> None:
     assert pos_one < pos_two < pos_big
 
 
-def test_build_stats_html_renders_formatted_mana_cost() -> None:
+def testbuild_stats_html_renders_formatted_mana_cost() -> None:
     """Mana cost prints in compact ``"1G"`` form (not ``"{1}{G}"``)."""
-    html = _build_stats_html(_make_explanation())
+    html = build_stats_html(_make_explanation())
     assert ">G<" in html  # the bare "G" cell for One-Drop
     assert ">1G<" in html  # Cheap Creature
     assert ">3GG<" in html  # Big Threat
 
 
-def test_build_stats_html_oh_wr_dash_for_missing() -> None:
+def testbuild_stats_html_oh_wr_dash_for_missing() -> None:
     """Cards with no shrunk OH WR render a muted dash, not a percentage."""
-    html = _build_stats_html(_make_explanation())
+    html = build_stats_html(_make_explanation())
     # The One-Drop row carries the only oh_wr=None card — the &mdash;
     # cell must be present at least once.
     assert "&mdash;" in html
 
 
-def test_build_stats_html_oh_wr_color_classes() -> None:
+def testbuild_stats_html_oh_wr_color_classes() -> None:
     """OH WR cells colour-code: >=55% green, >=50% amber, else red."""
-    html = _build_stats_html(_make_explanation())
+    html = build_stats_html(_make_explanation())
     # Big Threat at 58% is green (_KEEP_COLOR #7be57b)
     assert "#7be57b" in html
     # Cheap Creature at 51% is amber (_MARGINAL_COLOR #e5c87b)
