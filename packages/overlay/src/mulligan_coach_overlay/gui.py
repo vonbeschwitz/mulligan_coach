@@ -100,6 +100,7 @@ from .coordinator import (
 from .deck_persistence import default_persistence_path, load_last_deck, save_last_deck
 from .events import DeckSubmitted, MulliganDecisionRequest
 from .log_tailer import LogTailer
+from .position_persistence import default_positions_path, load_positions, save_positions
 
 log = logging.getLogger(__name__)
 
@@ -386,7 +387,13 @@ class OverlayWindow(QWidget):
     buttons.
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        compact_pos: tuple[int, int] | None = None,
+        expanded_pos: tuple[int, int] | None = None,
+    ) -> None:
         super().__init__(parent)
         # Frameless tool-window with a translucent background.
         # We deliberately do NOT set Qt.WindowStaysOnTopHint here —
@@ -406,9 +413,26 @@ class OverlayWindow(QWidget):
         # a fresh sim. Reset on any state-changing event other than
         # a successful recommendation.
         self._last_rec: RecommendationOutput | None = None
+        # Remembered window positions per layout. The user typically
+        # wants the compact pill parked somewhere out-of-the-way
+        # (e.g. the bottom of the screen) and the expanded panel near
+        # the mulligan UI — a single shared position would drag one
+        # layout to the other's spot on every toggle. Slots are seeded
+        # from disk by the caller and persist back on quit; in-session
+        # updates happen on drag-release and on layout toggle.
+        self._compact_pos: QPoint | None = QPoint(*compact_pos) if compact_pos is not None else None
+        self._expanded_pos: QPoint | None = (
+            QPoint(*expanded_pos) if expanded_pos is not None else None
+        )
         self._build_ui()
         self._apply_layout()
-        self._position_top_right()
+        # Default placement only if no saved position for the initial
+        # layout. _apply_layout() has already moved us to the stored
+        # spot when one exists.
+        if (self._compact and self._compact_pos is None) or (
+            not self._compact and self._expanded_pos is None
+        ):
+            self._position_top_right()
 
     # -----------------------------------------------------------------
     # UI construction
@@ -474,7 +498,7 @@ class OverlayWindow(QWidget):
         # Verdict line — replaced as state updates land. In compact
         # mode this single label carries everything (verdict + arms);
         # in expanded mode the arms move to their own row below.
-        self._verdict_label = QLabel("Waiting for deck…")
+        self._verdict_label = QLabel("Waiting for mulligan…")
         self._verdict_label.setStyleSheet(
             f"color: {_TEXT_PRIMARY}; font-size: 22px; font-weight: 700;"
         )
@@ -535,9 +559,44 @@ class OverlayWindow(QWidget):
 
     @pyqtSlot()
     def toggle_compact(self) -> None:
-        """Flip between full panel and compact pill."""
+        """Flip between full panel and compact pill.
+
+        Captures the current pos in the outgoing layout's slot before
+        flipping so the user's "wherever I last left it" preference
+        is preserved per layout. The new layout's saved pos (if any)
+        is then restored inside :meth:`_apply_layout`.
+        """
+        self.save_current_position()
         self._compact = not self._compact
         self._apply_layout()
+
+    def save_current_position(self) -> None:
+        """Record :meth:`pos` into the slot for the current layout.
+
+        Called on layout toggle, on drag-release, and at app-quit.
+        Cheap (just a ``QPoint`` copy) so we can call it liberally
+        without measuring whether the position actually changed.
+        """
+        if self._compact:
+            self._compact_pos = QPoint(self.pos())
+        else:
+            self._expanded_pos = QPoint(self.pos())
+
+    def compact_position(self) -> tuple[int, int] | None:
+        """Return the last-known compact-layout position, if any.
+
+        Used by :func:`save_positions` at app-quit. Returns plain
+        ``(x, y)`` so we don't leak Qt types into the on-disk schema.
+        """
+        if self._compact_pos is None:
+            return None
+        return (self._compact_pos.x(), self._compact_pos.y())
+
+    def expanded_position(self) -> tuple[int, int] | None:
+        """Return the last-known expanded-layout position, if any."""
+        if self._expanded_pos is None:
+            return None
+        return (self._expanded_pos.x(), self._expanded_pos.y())
 
     def _apply_layout(self) -> None:
         if self._compact:
@@ -569,11 +628,16 @@ class OverlayWindow(QWidget):
         # X% vs Y%", the expanded one is just the verdict alone.
         if self._last_rec is not None:
             self._render_recommendation_from_cached()
-        # Keep the top-right anchor when shrinking so the pill doesn't
-        # appear to drift across the screen on toggle. (Position is in
-        # the *primary* screen's coordinate space — fine for our
-        # right-corner default; if the user has dragged elsewhere the
-        # current self.pos() is preserved by Qt automatically.)
+        # Move to the saved position for the new layout, if any. The
+        # caller (toggle_compact or __init__) is responsible for
+        # having saved the *previous* layout's position before we
+        # arrive here. When no position is saved we leave self.pos()
+        # alone — the caller decides on a default (top-right) for the
+        # initial show, and a no-op for in-session toggles preserves
+        # whatever the user last dragged the window to.
+        target_pos = self._compact_pos if self._compact else self._expanded_pos
+        if target_pos is not None:
+            self.move(target_pos)
 
     # -----------------------------------------------------------------
     # Paint event: rounded-rect background with a subtle border
@@ -614,6 +678,11 @@ class OverlayWindow(QWidget):
         if event is None:
             return
         if event.button() == Qt.MouseButton.LeftButton:
+            # Snapshot the (possibly newly-dragged) position into the
+            # current layout's slot so the next toggle restores
+            # exactly here. Safe to do unconditionally; a click that
+            # didn't actually drag just re-writes the same coords.
+            self.save_current_position()
             self._drag_offset = None
             event.accept()
 
@@ -663,15 +732,26 @@ class OverlayWindow(QWidget):
 
     @pyqtSlot(object)
     def apply_output(self, payload: object) -> None:
-        """Update the UI from a :class:`CoordinatorOutput`."""
+        """Update the UI from a :class:`CoordinatorOutput`.
+
+        :class:`DeckLoadedOutput` is intentionally *not* rendered.
+        The recommendation pipeline now keys on the choice model
+        rather than a separate win-vs-mull sim comparison, so the
+        user doesn't need a per-deck "deck ready" handshake — the
+        first mulligan event is the meaningful trigger. The worker
+        still receives the output (to drive disk persistence of the
+        last-seen deck), but it's silent in the UI.
+        """
         output = cast(CoordinatorOutput, payload)
         if isinstance(output, RecommendationOutput):
             self._render_recommendation(output)
         elif isinstance(output, ComputingOutput):
             self._render_computing(output)
         elif isinstance(output, DeckLoadedOutput):
-            self._last_rec = None
-            self._render_deck_loaded(output)
+            # Silent — we still track decks internally for the
+            # simulator, but the user-facing surface only updates on
+            # mulligan / reset / missing-data events.
+            return
         elif isinstance(output, MissingDataOutput):
             self._last_rec = None
             self._render_missing(output)
@@ -747,29 +827,6 @@ class OverlayWindow(QWidget):
             self._context_label.setText(
                 f"mull #{output.mulligan_count} · on the {play_draw} · computing…"
             )
-
-    def _render_deck_loaded(self, output: DeckLoadedOutput) -> None:
-        font_size = 12 if self._compact else 18
-        if output.n_unresolved:
-            self._verdict_label.setText("Deck partially loaded")
-            self._verdict_label.setStyleSheet(
-                f"color: {_MARGINAL_COLOR}; font-size: {font_size}px; font-weight: 700;"
-            )
-            self._hand_label.setText(
-                f"{output.n_resolved} of {output.n_cards} cards have a local "
-                f"encoding. Refresh card data to fill the gaps."
-            )
-        else:
-            self._verdict_label.setText("Deck ready · waiting for hand")
-            self._verdict_label.setStyleSheet(
-                f"color: {_TEXT_PRIMARY}; font-size: {font_size}px; font-weight: 700;"
-            )
-            self._hand_label.setText("")
-        self._mull_label.setText("Should mulligan —")
-        self._stats_label.setText("")
-        self._context_label.setText(
-            f"deck loaded · {output.n_cards} cards · set {output.primary_set or '?'}"
-        )
 
     def _render_missing(self, output: MissingDataOutput) -> None:
         font_size = 12 if self._compact else 18
@@ -1012,7 +1069,15 @@ def main(argv: list[str] | None = None) -> int:
     log.info("tailing %s", log_path)
     tailer = LogTailer(log_path, start_at_end=True)
 
-    window = OverlayWindow()
+    # Load the per-layout positions saved on the previous quit. Either
+    # arm may be absent — the OverlayWindow falls back to its top-right
+    # default for any slot that comes back None.
+    positions_path = default_positions_path()
+    saved_positions = load_positions(positions_path)
+    window = OverlayWindow(
+        compact_pos=saved_positions.compact,
+        expanded_pos=saved_positions.expanded,
+    )
     thread = QThread()
     worker = TailerWorker(
         tailer,
@@ -1057,6 +1122,18 @@ def main(argv: list[str] | None = None) -> int:
             log.warning("tailer thread did not stop within 2s; forcing")
             thread.terminate()
         service.shutdown()
+        # Persist the per-layout window positions for the next launch.
+        # Snapshot the *current* position into the active layout's
+        # slot first so a drag-then-quit-without-toggle still sticks.
+        try:
+            window.save_current_position()
+            save_positions(
+                positions_path,
+                compact=window.compact_position(),
+                expanded=window.expanded_position(),
+            )
+        except Exception:
+            log.exception("could not persist overlay positions")
 
     app.aboutToQuit.connect(_on_app_quit)
 
@@ -1079,9 +1156,11 @@ def main(argv: list[str] | None = None) -> int:
 
     watcher.start()
 
-    # If we seeded from disk, apply the resulting DeckLoadedOutput to
-    # the UI now (after show) so the initial label reflects the
-    # available deck instead of "Waiting for deck…".
+    # We still call apply_output for the seeded deck so any future
+    # non-DeckLoadedOutput shapes coming back from _seed_from_disk
+    # render — but the current DeckLoadedOutput path is silent in the
+    # UI, so this is a no-op on the common case. The seed itself
+    # already populated the coordinator above.
     if seeded_output is not None:
         window.apply_output(seeded_output)
 
