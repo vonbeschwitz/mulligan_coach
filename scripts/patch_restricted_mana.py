@@ -39,70 +39,29 @@ def patch_card(card: dict) -> bool:
     if "spend this mana only" not in text.lower():
         return False
 
-    # Per-chunk re-extraction. The order of `mana_abilities` from a
-    # detector run mirrors the order chunks were walked in the parser,
-    # so we can match by chunk position. Any chunk whose extraction
-    # now returns None (because of the restriction) drops that
-    # corresponding ability — we use a positional walk: collect the
-    # chunks that DO yield an ability (pre-fix) and DROP those that
-    # would now be rejected.
-    #
-    # We rebuild the kept list from scratch instead of mapping indices:
-    # the chunks not yielding an ability (ETB tapped, basic-synthesis,
-    # etc.) never contributed to the list, so a positional rebuild is
-    # equivalent and avoids subtle index mismatches.
+    # Walk chunks and rebuild ``mana_abilities`` from the saved data.
+    # Idempotent: if the file has already been patched, the saved
+    # abilities are exactly the ones we'd keep — so we re-emit them
+    # unchanged. The walk is keyed by chunk shape, not position, so a
+    # mid-list previous-removal doesn't desync the index.
     chunks = _split_chunks(text)
-    kept: list[dict] = []
-    # Cheap sanity check: count of "would have matched but for the
-    # restriction" must equal the number of dropped abilities.
-    dropped = 0
-    for chunk in chunks:
-        if "spend this mana only" not in chunk.lower():
-            continue
-        # This chunk used to yield an ability (before the parser fix).
-        # If the rest of the chunk looks like a recognized mana-ability
-        # shape, we count it as one to drop. We confirm by checking
-        # whether the chunk matches any of the patterns *after* we
-        # strip the restriction prose — kept simple: just count one
-        # per chunk that mentions a tap-for-add line.
-        dropped += 1
-
-    # Walk the saved abilities and drop the trailing-N matching the
-    # number of "would-have-matched-but-restricted" chunks. The parser
-    # walked chunks in order; abilities were appended in order; the
-    # restricted ones were *interspersed* among unrestricted ones, so
-    # we can't just truncate. Instead we re-run the extractor on each
-    # chunk that yielded an ability and rebuild the list.
-    #
-    # Approach: walk chunks and abilities in parallel. For each chunk
-    # that yielded a non-None ability in the OLD parser, we have one
-    # entry in ``abilities``. The OLD parser kept restricted entries;
-    # the NEW parser drops them. So: for each chunk, decide whether
-    # the OLD parser would have produced an ability (any of the six
-    # shapes match without the restriction guard). If so, advance the
-    # ``abilities`` index. If the chunk has the restriction, skip
-    # appending; otherwise, keep the ability.
     idx = 0
     rebuilt: list[dict] = []
     for chunk in chunks:
-        if idx >= len(abilities):
-            break
-        # Would the OLD parser have emitted an ability for this chunk?
-        # We can answer cheaply: bypass the new restriction guard by
-        # calling the same matchers manually, OR by temporarily
-        # removing the leading restriction sentence from the chunk and
-        # re-running the extractor. Easier: just strip the trailing
-        # "Spend this mana only..." clause and re-run.
         cleaned = _strip_restriction(chunk)
-        # The fixed extractor will now happily match cleaned without
-        # hitting the restriction guard.
-        new_ab = _extract_mana_ability(cleaned)
-        if new_ab is None:
+        candidate = _extract_mana_ability(cleaned)
+        if candidate is None:
+            continue  # chunk never yielded an ability (no shape match)
+        restricted = "spend this mana only" in chunk.lower()
+        # Does the next saved ability match this chunk's shape? If yes,
+        # it's the chunk's entry — keep it (unless restricted, in which
+        # case drop). If no, the chunk's entry was removed by a prior
+        # patch run — skip without advancing.
+        next_matches = idx < len(abilities) and _matches(abilities[idx], candidate)
+        if not next_matches:
             continue
-        # OLD parser emitted; either we drop (if restricted) or keep.
-        if "spend this mana only" in chunk.lower():
-            # Drop the corresponding stored ability.
-            idx += 1
+        if restricted:
+            idx += 1  # drop
             continue
         rebuilt.append(abilities[idx])
         idx += 1
@@ -111,6 +70,22 @@ def patch_card(card: dict) -> bool:
         return False
     card["mana_abilities"] = rebuilt
     return True
+
+
+def _matches(saved: dict, candidate) -> bool:
+    """Return True if ``saved`` (raw JSON dict) and ``candidate``
+    (typed ``ManaAbility``) describe the same ability shape.
+
+    Compares tap-cost, mana-cost-raw, and the produces matrix —
+    enough to distinguish all six recognised mana-ability shapes
+    that ``_extract_mana_ability`` emits. Conditions on
+    ``ManaAbility.condition`` aren't checked because the extractor
+    never emits a non-None condition for these chunks."""
+    if saved["cost"]["tap"] != candidate.cost.tap:
+        return False
+    if saved["cost"]["mana"]["raw"] != candidate.cost.mana.raw:
+        return False
+    return saved["produces"] == [list(opts) for opts in candidate.produces]
 
 
 def _strip_restriction(chunk: str) -> str:
@@ -133,8 +108,10 @@ def main() -> None:
         for c in cards:
             if patch_card(c):
                 changed += 1
-                print(f"  patched {fp.stem} / {c['name']}: "
-                      f"mana_abilities -> {len(c['mana_abilities'])} kept")
+                print(
+                    f"  patched {fp.stem} / {c['name']}: "
+                    f"mana_abilities -> {len(c['mana_abilities'])} kept"
+                )
         if changed:
             # ensure_ascii=True matches the committed file's encoding —
             # unicode characters like the em-dash stay as — escapes,
