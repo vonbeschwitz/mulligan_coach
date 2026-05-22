@@ -211,7 +211,21 @@ def resolve_fetch(state: GameState, fx: FetchLandEffect) -> None:
 
 
 def _pick_fetch_target(state: GameState, fx: FetchLandEffect) -> Card | None:
-    """Return the first library card that matches *fx*, or None."""
+    """Return the best library card that matches *fx*, or None.
+
+    For ``target_filter="specific_subtype"`` there's only one
+    subtype to match — first land found wins.
+
+    For ``target_filter="basic"`` / ``"any"`` the choice matters:
+    a real player picks the basic whose color fills a gap. The
+    simulator's earlier "first basic in library order" pick was
+    effectively random (the library is shuffled), so Terramorphic
+    Expanse / Evolving Wilds / etc. only landed on the needed color
+    by chance. Now we score every matching candidate by how much
+    its color helps hand spells become castable, and break ties on
+    library order.
+    """
+    candidates: list[Card] = []
     for card in state.library:
         if not card.is_land:
             continue
@@ -222,9 +236,82 @@ def _pick_fetch_target(state: GameState, fx: FetchLandEffect) -> Card | None:
             fx.subtype is None or fx.subtype not in parsed.subtypes
         ):
             continue
-        # "any" matches any land, so no further filter.
-        return card
-    return None
+        candidates.append(card)
+    if not candidates:
+        return None
+    # Specific-subtype fetches only have one valid subtype — score
+    # collapses to library order anyway, so skip the work.
+    if fx.target_filter == "specific_subtype":
+        return candidates[0]
+    needed = _needed_colors_from_hand(state)
+    if not needed:
+        return candidates[0]
+    # Score each candidate by colors-produced ∩ needed-colors.
+    best = candidates[0]
+    best_score = _score_basic_for_needs(best, needed)
+    for cand in candidates[1:]:
+        score = _score_basic_for_needs(cand, needed)
+        if score > best_score:
+            best = cand
+            best_score = score
+    return best
+
+
+def _needed_colors_from_hand(state: GameState) -> dict[str, int]:
+    """Map color -> "how badly we need this color" for fetch selection.
+
+    Restricted to colors NOT already producible from the current
+    battlefield + lands in hand — fetching a redundant color is
+    wasted. The weight is ``max(0, 6 - cmc)`` for each hand spell
+    that has a colored pip in the color, so a 1- or 2-mana spell
+    (the kind we'd cast on T2 / T3 off the fetch) dominates a
+    4-mana spell (which needs four lands and can be paid for by
+    a later turn's land drop anyway). Pip counts are folded in by
+    summing across pips (e.g. ``{U}{U}`` contributes twice). The
+    weight curve is intentionally simple: any priority order
+    favouring cheap spells over expensive ones over "don't care"
+    is enough to break the realistic ties.
+
+    Returns an empty dict when every colored pip in hand spells is
+    already covered — caller falls back to library order.
+    """
+    available: set[str] = set()
+    sources: list[Card] = list(state.battlefield_lands) + list(state.battlefield_mana_perms)
+    sources += [c for c in state.hand if c.is_land]
+    for src in sources:
+        for ab in src.parsed.mana_abilities:
+            for option in ab.produces:
+                for option_color in option:
+                    if option_color != "any":
+                        available.add(option_color)
+    needs: dict[str, int] = {}
+    for card in state.hand:
+        if card.is_land:
+            continue
+        cost = card.parsed.mana_cost
+        if cost is None:
+            continue
+        # Cheaper spells get more weight: a 2-drop fetch enables T2
+        # play; a 5-drop fetch barely beats just drawing a basic.
+        weight = max(1, 6 - cost.cmc)
+        for color, count in cost.color_pips.items():
+            if color in available:
+                continue
+            needs[color] = needs.get(color, 0) + weight * count
+    return needs
+
+
+def _score_basic_for_needs(card: Card, needs: dict[str, int]) -> int:
+    """Sum needs[c] over every concrete color *card* can produce."""
+    score = 0
+    seen: set[str] = set()
+    for ab in card.parsed.mana_abilities:
+        for option in ab.produces:
+            for color in option:
+                if color != "any" and color not in seen:
+                    seen.add(color)
+                    score += needs.get(color, 0)
+    return score
 
 
 def _put_fetched_card(state: GameState, card: Card, destination: str) -> None:

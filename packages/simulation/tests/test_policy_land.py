@@ -202,6 +202,30 @@ def test_l3_prefers_unrepresented_color() -> None:
     assert rule == "L3"
 
 
+def test_l3_keeps_sac_for_basic_fetcher_alongside_real_duals() -> None:
+    """A sac-for-basic fetcher (Evolving Wilds / Terramorphic Expanse)
+    has no own mana ability — its eventual basic provides the color
+    via the smart fetch picker. L3 should treat it as adding a new
+    color so it isn't deprioritised below "real" duals whose colors
+    are already covered.
+
+    Hand: Plains + Evolving Wilds (no battlefield, no other hand
+    lands). With Plains in the L3 candidate set the test
+    deliberately leaves L3 to decide between the two: Plains adds
+    W (new), Evolving Wilds adds "the fetched color" (also new).
+    Without the fix Evolving Wilds would fail L3's
+    ``land_adds_new_concrete_color`` check (it has no own mana
+    abilities) and Plains would be the sole survivor. With the
+    fix both pass L3, and L2 ("tapped first") then picks Evolving
+    Wilds — which is tapped-equivalent."""
+    plains_hand = Card(instance_id=20, parsed=f.plains())
+    wilds_hand = Card(instance_id=21, parsed=f.evolving_wilds())
+    state = _state(hand=[plains_hand, wilds_hand])
+    chosen, rule = choose_land(state)
+    assert chosen is wilds_hand
+    assert rule == "L2"
+
+
 # ----------------------------------------------------------------------
 # L4 — duplicate in hand
 # ----------------------------------------------------------------------
