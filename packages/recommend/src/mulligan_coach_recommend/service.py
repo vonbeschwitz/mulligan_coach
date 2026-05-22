@@ -391,8 +391,47 @@ def _build_explanation(
         float(feature_row.get("p_land_drop_by_turn_3", 0.0)),
         float(feature_row.get("p_land_drop_by_turn_4", 0.0)),
     )
-    p_creature = tuple(float(feature_row.get(f"p_any_creature_t{t}", 0.0)) for t in range(1, 5))
-    p_spell = tuple(float(feature_row.get(f"p_any_any_spell_t{t}", 0.0)) for t in range(1, 5))
+
+    # T1/T2 emit a single broad ``p_any_creature_t{T}`` / ``p_any_any_spell_t{T}``
+    # key. T3/T4 split the broad bucket by mana value (mv_0_2 / mv_3p on T3;
+    # mv_0_2 / mv_3 / mv_4p on T4) and do NOT emit the unsplit key — see
+    # ``packages/features/CLAUDE.md``. Recombine via 1 - prod(1 - p) so the
+    # overlay's grid stays a true "any creature / any spell" probability.
+    # The independence assumption matches what the feature builder uses
+    # within a bucket; since the MV splits partition the creatures by CMC
+    # (disjoint name sets), the union is exactly the broad aggregate.
+    def _combine_disjoint(*ps: float) -> float:
+        out = 1.0
+        for p in ps:
+            out *= 1.0 - p
+        return 1.0 - out
+
+    p_creature = (
+        float(feature_row.get("p_any_creature_t1", 0.0)),
+        float(feature_row.get("p_any_creature_t2", 0.0)),
+        _combine_disjoint(
+            float(feature_row.get("p_any_creature_mv_0_2_t3", 0.0)),
+            float(feature_row.get("p_any_creature_mv_3p_t3", 0.0)),
+        ),
+        _combine_disjoint(
+            float(feature_row.get("p_any_creature_mv_0_2_t4", 0.0)),
+            float(feature_row.get("p_any_creature_mv_3_t4", 0.0)),
+            float(feature_row.get("p_any_creature_mv_4p_t4", 0.0)),
+        ),
+    )
+    p_spell = (
+        float(feature_row.get("p_any_any_spell_t1", 0.0)),
+        float(feature_row.get("p_any_any_spell_t2", 0.0)),
+        _combine_disjoint(
+            float(feature_row.get("p_any_any_spell_mv_0_2_t3", 0.0)),
+            float(feature_row.get("p_any_any_spell_mv_3p_t3", 0.0)),
+        ),
+        _combine_disjoint(
+            float(feature_row.get("p_any_any_spell_mv_0_2_t4", 0.0)),
+            float(feature_row.get("p_any_any_spell_mv_3_t4", 0.0)),
+            float(feature_row.get("p_any_any_spell_mv_4p_t4", 0.0)),
+        ),
+    )
     return RecommendationExplanation(
         p_make_2nd_land_by_t2=float(feature_row.get("p_land_drop_by_turn_2", 0.0)),
         p_make_3rd_land_by_t3=float(feature_row.get("p_land_drop_by_turn_3", 0.0)),
