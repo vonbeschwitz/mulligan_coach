@@ -254,6 +254,16 @@ class HandCardPlayability:
     Lands populate ``p_castable_by_turn`` with zeros — the simulator
     plays lands, it doesn't "cast" them — and the template renders
     them with a dash. ``mana_value`` is ``None`` for lands as well.
+
+    ``mana_cost`` is the printed Scryfall cost string (e.g. ``"{1}{G}"``)
+    for spells; ``None`` for lands. The overlay renders a pretty form
+    (``"1G"``); the website is free to render the Scryfall mana-symbol
+    SVGs from the same raw string.
+
+    ``opening_hand_win_rate`` is the *shrunk* 17Lands OH WR for the
+    card (pulled from the same shrunk table the choice model reads).
+    ``None`` when the card has no 17Lands stats for the current format
+    (new printing, or arena_id not yet in the parquet).
     """
 
     name: str
@@ -262,6 +272,8 @@ class HandCardPlayability:
     # P(card castable on turn T | drawn by turn T), averaged across
     # the keep arm's Monte Carlo runs. Length-4 tuple for T = 1..4.
     p_castable_by_turn: tuple[float, float, float, float]
+    mana_cost: str | None = None
+    opening_hand_win_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -301,6 +313,15 @@ class RecommendationExplanation:
     p_cast_3drop_by_t4: float
     color_fix_by_t4: float
     hand_cards: tuple[HandCardPlayability, ...]
+    # Per-turn aggregates surfaced in the overlay's 4x3 stats table.
+    # All four turns; T1 land is conventionally 1.0 — a 0-land hand
+    # is rare enough in Premier Draft that hard-coding it is honest.
+    # Each tuple is (T1, T2, T3, T4). Read from the same feature-row
+    # the model consumed, so what the UI shows is exactly what
+    # entered the prediction.
+    p_make_land_drop_by_turn: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
+    p_cast_any_creature_by_turn: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    p_cast_any_spell_by_turn: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
 
 
 def _build_explanation(
@@ -308,6 +329,7 @@ def _build_explanation(
     hand: list[ParsedCard],
     aggregate: AggregateStats,
     feature_row: dict[str, float],
+    shrunk: dict[int, ShrunkWinRates] | None = None,
 ) -> RecommendationExplanation:
     """Pull the explanatory subset out of the per-card stats + feature row.
 
@@ -317,7 +339,15 @@ def _build_explanation(
     the prediction was built on. Per-card castability comes from the
     aggregate directly because the feature row aggregates across cards
     and loses the per-card breakdown.
+
+    ``shrunk`` (when provided) is the same ``ShrunkWinRates`` dict the
+    choice/win model reads — keyed by ``mtga_id`` (a.k.a. arena_id).
+    We pull the shrunk OH WR per hand card so the overlay's per-card
+    table can colour-code it the same way the model weights it.
+    Passing ``None`` (or a card whose arena_id isn't in the table)
+    just leaves the per-card OH WR field as ``None``.
     """
+    shrunk = shrunk or {}
     per_card: list[HandCardPlayability] = []
     for card in hand:
         cs = aggregate.by_card_name.get(card.name)
@@ -331,14 +361,38 @@ def _build_explanation(
                 float(cs.p_castable_by_turn[3]),
             )
         is_land = _card_is_land(card)
+        # Per-card OH WR lookup. Arena_id is the canonical join key
+        # the shrunk table uses; cards without an arena_id (e.g. a
+        # printing MTGJSON hasn't ingested yet) just get None and
+        # the renderer shows a dash.
+        oh_wr: float | None = None
+        if card.arena_id is not None:
+            entry = shrunk.get(card.arena_id)
+            if entry is not None:
+                oh_wr = entry.shrunk_opening_hand_win_rate
+        mana_cost_raw = card.mana_cost.raw if card.mana_cost is not None else None
         per_card.append(
             HandCardPlayability(
                 name=card.name,
                 is_land=is_land,
                 mana_value=None if is_land else int(_card_cmc(card)),
                 p_castable_by_turn=ps,
+                mana_cost=mana_cost_raw,
+                opening_hand_win_rate=oh_wr,
             )
         )
+    # Per-turn aggregates for the overlay's 4x3 table. Lands T1 is
+    # hard-coded to 1.0 because the feature row doesn't track it (a
+    # 0-land hand is rare enough in Premier Draft that pinning it to
+    # 100% reads more honestly than showing 0).
+    p_land = (
+        1.0,
+        float(feature_row.get("p_land_drop_by_turn_2", 0.0)),
+        float(feature_row.get("p_land_drop_by_turn_3", 0.0)),
+        float(feature_row.get("p_land_drop_by_turn_4", 0.0)),
+    )
+    p_creature = tuple(float(feature_row.get(f"p_any_creature_t{t}", 0.0)) for t in range(1, 5))
+    p_spell = tuple(float(feature_row.get(f"p_any_any_spell_t{t}", 0.0)) for t in range(1, 5))
     return RecommendationExplanation(
         p_make_2nd_land_by_t2=float(feature_row.get("p_land_drop_by_turn_2", 0.0)),
         p_make_3rd_land_by_t3=float(feature_row.get("p_land_drop_by_turn_3", 0.0)),
@@ -353,6 +407,9 @@ def _build_explanation(
             feature_row.get("avg_pct_hand_spells_with_colored_mana_by_turn_4", 0.0)
         ),
         hand_cards=tuple(per_card),
+        p_make_land_drop_by_turn=p_land,
+        p_cast_any_creature_by_turn=(p_creature[0], p_creature[1], p_creature[2], p_creature[3]),
+        p_cast_any_spell_by_turn=(p_spell[0], p_spell[1], p_spell[2], p_spell[3]),
     )
 
 
@@ -817,8 +874,18 @@ class RecommendationService:
         delta = p_keep - p_mull
         adjusted_delta = delta - MULLIGAN_BIAS
         verdict = _classify_verdict(adjusted_delta)
+        # Look up shrunk OH WRs for the explanation's per-card panel.
+        # The keep arm's feature build used the same dict, so this is
+        # just a re-read — no extra computation.
+        keep_shrunk: dict[int, ShrunkWinRates] = {}
+        stats_keep = self.stats_by_set.get(set_code)
+        if stats_keep is not None:
+            keep_shrunk = stats_keep.shrunk
         explanation = _build_explanation(
-            hand=hand, aggregate=keep_aggregate, feature_row=keep_feature_row
+            hand=hand,
+            aggregate=keep_aggregate,
+            feature_row=keep_feature_row,
+            shrunk=keep_shrunk,
         )
         return AsymmetricRecommendation(
             verdict=verdict,
@@ -906,7 +973,16 @@ class RecommendationService:
             seed=seed,
         )
         verdict = _classify_choice_verdict(p_keep)
-        explanation = _build_explanation(hand=hand, aggregate=aggregate, feature_row=feature_row)
+        choice_shrunk: dict[int, ShrunkWinRates] = {}
+        stats_choice = self.stats_by_set.get(set_code)
+        if stats_choice is not None:
+            choice_shrunk = stats_choice.shrunk
+        explanation = _build_explanation(
+            hand=hand,
+            aggregate=aggregate,
+            feature_row=feature_row,
+            shrunk=choice_shrunk,
+        )
         return ChoiceRecommendation(
             verdict=verdict,
             p_keep=p_keep,

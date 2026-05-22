@@ -144,15 +144,26 @@ class ArenaCardIndex:
                     continue  # Already indexed (MTGJSON wins).
                 hit = by_set_num.get((set_code, collector_number))
                 if hit is not None:
-                    by_arena_id[grpid] = hit
+                    # Stamp the grpid onto a copy of the ParsedCard so
+                    # downstream code (the recommender's per-card OH WR
+                    # lookup, the feature builder's shrunk-stats join)
+                    # has a usable arena_id even on new sets where
+                    # MTGJSON hasn't ingested the printing yet.
+                    # Always model_copy rather than mutate in place —
+                    # the same `hit` instance can be the join target
+                    # for multiple grpids (alt-art variants).
+                    by_arena_id[grpid] = hit.model_copy(update={"arena_id": grpid})
                     n_db_added += 1
                     continue
                 # Name-match fallback for basic lands. Any of the 20+
                 # basic-land printings Arena ships maps to the one
-                # synthesized basic for that name.
+                # synthesized basic for that name. Stamp the grpid the
+                # same way so the recommender sees a populated
+                # arena_id (in practice basics don't have shrunk OH
+                # stats, but consistency keeps the invariant simple).
                 basic = basics_by_name.get(name)
                 if basic is not None:
-                    by_arena_id[grpid] = basic
+                    by_arena_id[grpid] = basic.model_copy(update={"arena_id": grpid})
                     n_basic_added += 1
         else:
             log.info("no MTGA CardDatabase found; arena_id coverage limited to MTGJSON")

@@ -55,7 +55,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
-from mulligan_coach_recommend import RecommendationExplanation, load_service
+from mulligan_coach_recommend import load_service
 from PyQt6.QtCore import (
     QObject,
     QPoint,
@@ -101,15 +101,24 @@ from .deck_persistence import default_persistence_path, load_last_deck, save_las
 from .events import DeckSubmitted, MulliganDecisionRequest
 from .log_tailer import LogTailer
 from .position_persistence import default_positions_path, load_positions, save_positions
+from .stats_html import (
+    _KEEP_COLOR,
+    _MARGINAL_COLOR,
+    _MULL_COLOR,
+    _TEXT_MUTED,
+    _TEXT_PRIMARY,
+)
+from .stats_html import build_stats_html as _build_stats_html
 
 log = logging.getLogger(__name__)
 
 # Two layouts: full panel and compact pill. The window is the same
 # widget — we just toggle child widget visibility and shrink it.
-# Normal panel is taller now that it surfaces playability stats
-# (mana base, curve hits, per-card grid) alongside the verdict.
-_NORMAL_WIDTH = 380
-_NORMAL_HEIGHT = 540
+# Width is fixed; height is content-driven in expanded mode (we call
+# adjustSize() after rendering) so the panel never grows taller than
+# the actual rows of stats. That keeps the Arena mulligan UI as
+# uncovered as we can manage.
+_NORMAL_WIDTH = 320
 # Compact pill: verdict + single mulligan-% on one line. The choice
 # model collapses the keep/mull decision into one number, so the
 # pill only needs room for "Clear keep · mull 12%" rather than two
@@ -117,18 +126,19 @@ _NORMAL_HEIGHT = 540
 _COMPACT_WIDTH = 220
 _COMPACT_HEIGHT = 32
 _CORNER_RADIUS = 12
+# QWIDGETSIZE_MAX (defined in Qt's qwidget.h) — used to undo a
+# setFixedSize when switching from compact back to expanded, so the
+# vertical extent becomes content-driven again.
+_QT_WIDGETSIZE_MAX = 16_777_215
 
-# Colour palette — kept in lockstep with the website's dark theme so
-# users moving between the two surfaces see a recognisable look. The
-# alpha channel on the panel background is what gives the overlay its
-# slight see-through quality.
+# Colour palette — colour STRINGS live in ``stats_html`` so the
+# Qt-free HTML helpers there can colour-code cells without dragging
+# in PyQt6 (the CI runner is headless and can't load libEGL). We
+# re-import the names here so the rest of gui.py can keep using the
+# leading-underscore convention. The QColor pair below is the only
+# Qt-typed colour state — it's drawn directly via QPainter.
 _PANEL_BG = QColor(20, 20, 24, 235)
 _PANEL_BORDER = QColor(60, 60, 70, 255)
-_TEXT_PRIMARY = "#e8e8ec"
-_TEXT_MUTED = "#909098"
-_KEEP_COLOR = "#7be57b"  # green
-_MULL_COLOR = "#e57b7b"  # red
-_MARGINAL_COLOR = "#e5c87b"  # amber
 
 # Alt+E is the collapse / expand toggle (see the
 # :class:`_KeyboardHook` block below for the binding). Picked over
@@ -440,17 +450,21 @@ class OverlayWindow(QWidget):
 
     def _build_ui(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(16, 12, 16, 12)
-        outer.setSpacing(6)
+        # Tight margins + spacing — the overlay sits on top of Arena's
+        # mulligan-decision UI, so every pixel of vertical space saved
+        # is one less card covered. Inner table padding handles row
+        # readability independently.
+        outer.setContentsMargins(10, 4, 10, 6)
+        outer.setSpacing(2)
 
-        # Title row: app name + collapse toggle + close button.
+        # Title row: collapse + settings + close buttons, right-aligned.
+        # No "Mulligan Coach" text — the overlay's purpose is obvious
+        # from the verdict immediately below, and the title was just
+        # eating horizontal space that the window doesn't have to spare.
         self._title_row_widget = QWidget()
         title_row = QHBoxLayout(self._title_row_widget)
         title_row.setContentsMargins(0, 0, 0, 0)
-        title_row.setSpacing(8)
-        title_label = QLabel("Mulligan Coach")
-        title_label.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 11px; font-weight: 600;")
-        title_row.addWidget(title_label)
+        title_row.setSpacing(4)
         title_row.addStretch(1)
         # Collapse toggle. "-" when in normal (collapse-to-compact),
         # square when compact (expand-to-normal). Kept as text rather
@@ -495,37 +509,33 @@ class OverlayWindow(QWidget):
         title_row.addWidget(close_btn)
         outer.addWidget(self._title_row_widget)
 
-        # Verdict line — replaced as state updates land. In compact
-        # mode this single label carries everything (verdict + arms);
-        # in expanded mode the arms move to their own row below.
+        # Verdict + mulligan-probability row. In expanded mode the
+        # verdict and the mull% share a single line — verdict on the
+        # left, mull% right-aligned. In compact mode only the verdict
+        # label is shown and it carries the whole "verdict · mull X%"
+        # string on its own.
+        #
+        # "Mulligan probability" rather than "Should mulligan" because
+        # the imperative form invited misreading ("Should mulligan 23%"
+        # → keep, but reads like advice to mull).
+        self._verdict_row_widget = QWidget()
+        verdict_row = QHBoxLayout(self._verdict_row_widget)
+        verdict_row.setContentsMargins(0, 0, 0, 0)
+        verdict_row.setSpacing(8)
         self._verdict_label = QLabel("Waiting for mulligan…")
         self._verdict_label.setStyleSheet(
-            f"color: {_TEXT_PRIMARY}; font-size: 22px; font-weight: 700;"
+            f"color: {_TEXT_PRIMARY}; font-size: 17px; font-weight: 700;"
         )
-        self._verdict_label.setWordWrap(True)
-        outer.addWidget(self._verdict_label)
-
-        # Score row: a single "Should mulligan: NN%" display. The
-        # choice model collapses the keep/mull decision into one
-        # probability (P(skilled player keeps)), so we show just the
-        # complementary mulligan percentage rather than two arms.
-        # Expanded mode only — the compact pill folds the number
-        # into the verdict label.
-        self._arms_row_widget = QWidget()
-        arms_row = QHBoxLayout(self._arms_row_widget)
-        arms_row.setContentsMargins(0, 0, 0, 0)
-        arms_row.setSpacing(8)
-        self._mull_label = QLabel("Should mulligan —")
-        self._mull_label.setStyleSheet(f"color: {_TEXT_PRIMARY}; font-size: 14px;")
-        arms_row.addWidget(self._mull_label)
-        arms_row.addStretch(1)
-        outer.addWidget(self._arms_row_widget)
-
-        # Hand summary (expanded layout only).
-        self._hand_label = QLabel("")
-        self._hand_label.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 11px;")
-        self._hand_label.setWordWrap(True)
-        outer.addWidget(self._hand_label)
+        # No word-wrap — the verdict text is always short ("CLEAR
+        # KEEP", "Marginal mull", etc.) and turning wrap off lets the
+        # mull% sit beside it instead of being pushed to a second line.
+        verdict_row.addWidget(self._verdict_label)
+        verdict_row.addStretch(1)
+        self._mull_label = QLabel("Mull —")
+        self._mull_label.setStyleSheet(f"color: {_TEXT_PRIMARY}; font-size: 12px;")
+        self._mull_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        verdict_row.addWidget(self._mull_label)
+        outer.addWidget(self._verdict_row_widget)
 
         # Playability stats (expanded layout only). Mirror of the
         # website's "Why this hand plays out the way it does" panel —
@@ -536,7 +546,11 @@ class OverlayWindow(QWidget):
         self._stats_label.setTextFormat(Qt.TextFormat.RichText)
         self._stats_label.setStyleSheet(f"color: {_TEXT_PRIMARY}; font-size: 11px;")
         self._stats_label.setWordWrap(True)
-        outer.addWidget(self._stats_label, stretch=1)
+        # No vertical stretch — the window resizes to the label's
+        # natural height via adjustSize() after every render, so
+        # giving the label a stretch factor would just leave dead
+        # space when content is short.
+        outer.addWidget(self._stats_label)
 
         # Context footer (expanded layout only).
         self._context_label = QLabel("")
@@ -600,14 +614,13 @@ class OverlayWindow(QWidget):
 
     def _apply_layout(self) -> None:
         if self._compact:
-            # Compact pill: a single line carrying verdict + both
-            # percentages. Title bar, arms row, hand summary, stats
-            # panel, and context footer all hide. Re-expand via the
-            # hotkey, the title-bar button (once title is back), or
-            # a double-click anywhere on the panel.
+            # Compact pill: a single line carrying verdict + mull%.
+            # Title bar, mull label, stats panel, context footer all
+            # hide. Re-expand via the hotkey, the title-bar button
+            # (once title is back), or a double-click anywhere on the
+            # panel.
             self._title_row_widget.setVisible(False)
-            self._arms_row_widget.setVisible(False)
-            self._hand_label.setVisible(False)
+            self._mull_label.setVisible(False)
             self._stats_label.setVisible(False)
             self._context_label.setVisible(False)
             self._verdict_label.setStyleSheet(
@@ -617,17 +630,27 @@ class OverlayWindow(QWidget):
             self._collapse_btn.setText("▢")
         else:
             self._title_row_widget.setVisible(True)
-            self._arms_row_widget.setVisible(True)
-            self._hand_label.setVisible(True)
+            self._mull_label.setVisible(True)
             self._stats_label.setVisible(True)
             self._context_label.setVisible(True)
-            self.setFixedSize(_NORMAL_WIDTH, _NORMAL_HEIGHT)
+            # Undo the compact-mode setFixedSize (which pinned both
+            # min and max), then re-pin the width only. Height is
+            # content-driven below via adjustSize() after the layout
+            # has re-rendered.
+            self.setMinimumSize(0, 0)
+            self.setMaximumSize(_QT_WIDGETSIZE_MAX, _QT_WIDGETSIZE_MAX)
+            self.setFixedWidth(_NORMAL_WIDTH)
             self._collapse_btn.setText("-")
         # Re-render the verdict label so its text matches the new
         # layout — the compact format is single-line "verdict ·
         # X% vs Y%", the expanded one is just the verdict alone.
         if self._last_rec is not None:
             self._render_recommendation_from_cached()
+        # Content-driven height in expanded mode. Has to run AFTER the
+        # render above so the stats label's rich-text height is up to
+        # date when adjustSize asks for it.
+        if not self._compact:
+            self.adjustSize()
         # Move to the saved position for the new layout, if any. The
         # caller (toggle_compact or __init__) is responsible for
         # having saved the *previous* layout's position before we
@@ -791,17 +814,28 @@ class OverlayWindow(QWidget):
         else:
             self._verdict_label.setText(short_verdict)
             self._verdict_label.setStyleSheet(
-                f"color: {verdict_color}; font-size: 22px; font-weight: 700;"
+                f"color: {verdict_color}; font-size: 17px; font-weight: 700;"
             )
-            self._mull_label.setText(f"Should mulligan <b>{mull_pct:.0f}%</b>")
-            names = ", ".join(c.name for c in output.hand)
-            self._hand_label.setText(f"Hand: {names}")
+            # Compact label form because it shares a row with the
+            # (much larger) verdict — "Mull <b>23%</b>" reads as
+            # "mulligan probability 23%" at a glance once the user
+            # knows the panel.
+            self._mull_label.setText(f"Mull <b>{mull_pct:.0f}%</b>")
+            # No standalone "Hand: ..." line — the per-card playability
+            # table inside the stats panel already shows every spell
+            # in the opening hand, and the line was eating vertical
+            # space the user wanted back. Lands aren't surfaced here
+            # but their count is implicit in the turn-grid land row.
             self._stats_label.setText(_build_stats_html(rec.explanation))
             play_draw = "play" if output.on_the_play else "draw"
             self._context_label.setText(
                 f"mull #{output.mulligan_count} · on the {play_draw} · "
                 f"set {output.primary_set or '?'}"
             )
+            # Re-size to fit the new content — number of per-card
+            # rows varies by hand, so a fixed height would either
+            # truncate or leave dead space.
+            self.adjustSize()
 
     def _render_computing(self, output: ComputingOutput) -> None:
         """Render the "running simulation" placeholder."""
@@ -819,36 +853,42 @@ class OverlayWindow(QWidget):
         else:
             self._verdict_label.setText(msg)
             self._verdict_label.setStyleSheet(
-                f"color: {_MARGINAL_COLOR}; font-size: 22px; font-weight: 700;"
+                f"color: {_MARGINAL_COLOR}; font-size: 17px; font-weight: 700;"
             )
-            self._mull_label.setText("Should mulligan —")
-            self._hand_label.setText("")
+            self._mull_label.setText("Mull —")
             self._stats_label.setText("")
             self._context_label.setText(
                 f"mull #{output.mulligan_count} · on the {play_draw} · computing…"
             )
+            self.adjustSize()
 
     def _render_missing(self, output: MissingDataOutput) -> None:
-        font_size = 12 if self._compact else 18
+        # Re-use the stats label for the error reason; it's the only
+        # widget with word-wrap + a usable height in the expanded
+        # layout. The previous dedicated hand-label widget was dropped
+        # to claw vertical space back.
+        font_size = 12 if self._compact else 15
         self._verdict_label.setText("Can't recommend")
         self._verdict_label.setStyleSheet(
             f"color: {_MARGINAL_COLOR}; font-size: {font_size}px; font-weight: 700;"
         )
-        self._mull_label.setText("Should mulligan —")
-        self._hand_label.setText(output.reason)
-        self._stats_label.setText("")
+        self._mull_label.setText("Mull —")
+        self._stats_label.setText(output.reason)
         self._context_label.setText(f"({output.what})")
+        if not self._compact:
+            self.adjustSize()
 
     def _render_reset(self) -> None:
-        font_size = 12 if self._compact else 18
+        font_size = 12 if self._compact else 15
         self._verdict_label.setText("Waiting for next match…")
         self._verdict_label.setStyleSheet(
             f"color: {_TEXT_PRIMARY}; font-size: {font_size}px; font-weight: 700;"
         )
-        self._mull_label.setText("Should mulligan —")
-        self._hand_label.setText("")
+        self._mull_label.setText("Mull —")
         self._stats_label.setText("")
         self._context_label.setText("")
+        if not self._compact:
+            self.adjustSize()
 
     def _close_clicked(self) -> None:
         QApplication.quit()
@@ -928,80 +968,10 @@ _TITLE_BTN_STYLE = (
 
 
 # ---------------------------------------------------------------------------
-# Stats panel HTML — mirror of the website's "Why this hand plays out"
-# block, but flattened into a single QLabel rich-text string so we
-# don't have to manage two dozen child widgets.
+# Stats panel — implementation lives in :mod:`stats_html` (Qt-free so
+# CI can unit-test it without libEGL). gui.py re-exports the entry
+# point above; nothing further needed here.
 # ---------------------------------------------------------------------------
-
-
-def _build_stats_html(exp: RecommendationExplanation) -> str:
-    """Render the keep-arm playability stats as a QLabel-safe HTML string.
-
-    QLabel's rich-text rendering supports a small HTML subset
-    (paragraphs, basic tables, inline ``<b>`` / ``<span>``, percent
-    widths). Stick to that — no CSS in style attributes other than
-    ``color`` / ``font-size`` / ``text-align`` / ``padding``.
-    """
-
-    def pct(p: float) -> str:
-        return f"{round(p * 100):d}%"
-
-    # Mana base + curve hits: two-column key/value tables stacked.
-    mana_rows = [
-        ("2nd land by T2", pct(exp.p_make_2nd_land_by_t2)),
-        ("3rd land by T3", pct(exp.p_make_3rd_land_by_t3)),
-        ("4th land by T4", pct(exp.p_make_4th_land_by_t4)),
-        ("Avg mana at T4", f"{exp.expected_mana_at_t4:.1f}"),
-    ]
-    curve_rows = [
-        ("Cast any spell T1", pct(exp.p_cast_any_spell_t1)),
-        ("Cast a creature T2", pct(exp.p_cast_any_creature_t2)),
-        ("Cast removal T2", pct(exp.p_cast_any_removal_t2)),
-        ("Cast 2-drop by T3", pct(exp.p_cast_small_creature_by_t3)),
-        ("Cast 3-drop by T4", pct(exp.p_cast_3drop_by_t4)),
-        ("Colors fixed by T4", pct(exp.color_fix_by_t4)),
-    ]
-
-    def kv_table(title: str, rows: list[tuple[str, str]]) -> str:
-        body = "".join(
-            f"<tr><td style='color:{_TEXT_MUTED};'>{k}</td><td align='right'>{v}</td></tr>"
-            for k, v in rows
-        )
-        return (
-            f"<p style='margin-top:4px;margin-bottom:2px;'>"
-            f"<b>{title}</b></p>"
-            f"<table width='100%' cellspacing='0' cellpadding='1'>{body}</table>"
-        )
-
-    # Per-card playability table: card name | MV | T1..T4 columns.
-    card_header = (
-        "<tr>"
-        f"<th align='left' style='color:{_TEXT_MUTED};font-weight:600;'>Card</th>"
-        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>MV</th>"
-        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T1</th>"
-        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T2</th>"
-        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T3</th>"
-        f"<th align='center' style='color:{_TEXT_MUTED};font-weight:600;'>T4</th>"
-        "</tr>"
-    )
-    card_rows: list[str] = []
-    for hc in exp.hand_cards:
-        if hc.is_land:
-            cells = [f"<td align='center' style='color:{_TEXT_MUTED};'>&mdash;</td>"] * 5
-        else:
-            mv_cell = f"<td align='center'>{hc.mana_value}</td>"
-            turn_cells = "".join(f"<td align='center'>{pct(p)}</td>" for p in hc.p_castable_by_turn)
-            cells = [mv_cell + turn_cells]
-        name_color = _TEXT_MUTED if hc.is_land else _TEXT_PRIMARY
-        card_rows.append(f"<tr><td style='color:{name_color};'>{hc.name}</td>{''.join(cells)}</tr>")
-    card_table = (
-        f"<p style='margin-top:6px;margin-bottom:2px;'><b>Per-card playability</b></p>"
-        f"<table width='100%' cellspacing='0' cellpadding='1'>"
-        f"{card_header}{''.join(card_rows)}"
-        f"</table>"
-    )
-
-    return kv_table("Mana base", mana_rows) + kv_table("Curve hits", curve_rows) + card_table
 
 
 def _verdict_display(verdict: str) -> tuple[str, str]:
