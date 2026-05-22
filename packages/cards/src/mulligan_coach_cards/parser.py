@@ -1403,6 +1403,17 @@ _COST_ONLY_FOR_ANY_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Restriction prose attached to a mana ability: "Spend this mana only to cast
+# an instant or sorcery spell", "Spend this mana only to cast Lesson spells",
+# etc. The simulator's mana model has no concept of "this mana is restricted
+# to spells matching predicate P" (per the design doc — out of scope), so
+# treating these as unrestricted would over-count mana on hands containing
+# the source. The honest call is to drop the ability entirely: it under-
+# counts mana on the spell types the source CAN pay for, but never lets the
+# simulator cast a creature off Hydro-Channeler's instant/sorcery mana.
+# See packages/simulation/CLAUDE.md, "Things explicitly out of scope".
+_RESTRICTED_MANA_RE = re.compile(r"spend this mana only", re.IGNORECASE)
+
 # Conditional ETB-tapped patterns.
 _DEATHCAP_RE = re.compile(
     r"enters tapped unless you control\s+"
@@ -1456,7 +1467,16 @@ def _extract_mana_ability(chunk: str) -> ManaAbility | None:
     Trailing prose after the colors (Raucous Audience's conditional
     "...add {G}{G} instead." clause, or the "Activate only once each
     turn." limiter) is tolerated; the baseline gets encoded. Returns
-    ``None`` when the chunk isn't a mana ability."""
+    ``None`` when the chunk isn't a mana ability.
+
+    Restricted-mana abilities ("Spend this mana only to cast an
+    instant or sorcery spell" etc.) return ``None`` — the simulator
+    has no way to express the restriction, so encoding the unrestricted
+    baseline would let the policy pay for any cost off the source.
+    Dropping the ability under-counts mana on the spell types the
+    source actually CAN pay for, but never over-counts."""
+    if _RESTRICTED_MANA_RE.search(chunk):
+        return None
     if m := _TAP_FOR_RE.match(chunk):
         colors = re.findall(r"\{([WUBRGC])\}", m.group(1))
         return ManaAbility(

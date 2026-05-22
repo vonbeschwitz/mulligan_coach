@@ -391,6 +391,58 @@ def test_artifact_mana_rock_with_untap_static_auto() -> None:
     assert not p.role_features.is_other
 
 
+def test_restricted_mana_ability_dropped() -> None:
+    # Hydro-Channeler (SOS) shape: a creature whose mana abilities are
+    # gated by "Spend this mana only to cast an instant or sorcery spell".
+    # The simulator can't model the restriction, so encoding the
+    # unrestricted baseline would silently over-count mana availability
+    # whenever the source is on the battlefield (a 4-drop becomes
+    # castable on T3 off a 2-drop creature). We drop the ability instead.
+    card = _scryfall(
+        name="Hydro-Channeler",
+        type_line="Creature — Merfolk Wizard",
+        oracle_text=(
+            "{T}: Add {U}. Spend this mana only to cast an instant or sorcery spell.\n"
+            "{1}, {T}: Add one mana of any color. "
+            "Spend this mana only to cast an instant or sorcery spell."
+        ),
+        mana_cost="{1}{U}",
+        power="1",
+        toughness="3",
+    )
+    p = parse_card(card)
+    # Both abilities are restricted; the simulator should see Hydro as
+    # a vanilla 1/3 with no usable mana production.
+    assert p.mana_abilities == []
+    # The role_features signal is unaffected — the mulligan-coach model
+    # still gets the creature signal through other paths.
+    assert p.role_features.is_creature
+    assert not p.role_features.is_mana_rock
+
+
+def test_partially_restricted_mana_ability_keeps_unrestricted_one() -> None:
+    # White Lotus Hideout (TLA) shape: a land with three mana abilities,
+    # one of which is restricted ("Spend this mana only to cast a Lesson
+    # or Shrine spell."). The unrestricted abilities should survive.
+    card = _scryfall(
+        name="White Lotus Hideout",
+        type_line="Land",
+        oracle_text=(
+            "{T}: Add {C}.\n"
+            "{T}: Add one mana of any color. "
+            "Spend this mana only to cast a Lesson or Shrine spell.\n"
+            "{1}, {T}: Add one mana of any color."
+        ),
+    )
+    p = parse_card(card)
+    # The two unrestricted abilities survive; the middle one is dropped.
+    produces = [a.produces for a in p.mana_abilities]
+    assert produces == [[["C"]], [["any"]]]
+    # And the {1} cost made it onto the surviving filter ability.
+    costs_with_one = [a for a in p.mana_abilities if a.cost.mana.cmc == 1]
+    assert len(costs_with_one) == 1
+
+
 def test_vanilla_enchantment_falls_back_to_is_other() -> None:
     # Static "Players can't gain life." style enchantment: parses cleanly
     # (the _is_likely_static_or_triggered tolerance accepts it), no role

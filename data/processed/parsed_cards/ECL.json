@@ -35600,31 +35600,6 @@
           ]
         ],
         "condition": null
-      },
-      {
-        "cost": {
-          "mana": {
-            "raw": "",
-            "pips": [],
-            "cmc": 0,
-            "color_pips": {},
-            "has_x": false,
-            "has_hybrid": false,
-            "has_phyrexian": false,
-            "has_colorless": false,
-            "has_snow": false
-          },
-          "tap": true,
-          "untap": false,
-          "sacrifice": null,
-          "discard_self": false
-        },
-        "produces": [
-          [
-            "any"
-          ]
-        ],
-        "condition": null
       }
     ],
     "enter_condition": null,
