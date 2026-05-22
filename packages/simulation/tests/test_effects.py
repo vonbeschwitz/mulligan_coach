@@ -234,6 +234,57 @@ def test_fetch_count_more_than_one() -> None:
     assert len(state.library) == 1
 
 
+def test_fetch_basic_picks_color_needed_by_hand() -> None:
+    """With multiple basics in the library, ``resolve_fetch`` for a
+    basic-target effect should pick the basic whose color a hand
+    spell needs and the battlefield + lands in hand don't already
+    produce — not just the first basic in library order.
+
+    The hand has a {1}{U} instant; Plains and Mountain are in hand
+    (covering W and R); library has Plains, Swamp, Island in that
+    order. Without smart selection the picker grabs Plains (first
+    matching basic). With smart selection it grabs Island, since
+    U is the only color the hand needs that the existing lands
+    don't cover."""
+    hand_lands = [
+        Card(instance_id=1, parsed=f.plains()),
+        Card(instance_id=2, parsed=f.mountain()),
+    ]
+    counter = f.cantrip("Counterspell", "{1}{U}")
+    hand_spell = Card(instance_id=3, parsed=counter)
+    library = [
+        Card(instance_id=10, parsed=f.plains()),
+        Card(instance_id=11, parsed=f.swamp()),
+        Card(instance_id=12, parsed=f.island()),
+    ]
+    state = _state(library=library)
+    state.hand = [*hand_lands, hand_spell]
+    fx = FetchLandEffect(target_filter="basic", destination="battlefield_tapped")
+    resolve_fetch(state, fx)
+    fetched_names = [c.parsed.name for c in state.battlefield_lands]
+    assert "Island" in fetched_names
+
+
+def test_fetch_basic_weights_low_cmc_higher() -> None:
+    """When two hand spells need different uncovered colors, prefer the
+    color the cheaper spell wants. A 2-mana counter ({1}{U}) and a
+    5-mana finisher ({4}{B}) both have uncovered colors; the picker
+    should fetch Island (enabling the cheap T2 counter) rather than
+    Swamp (which only enables a T5 spell that we'd reach with normal
+    land drops anyway)."""
+    cheap = Card(instance_id=3, parsed=f.cantrip("Counterspell", "{1}{U}"))
+    pricey = Card(instance_id=4, parsed=f.cantrip("Finisher", "{4}{B}"))
+    library = [
+        Card(instance_id=10, parsed=f.swamp()),
+        Card(instance_id=11, parsed=f.island()),
+    ]
+    state = _state(library=library)
+    state.hand = [cheap, pricey]
+    fx = FetchLandEffect(target_filter="basic", destination="battlefield_tapped")
+    resolve_fetch(state, fx)
+    assert any(c.parsed.name == "Island" for c in state.battlefield_lands)
+
+
 def test_fetch_shuffles_library() -> None:
     """Resolving a fetch should shuffle the remaining library."""
     library = [Card(instance_id=i, parsed=f.forest()) for i in range(10, 30)]

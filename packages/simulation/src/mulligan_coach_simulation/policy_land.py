@@ -229,6 +229,22 @@ def _land_adds_new_concrete_color(card: Card, available: set[str]) -> bool:
             for c in option:
                 if c != "any" and c not in available:
                     return True
+    # Sac-for-basic fetchers (Terramorphic Expanse, Evolving Wilds) have
+    # no own mana ability but resolve to a basic land — the fetched
+    # basic provides a color we don't necessarily have. Treat them as
+    # adding a new color so L3 doesn't deprioritise them below a "real"
+    # tapped dual whose colors we already produce. Concrete color
+    # selection happens in the fetcher's resolve path (which now
+    # picks based on hand-spell needs).
+    for mode in card.parsed.modes:
+        if mode.kind != "activated":
+            continue
+        sac = mode.cost.sacrifice
+        if sac is None or sac.target != "self":
+            continue
+        for fx in mode.effects:
+            if isinstance(fx, FetchLandEffect) and fx.target_filter == "basic":
+                return True
     return False
 
 
