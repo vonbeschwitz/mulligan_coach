@@ -59,7 +59,14 @@ from pathlib import Path
 from typing import cast
 
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
+
+# ``sklearn.linear_model.LogisticRegression`` is only needed at fit
+# time; inference is a per-cell dict lookup against ``cell_margins``.
+# Lazy-importing keeps the overlay's frozen bundle from pulling
+# sklearn + its scipy dependencies (~75 MB combined) on the deploy
+# path — the recommend service imports ``mulligan_coach_model``
+# transitively, so a top-level sklearn import here forces it into
+# the bundle even though we never call ``.fit``.
 
 log = logging.getLogger(__name__)
 
@@ -239,6 +246,8 @@ class BaselineModel:
         # generous; convergence is fast at this size. L2 is sklearn's
         # default penalty so we omit the explicit kwarg (passing
         # `penalty="l2"` raises a FutureWarning in sklearn 1.10+).
+        from sklearn.linear_model import LogisticRegression  # local — see module header
+
         model = LogisticRegression(
             C=l2_C,
             solver="lbfgs",

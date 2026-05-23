@@ -45,9 +45,15 @@ import math
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
-import duckdb
+# DuckDB is used only by ``iter_training_rows`` to consume the games
+# view. Keep it out of the import-time graph so the overlay's frozen
+# bundle (which imports ``mulligan_coach_model`` transitively but
+# never touches the training path) can drop the ~36 MB native lib.
+if TYPE_CHECKING:
+    import duckdb
+
 from mulligan_coach_cards import (
     Cost,
     ManaAbility,

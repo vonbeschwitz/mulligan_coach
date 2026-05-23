@@ -8,12 +8,29 @@ friend.
 
 ## Build
 
+The end-to-end wrapper handles swapping the venv to `xgboost-cpu` for
+the build and restoring `xgboost` (with CUDA) afterwards — see the
+size-reduction notes below for why this matters:
+
+```
+.venv/Scripts/python.exe packages/overlay/packaging/build_distribution.py
+```
+
+Output: `dist/MulliganCoach/` (~325 MB). `MulliganCoach.exe` is the
+launcher; everything else lives next to it in `_internal/`.
+
+The wrapper is idempotent — re-running it is safe even after an
+interrupted build (it cleans `build/` and the dist subfolder before
+re-running PyInstaller). If you'd rather drive PyInstaller directly,
+the spec also works standalone:
+
 ```
 .venv/Scripts/pyinstaller.exe packages/overlay/packaging/mulligan_coach.spec --noconfirm
 ```
 
-Output: `dist/MulliganCoach/` (~520 MB). `MulliganCoach.exe` is the
-launcher; everything else lives next to it in `_internal/`.
+…but in that case you'd ship the larger CUDA-flavoured xgboost.dll
+(~143 MB on top of the standard bundle) unless you've already swapped
+to `xgboost-cpu` manually.
 
 Re-run after any change to overlay code, the choice model, the
 parsed cards, or the 17Lands ratings. The spec is deterministic
@@ -60,19 +77,45 @@ The shipped EXE is GUI-only (no console window). Logs go to
 3 generations). Ask the recipient to attach this file when
 reporting issues.
 
+## Size reduction (vs. unrestricted PyInstaller default)
+
+A naive bundle weighs ~520 MB. The current pipeline trims it to
+~325 MB with no behavioural changes:
+
+* **`xgboost-cpu` swap (~138 MB).** The PyPI `xgboost` wheel ships
+  a 143 MB `xgboost.dll` carrying full CUDA build artifacts. We
+  never invoke the GPU code path (training uses `tree_method=hist`;
+  inference uses Booster.predict). `build_distribution.py`
+  temporarily swaps the venv to `xgboost-cpu` (5 MB DLL, same Python
+  API) for the PyInstaller pass, then reinstates `xgboost` after.
+  Doing this transparently around the build keeps day-to-day
+  `uv sync` semantics unchanged.
+* **DuckDB excluded (~36 MB).** DuckDB is only used by the training
+  / data-download paths. `seventeenlands_stats` now reads ratings
+  parquets via `pyarrow.parquet` directly, and `training_rows` /
+  `feature_matrix` lazy-import duckdb inside their training entry
+  points. The spec then lists `duckdb` under `EXCLUDED_MODULES`.
+* **pyarrow optional natives stripped (~22 MB).** Arrow Flight,
+  Substrait, Acero, and Dataset DLLs are shipped inside the
+  `pyarrow/` wheel directory and copied by PyInstaller even though
+  the overlay only calls `pq.read_table`. The spec has a
+  post-Analysis filter (`_BINARY_PATTERNS_TO_DROP`) that removes
+  them from `a.binaries` / `a.datas`.
+* **Qt6 non-English translations stripped (~7 MB).** We don't
+  localise the UI, so `Qt6/translations/qt_*.qm` files for every
+  locale Qt supports are deadweight. The spec keeps `qt_en.qm` /
+  `qtbase_en.qm` as a fallback and drops the rest.
+
+If you want to claw back more, the next-cheapest target is pyarrow
+itself (~58 MB left after the optional-native pass): the bundle still
+ships the full Arrow C++ runtime via `arrow.dll` plus the Parquet
+DLL, which we genuinely need. A custom path using only the parquet
+read functions doesn't exist in pure-Python form, so a meaningful
+trim there means writing a one-shot loader using `fastparquet` or
+similar. Not worth it for friends-and-family.
+
 ## Known limitations
 
-* **Bundle size (~520 MB).** XGBoost's `xgboost.dll` is 137 MB on
-  its own — Windows wheels ship with full CUDA build artifacts
-  even when only the CPU path is used. Switching to the
-  `xgboost-cpu` wheel would trim the bundle by ~120 MB; not done
-  yet because the project's training scripts may want GPU support
-  later and we don't want two divergent install closures.
-* **DuckDB is bundled (~50 MB) but unused at runtime.** The
-  `seventeenlands_stats` and `feature_matrix` modules have
-  top-level `import duckdb` even on the read-only ratings-parquet
-  code path. Lazy-importing it would shave the bundle further;
-  filed under "later".
 * **Single-platform (Windows).** PyInstaller builds for the host
   OS. Cross-compilation is not supported by PyInstaller itself;
   a macOS / Linux build would need to run on that platform.

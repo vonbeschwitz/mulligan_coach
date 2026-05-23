@@ -37,7 +37,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import duckdb
 from pydantic import BaseModel, Field
 
 from .models import ParsedCard
@@ -232,20 +231,16 @@ def load_premier_draft_stats(set_code: str, *, data_root: Path | None = None) ->
             f"Run 'mulligan-coach-data refresh-17lands --sets {set_code.upper()}' first."
         )
 
-    # DuckDB reads the parquet, normalises list / nullable columns, and
-    # tolerates schema drift across sets in case 17Lands adds a column
-    # for a later set. We materialise to a list of dicts and let pydantic
-    # validate / coerce. The path is a repository-managed file, not user
-    # input, but we still single-quote-escape it to mirror data-download's
-    # _sql_str pattern and stay safe against unusual install paths.
-    con = duckdb.connect(":memory:")
-    try:
-        path_literal = "'" + path.as_posix().replace("'", "''") + "'"
-        rows: list[dict[str, Any]] = (
-            con.execute(f"SELECT * FROM read_parquet({path_literal})").to_arrow_table().to_pylist()
-        )
-    finally:
-        con.close()
+    # pyarrow reads the parquet directly. We previously used DuckDB
+    # here, but the only operation is a plain `SELECT *` so pyarrow
+    # is sufficient — and DuckDB drags a ~36 MB native lib into the
+    # PyInstaller bundle the overlay ships, which we'd rather avoid.
+    # The result still goes through pydantic for validation, so any
+    # schema drift across sets (17Lands adding a column) is tolerated
+    # the same way it was before.
+    import pyarrow.parquet as pq  # local import — keep the recommend hot path light
+
+    rows: list[dict[str, Any]] = pq.read_table(path).to_pylist()
 
     by_arena_id: dict[int, SeventeenLandsStats] = {}
     by_name: dict[str, SeventeenLandsStats] = {}

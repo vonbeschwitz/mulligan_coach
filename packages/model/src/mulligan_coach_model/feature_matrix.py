@@ -58,9 +58,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
+
+# DuckDB is only used inside ``materialize_feature_matrix`` to read
+# the training games view. Importing it lazily there keeps the
+# overlay's inference-only import graph from pulling in DuckDB's
+# ~36 MB native lib (the recommend service imports this module
+# transitively via ``mulligan_coach_model`` → ``BaselineModel``).
 from mulligan_coach_cards import (
     ParsedCard,
     load_premier_draft_stats,
@@ -736,6 +741,8 @@ def materialize_feature_matrix(
     )
 
     materialization_stats = MaterializationStats()
+
+    import duckdb  # local — see note at top of module
 
     con = duckdb.connect(str(duckdb_path), read_only=True)
     try:

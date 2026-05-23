@@ -150,18 +150,70 @@ EXCLUDED_MODULES = [
     "uvicorn",
     # The data-download package isn't needed at recommend-time.
     "mulligan_coach_data_download",
-    # NOTE: duckdb cannot be excluded — `mulligan_coach_cards.seventeenlands_stats`
-    # and `mulligan_coach_model.feature_matrix` both `import duckdb` at module
-    # top-level, and both modules are reached by the recommend service at
-    # startup (via `load_premier_draft_stats` and `_library_from_deck`).
-    # Lazy-importing duckdb in those modules would let us drop ~30 MB from
-    # the bundle, but that's a refactor for another day.
+    # DuckDB is a training-only dep. Its native lib weighs ~36 MB
+    # and the overlay's recommend path now reads 17Lands parquets via
+    # pyarrow directly. ``mulligan_coach_model.training_rows`` /
+    # ``feature_matrix`` lazy-import duckdb inside their training
+    # entry points (with TYPE_CHECKING guards), so excluding it here
+    # is safe — the bundle never reaches those code paths.
+    "duckdb",
+    # pyarrow ships several large optional native libs (Flight, Substrait,
+    # Acero, Dataset) that the overlay never touches — we only use
+    # ``pq.read_table`` to load the 17Lands ratings parquets. Excluding
+    # the submodules tells PyInstaller's analysis to skip the Python-
+    # level imports; the matching DLLs are filtered out below in the
+    # ``a.binaries`` / ``a.datas`` post-pass.
+    "pyarrow.flight",
+    "pyarrow._flight",
+    "pyarrow.substrait",
+    "pyarrow._substrait",
+    "pyarrow.acero",
+    "pyarrow._acero",
+    "pyarrow.dataset",
+    "pyarrow._dataset",
+    "pyarrow.dataset_orc",
+    "pyarrow.dataset_parquet",
+    "pyarrow._dataset_orc",
+    "pyarrow._dataset_parquet",
+    "pyarrow.orc",
+    "pyarrow._orc",
+    "pyarrow.csv",
+    "pyarrow._csv",
+    "pyarrow.json",
+    "pyarrow._json",
+    "pyarrow.feather",
+    "pyarrow.cuda",
+    "pyarrow._cuda",
     # Test runners and dev tools.
     "pytest",
     "_pytest",
     "ruff",
     "mypy",
+    # Notebook tooling occasionally drags in via pandas helpers.
+    "IPython",
+    "jupyter",
+    "notebook",
 ]
+
+
+# Native libs we want stripped from the final bundle regardless of
+# whether PyInstaller's static analysis thought they were needed.
+# Each entry is a substring match against the destination filename
+# inside the bundle (case-insensitive). Anything matching is dropped
+# from both ``a.binaries`` and ``a.datas`` after Analysis runs.
+#
+# pyarrow's optional native libs land in ``pyarrow/<name>.dll`` (or
+# ``.so`` on Linux). The Python-level excludes above stop the
+# matching ``import`` statements, but PyInstaller still copies the
+# DLLs as plain data files because they're shipped inside the
+# wheel's top-level package directory.
+_BINARY_PATTERNS_TO_DROP = (
+    "arrow_flight",
+    "arrow_substrait",
+    "arrow_acero",
+    "arrow_dataset",
+    "arrow_python_flight",
+)
 
 
 block_cipher = None
@@ -182,6 +234,49 @@ a = Analysis(  # noqa: F821 - PyInstaller injects ``Analysis`` at exec time
     cipher=block_cipher,
     noarchive=False,
 )
+
+
+def _drop_unused_natives(entries: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    """Filter PyInstaller TOC entries against ``_BINARY_PATTERNS_TO_DROP``.
+
+    PyInstaller ``Analysis`` produces lists of ``(dest, src, kind)``
+    tuples; we drop any entry whose destination contains one of the
+    pattern substrings (case-insensitive). Used to strip pyarrow's
+    optional native libs (Flight, Substrait, Acero, Dataset) that
+    the overlay never imports.
+    """
+    keep = []
+    for entry in entries:
+        dest = entry[0].lower()
+        if any(pat in dest for pat in _BINARY_PATTERNS_TO_DROP):
+            continue
+        keep.append(entry)
+    return keep
+
+
+a.binaries = _drop_unused_natives(a.binaries)
+a.datas = _drop_unused_natives(a.datas)
+
+
+# Qt6 ships translation files for every locale Qt supports. We don't
+# localise the overlay UI, so the ``qt_*.qm`` files in
+# ``PyQt6/Qt6/translations/`` are pure deadweight (~7 MB). Keep the
+# English fallback (``qt_en.qm``) just in case PyQt6 looks for it.
+def _drop_qt_translations(entries: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    keep = []
+    for entry in entries:
+        dest = entry[0].replace("\\", "/")
+        if "Qt6/translations/" in dest and dest.endswith(".qm"):
+            # Strip every locale .qm except an English fallback.
+            if "qt_en.qm" in dest or "qtbase_en.qm" in dest:
+                keep.append(entry)
+            continue
+        keep.append(entry)
+    return keep
+
+
+a.datas = _drop_qt_translations(a.datas)
+
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)  # noqa: F821
 
