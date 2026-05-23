@@ -119,12 +119,11 @@ log = logging.getLogger(__name__)
 # the actual rows of stats. That keeps the Arena mulligan UI as
 # uncovered as we can manage.
 _NORMAL_WIDTH = 320
-# Compact pill: verdict + single mulligan-% on one line. The choice
-# model collapses the keep/mull decision into one number, so the
-# pill only needs room for "Clear keep · mull 12%" rather than two
-# arm percentages.
-_COMPACT_WIDTH = 220
-_COMPACT_HEIGHT = 32
+# Compact pill: width and height are content-driven (we let
+# ``adjustSize()`` shrink the box to the natural verdict-label size),
+# so there are no _COMPACT_WIDTH / _COMPACT_HEIGHT constants. The
+# previous fixed 220 x 32 box left a noticeable strip of empty space
+# to the right of short verdicts like "CLEAR KEEP · mull 1%".
 _CORNER_RADIUS = 12
 # QWIDGETSIZE_MAX (defined in Qt's qwidget.h) — used to undo a
 # setFixedSize when switching from compact back to expanded, so the
@@ -416,6 +415,13 @@ class OverlayWindow(QWidget):
             | Qt.WindowType.WindowDoesNotAcceptFocus
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # ``WindowDoesNotAcceptFocus`` (set above) makes the overlay an
+        # "inactive" window in Qt's eyes — and by default Qt suppresses
+        # tooltips on inactive windows, so the compact pill's
+        # "Alt+E to expand" tooltip never showed without this flag.
+        # ``WA_AlwaysShowToolTips`` is documented for exactly this
+        # case: allow tooltips for widgets in inactive windows.
+        self.setAttribute(Qt.WidgetAttribute.WA_AlwaysShowToolTips)
         self._compact = False
         self._drag_offset: QPoint | None = None
         # Cached payload from the last RecommendationOutput so the
@@ -435,14 +441,12 @@ class OverlayWindow(QWidget):
             QPoint(*expanded_pos) if expanded_pos is not None else None
         )
         self._build_ui()
+        # _apply_layout handles both arms of the position decision:
+        # restores the saved spot for the active layout when one
+        # exists, otherwise falls back to the layout-specific default
+        # (top-right for expanded, bottom-right for compact). No
+        # separate post-init placement is needed here.
         self._apply_layout()
-        # Default placement only if no saved position for the initial
-        # layout. _apply_layout() has already moved us to the stored
-        # spot when one exists.
-        if (self._compact and self._compact_pos is None) or (
-            not self._compact and self._expanded_pos is None
-        ):
-            self._position_top_right()
 
     # -----------------------------------------------------------------
     # UI construction
@@ -558,14 +562,56 @@ class OverlayWindow(QWidget):
         outer.addWidget(self._context_label)
 
     def _position_top_right(self) -> None:
-        """Place the window in the top-right of the primary screen."""
+        """Flush top-right of the primary screen.
+
+        Anchors the expanded panel above Arena's mulligan UI with no
+        inset from either edge. ``screen.geometry()`` (full screen)
+        rather than ``availableGeometry()`` because Arena runs
+        fullscreen — the Windows taskbar isn't visible, so we want the
+        panel reaching the absolute top-right pixel of the display
+        rather than respecting an invisible workingArea boundary.
+        """
         screen = QGuiApplication.primaryScreen()
         if screen is None:
             return
-        available = screen.availableGeometry()
-        x = available.right() - self.width() - 20
-        y = available.top() + 20
+        geom = screen.geometry()
+        # ``QRect.right()`` returns ``x + width - 1`` (last pixel index),
+        # so ``right() - width + 1`` lands our left edge exactly where
+        # the panel's right edge meets the screen's right edge.
+        x = geom.right() - self.width() + 1
+        y = geom.top()
         self.move(x, y)
+
+    def _position_bottom_right(self) -> None:
+        """Flush right, 8 px above the bottom of the primary screen.
+
+        Same fullscreen-Arena rationale as :meth:`_position_top_right`:
+        the pill should sit at the visually-bottom edge of the display,
+        not above an invisible Windows taskbar. The 8 px lift gives
+        a tiny visual buffer so the pill doesn't kiss the screen
+        edge — matches the position the project owner settled on after
+        dragging the pill into place.
+        """
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        geom = screen.geometry()
+        x = geom.right() - self.width() + 1
+        y = geom.bottom() - self.height() + 1 - 8
+        self.move(x, y)
+
+    def _position_default_for_current_layout(self) -> None:
+        """Apply the per-layout default position.
+
+        Expanded panel → top-right (near the mulligan UI). Compact pill
+        → bottom-right (out of the way during normal play). Called when
+        no saved position exists for the active layout — typically the
+        very first time the user toggles into that layout.
+        """
+        if self._compact:
+            self._position_bottom_right()
+        else:
+            self._position_top_right()
 
     # -----------------------------------------------------------------
     # Compact / expanded layout
@@ -613,6 +659,7 @@ class OverlayWindow(QWidget):
         return (self._expanded_pos.x(), self._expanded_pos.y())
 
     def _apply_layout(self) -> None:
+        outer = self.layout()
         if self._compact:
             # Compact pill: a single line carrying verdict + mull%.
             # Title bar, mull label, stats panel, context footer all
@@ -626,41 +673,77 @@ class OverlayWindow(QWidget):
             self._verdict_label.setStyleSheet(
                 f"color: {_TEXT_PRIMARY}; font-size: 12px; font-weight: 700;"
             )
-            self.setFixedSize(_COMPACT_WIDTH, _COMPACT_HEIGHT)
+            # Tighter padding: the expanded panel's 10/4/10/6 margins
+            # were sized to keep the stats table from kissing the
+            # rounded corners. With only the verdict label visible we
+            # can shave 2 px off each side and 1 px top/bottom without
+            # the text feeling crowded.
+            if outer is not None:
+                outer.setContentsMargins(8, 3, 8, 3)
+            # Drop any fixed width/height left over from the expanded
+            # layout so adjustSize() below can shrink the pill to the
+            # verdict text.
+            self.setMinimumSize(0, 0)
+            self.setMaximumSize(_QT_WIDGETSIZE_MAX, _QT_WIDGETSIZE_MAX)
             self._collapse_btn.setText("▢")
+            # In compact mode the title-bar collapse button is hidden,
+            # so the global hotkey is the only quick way back out.
+            # A hover tooltip surfaces the binding for users who
+            # haven't seen the expanded panel yet.
+            #
+            # Qt routes hover/tooltip events to the widget directly
+            # under the cursor and does NOT auto-propagate an empty
+            # tooltip to the parent, so we set the same text on the
+            # verdict label (the only visible child in compact mode)
+            # as well as on the window itself.
+            tip = "Alt+E to expand"
+            self.setToolTip(tip)
+            self._verdict_label.setToolTip(tip)
         else:
             self._title_row_widget.setVisible(True)
             self._mull_label.setVisible(True)
             self._stats_label.setVisible(True)
             self._context_label.setVisible(True)
-            # Undo the compact-mode setFixedSize (which pinned both
-            # min and max), then re-pin the width only. Height is
-            # content-driven below via adjustSize() after the layout
-            # has re-rendered.
+            if outer is not None:
+                outer.setContentsMargins(10, 4, 10, 6)
+            # Undo the compact-mode constraints (which had no fixed
+            # size but the prior call may have pinned a small box),
+            # then re-pin the width only. Height is content-driven
+            # below via adjustSize() after the layout has re-rendered.
             self.setMinimumSize(0, 0)
             self.setMaximumSize(_QT_WIDGETSIZE_MAX, _QT_WIDGETSIZE_MAX)
             self.setFixedWidth(_NORMAL_WIDTH)
             self._collapse_btn.setText("-")
+            self.setToolTip("")
+            self._verdict_label.setToolTip("")
         # Re-render the verdict label so its text matches the new
         # layout — the compact format is single-line "verdict ·
         # X% vs Y%", the expanded one is just the verdict alone.
         if self._last_rec is not None:
             self._render_recommendation_from_cached()
-        # Content-driven height in expanded mode. Has to run AFTER the
-        # render above so the stats label's rich-text height is up to
-        # date when adjustSize asks for it.
-        if not self._compact:
-            self.adjustSize()
+        # Content-driven size for both layouts. Compact has no width
+        # pin, so adjustSize() shrinks both dimensions to the natural
+        # label size; expanded has setFixedWidth above, so only height
+        # changes here to fit the current stats-panel row count. Has
+        # to run AFTER the render above so the rich-text label heights
+        # are up to date when adjustSize asks for them.
+        self.adjustSize()
         # Move to the saved position for the new layout, if any. The
         # caller (toggle_compact or __init__) is responsible for
         # having saved the *previous* layout's position before we
-        # arrive here. When no position is saved we leave self.pos()
-        # alone — the caller decides on a default (top-right) for the
-        # initial show, and a no-op for in-session toggles preserves
-        # whatever the user last dragged the window to.
+        # arrive here. When no position is saved for this layout we
+        # fall back to the layout-specific default — top-right for
+        # expanded, bottom-right for compact. The defaults are picked
+        # to land the layout in its natural "home": expanded sits
+        # above the mulligan UI for reading, compact tucks away in
+        # the bottom-right where it doesn't cover anything important
+        # during normal play. The user can still drag either layout
+        # anywhere and the new position is persisted on quit.
         target_pos = self._compact_pos if self._compact else self._expanded_pos
         if target_pos is not None:
             self.move(target_pos)
+        else:
+            self._position_default_for_current_layout()
 
     # -----------------------------------------------------------------
     # Paint event: rounded-rect background with a subtle border
@@ -832,10 +915,13 @@ class OverlayWindow(QWidget):
                 f"mull #{output.mulligan_count} · on the {play_draw} · "
                 f"set {output.primary_set or '?'}"
             )
-            # Re-size to fit the new content — number of per-card
-            # rows varies by hand, so a fixed height would either
-            # truncate or leave dead space.
-            self.adjustSize()
+        # Re-size to fit the new content. In expanded mode the per-card
+        # row count varies by hand, so a fixed height would either
+        # truncate or leave dead space; in compact mode the verdict
+        # string changes width too ("Running simulation…" vs "CLEAR
+        # KEEP · mull 1%"), and the pill should shrink/grow to match
+        # rather than always sit at the widest text's box.
+        self.adjustSize()
 
     def _render_computing(self, output: ComputingOutput) -> None:
         """Render the "running simulation" placeholder."""
@@ -860,7 +946,7 @@ class OverlayWindow(QWidget):
             self._context_label.setText(
                 f"mull #{output.mulligan_count} · on the {play_draw} · computing…"
             )
-            self.adjustSize()
+        self.adjustSize()
 
     def _render_missing(self, output: MissingDataOutput) -> None:
         # Re-use the stats label for the error reason; it's the only
@@ -875,8 +961,7 @@ class OverlayWindow(QWidget):
         self._mull_label.setText("Mull —")
         self._stats_label.setText(output.reason)
         self._context_label.setText(f"({output.what})")
-        if not self._compact:
-            self.adjustSize()
+        self.adjustSize()
 
     def _render_reset(self) -> None:
         font_size = 12 if self._compact else 15
@@ -887,8 +972,7 @@ class OverlayWindow(QWidget):
         self._mull_label.setText("Mull —")
         self._stats_label.setText("")
         self._context_label.setText("")
-        if not self._compact:
-            self.adjustSize()
+        self.adjustSize()
 
     def _close_clicked(self) -> None:
         QApplication.quit()
@@ -1022,6 +1106,21 @@ def main(argv: list[str] | None = None) -> int:
     configure_frozen_logging()
 
     app = QApplication(argv if argv is not None else sys.argv)
+    # Tooltip styling MUST live at the QApplication stylesheet level —
+    # QToolTip is its own top-level window, not a child of the
+    # OverlayWindow, so a widget-scoped stylesheet doesn't reach it.
+    # The Windows default (greyish bg + light text) was unreadable on
+    # the dark overlay; this pins a dark panel + bright text that
+    # matches the rest of the overlay's palette.
+    app.setStyleSheet(
+        "QToolTip {"
+        f" color: {_TEXT_PRIMARY};"
+        " background-color: #141418;"
+        " border: 1px solid #3c3c46;"
+        " padding: 4px 6px;"
+        " font-size: 11px;"
+        "}"
+    )
 
     log.info("loading card index + recommendation service…")
     card_index = ArenaCardIndex.build()
