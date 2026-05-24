@@ -411,3 +411,48 @@ class TestMatchReset:
         )
         assert isinstance(out, MissingDataOutput)
         assert out.what == "no_deck"
+
+
+class TestCardIndexReload:
+    """``replace_card_index`` is the seam the auto-updater will call.
+
+    After parsed_cards JSONs land in the user dir, the manifest
+    fetcher rebuilds an :class:`ArenaCardIndex` from the new files
+    and pushes it through here. The current match's resolved deck is
+    intentionally preserved so the in-flight game isn't disturbed.
+    """
+
+    def test_swap_index_picks_up_new_cards(self) -> None:
+        original_ids = list(range(1, 41))
+        coord = OverlayCoordinator(
+            _build_index(original_ids),
+            _FakeService(status=_ready_status()),  # type: ignore[arg-type]
+        )
+        # Original index doesn't know arena_id 999.
+        resolved_before, missing_before = coord.card_index.resolve_all([999])
+        assert resolved_before == [] and missing_before == [999]
+
+        new_index = _build_index([*original_ids, 999])
+        coord.replace_card_index(new_index)
+
+        # New index resolves the previously-missing id.
+        resolved_after, missing_after = coord.card_index.resolve_all([999])
+        assert len(resolved_after) == 1 and missing_after == []
+
+    def test_swap_preserves_current_deck_snapshot(self) -> None:
+        deck_ids = list(range(1, 41))
+        coord = OverlayCoordinator(
+            _build_index(deck_ids),
+            _FakeService(
+                status=_ready_status(),
+                rec=_fake_choice_recommendation(),
+            ),  # type: ignore[arg-type]
+        )
+        coord.handle_event(DeckSubmitted(arena_ids=deck_ids))
+        deck_before = coord._current_deck
+
+        # Swap to a brand-new index. The in-flight match's resolved
+        # deck shouldn't be silently re-resolved against it.
+        coord.replace_card_index(_build_index(deck_ids))
+
+        assert coord._current_deck is deck_before
