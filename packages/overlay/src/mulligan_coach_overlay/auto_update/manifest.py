@@ -50,8 +50,44 @@ import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 log = logging.getLogger(__name__)
+
+
+_ALLOWED_URL_SCHEMES: frozenset[str] = frozenset({"http", "https"})
+"""URL schemes the auto-updater will fetch over.
+
+``urllib.request.urlopen`` honours ``file://``, ``ftp://``, and
+``data:`` out of the box. A hostile manifest using one of those could
+turn the downloader into a local-file reader (``file:///etc/passwd``)
+or rope us into other protocols we never meant to support. The
+allowlist closes that surface — the only schemes we ever legitimately
+fetch are HTTPS to GitHub Releases (production) and HTTP to
+``127.0.0.1`` (tests + local dev manifests). Everything else is
+rejected before any network call fires.
+"""
+
+
+def validate_fetch_url(url: str, *, context: str) -> None:
+    """Raise :class:`ValueError` if *url*'s scheme isn't in the allowlist.
+
+    Shared by the manifest parser (artifact URLs) and the runner
+    (the manifest URL itself). *context* is a short noun phrase such
+    as ``"artifact[3]"`` or ``"manifest_url"`` that the error string
+    embeds so log lines say *which* URL was rejected.
+
+    Empty / whitespace URLs and URLs with no scheme component (e.g.
+    ``"github.com/foo"``) are also rejected — ``urlsplit("github.com/foo")``
+    returns an empty scheme, which the allowlist check naturally
+    catches without a separate branch.
+    """
+    scheme = urlsplit(url).scheme.lower()
+    if scheme not in _ALLOWED_URL_SCHEMES:
+        raise ValueError(
+            f"{context} url has disallowed scheme {scheme!r} "
+            f"(allowed: {sorted(_ALLOWED_URL_SCHEMES)}); got {url!r}"
+        )
 
 
 # These two patterns are the primary defence against a hostile manifest
@@ -263,6 +299,10 @@ def _parse_one_artifact(entry: Any, index: int) -> ManifestArtifact | None:
     version = entry.get("version")
     if not isinstance(url, str) or not url:
         raise ManifestParseError(f"artifact[{index}] ({kind!r}) missing 'url' string")
+    try:
+        validate_fetch_url(url, context=f"artifact[{index}] ({kind!r})")
+    except ValueError as exc:
+        raise ManifestParseError(str(exc)) from exc
     if not isinstance(sha256, str) or not _is_valid_sha256(sha256):
         raise ManifestParseError(
             f"artifact[{index}] ({kind!r}) has invalid 'sha256' "

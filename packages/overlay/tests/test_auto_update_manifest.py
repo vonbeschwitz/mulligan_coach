@@ -265,3 +265,45 @@ def test_size_bytes_optional() -> None:
     del artifact["size_bytes"]
     manifest = parse_manifest(json.dumps(_valid_payload(artifacts=[artifact])))
     assert manifest.artifacts[0].size_bytes is None
+
+
+# ---------------------------------------------------------------------------
+# URL scheme allowlist on artifact URLs.
+# Closes file:// / ftp:// / data: tricks for a hostile manifest publisher —
+# urllib.request.urlopen happily handles all three out of the box. Only
+# http:// + https:// are valid auto-update fetch targets.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "file:///C:/Users/victim/secret.txt",
+        "ftp://example.invalid/x.parquet",
+        "data:text/plain;base64,aGVsbG8=",
+        "javascript:alert(1)",
+        "gopher://example.invalid/x",
+        "github.com/foo/bar",  # no scheme
+        "//example.invalid/x",  # protocol-relative (urlsplit yields empty scheme)
+    ],
+)
+def test_unsafe_artifact_url_scheme_rejected(bad_url: str) -> None:
+    """Non-http(s) artifact URLs fail at parse time."""
+    payload = _valid_payload(artifacts=[_valid_artifact(url=bad_url)])
+    with pytest.raises(ManifestParseError, match="disallowed scheme"):
+        parse_manifest(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    "good_url",
+    [
+        "https://github.com/foo/releases/download/x/y.parquet",
+        "http://127.0.0.1:8000/x.parquet",  # localhost dev / test
+        "HTTPS://EXAMPLE.INVALID/x",  # scheme is case-insensitive per RFC 3986
+    ],
+)
+def test_safe_artifact_url_scheme_accepted(good_url: str) -> None:
+    """http(s) artifact URLs still parse, including upper-case scheme."""
+    payload = _valid_payload(artifacts=[_valid_artifact(url=good_url)])
+    manifest = parse_manifest(json.dumps(payload))
+    assert manifest.artifacts[0].url == good_url
