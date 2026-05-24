@@ -50,7 +50,9 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import os
 import sys
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -62,6 +64,7 @@ from PyQt6.QtCore import (
     QRect,
     Qt,
     QThread,
+    QTimer,
     pyqtSignal,
     pyqtSlot,
 )
@@ -83,10 +86,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from . import arena_window, autostart
+from . import arena_window, autostart, user_data
 from ._frozen import configure_bundle_paths, configure_frozen_logging
 from .arena_paths import default_log_path
 from .arena_window import ArenaWindowWatcher
+from .auto_update import UpdateRunner
 from .card_index import ArenaCardIndex
 from .coordinator import (
     ComputingOutput,
@@ -1175,6 +1179,12 @@ def main(argv: list[str] | None = None) -> int:
     hotkey_hook = _KeyboardHook()
     hotkey_hook.triggered.connect(window.toggle_compact)
 
+    # Auto-update: poll the configured manifest URL at launch and on
+    # a slow timer afterwards, refreshing ratings / parsed cards /
+    # the choice model in-place when newer versions are available.
+    # Returns ``None`` (and logs) when no manifest URL is configured.
+    update_timer = _install_auto_update(service, coordinator)
+
     def _on_app_quit() -> None:
         # IMPORTANT: don't rely on a queued ``worker.stopped → thread.quit``
         # connection here — the slot would be dispatched to the main
@@ -1183,6 +1193,8 @@ def main(argv: list[str] | None = None) -> int:
         # the wait deadlocks (then force-terminates at the timeout).
         # Calling thread.quit() directly posts the quit event to the
         # QThread's own event loop, where it does run.
+        if update_timer is not None:
+            update_timer.stop()
         watcher.stop()
         hotkey_hook.uninstall()
         worker.request_stop()
@@ -1234,6 +1246,126 @@ def main(argv: list[str] | None = None) -> int:
         window.apply_output(seeded_output)
 
     return app.exec()
+
+
+# Default manifest URL used when ``MULLIGAN_COACH_MANIFEST_URL`` is
+# not set in the environment. Pointed at the canonical "data-current"
+# release that slice 4's publisher CLI keeps up to date. Friends who
+# don't have a custom server can rely on this; power users can
+# override via the env var.
+#
+# NOTE: until slice 4 ships the publisher tooling, this URL will
+# return 404 — :class:`UpdateRunner` handles that gracefully (logs
+# and continues) so the overlay still launches cleanly. The default
+# becomes useful as soon as the first manifest is published.
+_DEFAULT_MANIFEST_URL = (
+    "https://github.com/vonbeschwitz/mulligan_coach/releases/download/data-current/manifest.json"
+)
+
+
+def _install_auto_update(service: Any, coordinator: OverlayCoordinator) -> QTimer | None:
+    """Wire the auto-update runner onto a background QTimer.
+
+    Returns the timer so the caller can stop it at app shutdown;
+    ``None`` when auto-update is disabled (env var explicitly set
+    to an empty string).
+
+    Strategy: a single :class:`QTimer` running on the GUI thread
+    dispatches every N hours; each tick spawns a fresh daemon
+    :class:`threading.Thread` to do the slow network + disk I/O.
+    The threads use the reload callbacks below — which are already
+    thread-safe (see slice 2's ``_reload_lock``) — to invoke
+    ``service.reload_*`` and ``coordinator.replace_card_index``
+    inline. No Qt signals required: the reload hooks themselves
+    are the cross-thread interface.
+
+    The first check fires shortly after startup (4 s, so the
+    overlay is fully up and responsive before we hit the network),
+    and a periodic check runs every 6 hours. 6 h is a good fit for
+    the cadence the user described — weekly+ ratings refreshes,
+    with more frequent updates early in a format — without being
+    chatty in steady state.
+    """
+    manifest_url = os.environ.get("MULLIGAN_COACH_MANIFEST_URL", _DEFAULT_MANIFEST_URL).strip()
+    if not manifest_url:
+        log.info("auto-update disabled (MULLIGAN_COACH_MANIFEST_URL is empty)")
+        return None
+
+    def _rebuild_card_index_and_swap(set_codes: set[str]) -> None:
+        """Reload parsed-cards JSONs into a fresh ArenaCardIndex.
+
+        Rebuilding the index is fast (single-digit ms even with all
+        four sets) so we don't bother with incremental updates;
+        a full rebuild is simpler and avoids subtle correctness
+        traps around set-overlap.
+        """
+        log.info("auto-update: rebuilding card index for refreshed sets %s", sorted(set_codes))
+        new_index = ArenaCardIndex.build()
+        coordinator.replace_card_index(new_index)
+
+    def _reload_choice_model_named(name: str) -> None:
+        """Reload only when the manifest refreshed the production model.
+
+        We track the legacy win model separately in slice 2's API;
+        the auto-updater's ``reload_model`` callback gets the manifest
+        artifact's ``name``, so we filter here. Right now only
+        ``choice_v6`` matters — but a hypothetical ``choice_v7``
+        rolling out in the manifest would slot in here too.
+        """
+        if name.startswith("choice_"):
+            service.reload_choice_model()
+        else:
+            log.info("auto-update: ignoring unknown model %r", name)
+
+    runner = UpdateRunner(
+        manifest_url=manifest_url,
+        user_data_root=user_data.user_data_root(),
+        user_models_root=user_data.user_models_root(),
+        reload_ratings=service.reload_ratings,
+        reload_parsed_cards=_rebuild_card_index_and_swap,
+        reload_model=_reload_choice_model_named,
+    )
+
+    def _run_once_off_thread() -> None:
+        """Kick the runner on a daemon thread.
+
+        Daemon = doesn't block process exit. The runner can take up
+        to ~30 s on a slow connection (manifest fetch + a couple of
+        downloads). Long enough that we definitely don't want it on
+        the GUI thread.
+        """
+
+        def _do_run() -> None:
+            try:
+                report = runner.run()
+            except Exception:
+                log.exception("auto-update: runner raised unexpectedly")
+                return
+            if report.status == "failed":
+                log.warning("auto-update: %s", report.manifest_error)
+                return
+            if report.any_refreshed:
+                log.info(
+                    "auto-update: refreshed ratings=%s parsed_cards=%s models=%s",
+                    sorted(report.refreshed_ratings),
+                    sorted(report.refreshed_parsed_cards),
+                    sorted(report.refreshed_models),
+                )
+            else:
+                log.info("auto-update: nothing to do (all artifacts up-to-date)")
+
+        threading.Thread(target=_do_run, name="auto-update", daemon=True).start()
+
+    # First check shortly after startup so the overlay is fully up
+    # and the user isn't staring at a busy spinner during launch.
+    QTimer.singleShot(4_000, _run_once_off_thread)
+
+    timer = QTimer()
+    timer.setInterval(6 * 60 * 60 * 1000)  # 6 hours
+    timer.timeout.connect(_run_once_off_thread)
+    timer.start()
+    log.info("auto-update: scheduled every 6h against %s", manifest_url)
+    return timer
 
 
 def _seed_from_disk(
