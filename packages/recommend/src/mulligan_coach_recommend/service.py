@@ -699,6 +699,17 @@ class RecommendationService:
     # a few analysis scripts. ``status.model_loaded`` reflects the
     # choice bundle's load state (since that's the production model).
     choice_bundle: ChoiceModelBundle | None = None
+    # Reload lock — held briefly during the in-memory swap when an
+    # external trigger (auto-update, manual /reload route) refreshes
+    # one of the artifacts above. The disk I/O for the new artifact
+    # happens *outside* the lock; the lock only covers the
+    # single-assignment swap so a concurrent recommend can't observe
+    # a partially-rebuilt service. See :meth:`reload_ratings`,
+    # :meth:`reload_choice_model`, :meth:`reload_win_model`.
+    #
+    # An RLock (not Lock) so a single reload helper can call into
+    # another (e.g. ``reload_all``) without re-entrancy issues.
+    _reload_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     @staticmethod
     def primary_set_of(deck: list[ParsedCard]) -> str | None:
@@ -716,6 +727,154 @@ class RecommendationService:
         """Tear down the background executor at app shutdown."""
         if self.executor is not None:
             self.executor.shutdown(wait=False, cancel_futures=True)
+
+    # -----------------------------------------------------------------
+    # Live reload (called by the auto-updater after on-disk artifacts
+    # change). All three methods do their slow disk I/O OUTSIDE the
+    # ``_reload_lock`` and take the lock only for the in-memory swap,
+    # so a recommend in flight on another thread blocks for at most a
+    # few microseconds.
+    #
+    # Thread-safety nuance: an individual recommend call may make two
+    # reads of ``self.stats_by_set`` (e.g. once in ``_compute_choice_arm``,
+    # again in ``recommend_choice`` to build the explanation panel).
+    # If a reload completes between those two reads, the call sees
+    # consistent-but-from-different-snapshots stats. That's a cosmetic
+    # quirk on the explanation panel, never a model-correctness issue
+    # — the prediction was already produced. We accept this rather
+    # than refactoring every read to snapshot upfront. The lock above
+    # protects against the dangerous case (model bundle going from
+    # non-None to non-None — reload never assigns None).
+    # -----------------------------------------------------------------
+
+    def reload_ratings(self, set_codes: Iterable[str]) -> dict[str, bool]:
+        """Reload 17Lands ratings parquets for the named sets.
+
+        Returns a per-set ``{set_code: loaded?}`` dict. A set whose
+        parquet is missing OR fails to parse is logged and ``False``;
+        existing in-memory stats for that set are *kept* in that case
+        (we don't blow away good data because a download just landed
+        a corrupt file).
+
+        Updates :attr:`status.formats_with_stats` /
+        :attr:`status.formats_missing_stats` after the swap so callers
+        can re-render their startup status.
+        """
+        loaded_by_set: dict[str, FormatStats] = {}
+        outcome: dict[str, bool] = {}
+        for set_code in set_codes:
+            try:
+                stats = _try_load_format_stats(set_code)
+            except Exception:
+                log.exception("reload_ratings: failed to load %s", set_code)
+                stats = None
+            outcome[set_code] = stats is not None
+            if stats is not None:
+                loaded_by_set[set_code] = stats
+
+        with self._reload_lock:
+            new_stats_by_set = dict(self.stats_by_set)
+            new_stats_by_set.update(loaded_by_set)
+            self.stats_by_set = new_stats_by_set
+            self.status = self._status_with_new_sets(new_stats_by_set)
+
+        n_ok = sum(outcome.values())
+        log.info("reload_ratings: %d/%d sets refreshed", n_ok, len(outcome))
+        return outcome
+
+    def reload_choice_model(self, model_dir: Path | None = None) -> bool:
+        """Reload the choice-model bundle from disk.
+
+        ``model_dir=None`` uses the same env-var-resolved path
+        :func:`load_service` started from
+        (:envvar:`MULLIGAN_COACH_CHOICE_MODEL_DIR`). Pass an explicit
+        path to test loading from an alternate location.
+
+        Returns ``True`` on success. On failure (missing dir, corrupt
+        artifacts), the current in-memory bundle is preserved so the
+        overlay keeps producing recommendations until the next attempt
+        succeeds; the error is captured in :attr:`status.error`.
+        """
+        target = model_dir or _choice_model_dir()
+        new_bundle: ChoiceModelBundle | None = None
+        err: str | None = None
+        if target.exists():
+            try:
+                new_bundle = ChoiceModelBundle.load(target)
+            except Exception as exc:
+                err = f"reload_choice_model: load failed at {target}: {exc}"
+                log.exception("reload_choice_model: load failed at %s", target)
+        else:
+            err = f"reload_choice_model: directory does not exist: {target}"
+            log.warning("%s", err)
+
+        if new_bundle is None:
+            with self._reload_lock:
+                # Preserve the previously-loaded bundle but surface the
+                # failure on status so a status route / log can show it.
+                self.status = ServiceStatus(
+                    model_loaded=self.choice_bundle is not None,
+                    model_dir=target,
+                    formats_with_stats=self.status.formats_with_stats,
+                    formats_missing_stats=self.status.formats_missing_stats,
+                    error=err,
+                )
+            return False
+
+        with self._reload_lock:
+            self.choice_bundle = new_bundle
+            self.status = ServiceStatus(
+                model_loaded=True,
+                model_dir=target,
+                formats_with_stats=self.status.formats_with_stats,
+                formats_missing_stats=self.status.formats_missing_stats,
+                error=None,
+            )
+        log.info("reload_choice_model: loaded fresh bundle from %s", target)
+        return True
+
+    def reload_win_model(self, model_dir: Path | None = None) -> bool:
+        """Reload the legacy win-model bundle. Same semantics as
+        :meth:`reload_choice_model` but for the analysis-only win model.
+        Returns ``False`` quietly if the dir doesn't exist (this model
+        isn't required for the production verdict)."""
+        target = model_dir or _model_dir()
+        if not target.exists():
+            log.info("reload_win_model: %s does not exist; skipping", target)
+            return False
+        try:
+            new_bundle = ModelBundle.load(target)
+        except Exception:
+            log.exception("reload_win_model: load failed at %s", target)
+            return False
+        with self._reload_lock:
+            self.bundle = new_bundle
+        log.info("reload_win_model: loaded fresh bundle from %s", target)
+        return True
+
+    def _status_with_new_sets(self, stats_by_set: dict[str, FormatStats]) -> ServiceStatus:
+        """Rebuild ``ServiceStatus`` after a stats reload.
+
+        Keeps the model-side fields untouched (the reload didn't
+        change those) and just refreshes the per-format split.
+        Missing-stats list is computed by union'ing the prior status'
+        formats with the newly-loaded keys — so a set that was loaded
+        before, then failed to refresh, stays listed under
+        ``formats_with_stats`` until a successful reload OR the caller
+        explicitly drops it.
+        """
+        all_known = set(self.status.formats_with_stats) | set(stats_by_set.keys())
+        with_stats = sorted(k for k in all_known if k in stats_by_set)
+        without_stats = sorted(
+            k for k in self.status.formats_missing_stats if k not in stats_by_set
+        )
+        return ServiceStatus(
+            model_loaded=self.status.model_loaded,
+            model_dir=self.status.model_dir,
+            formats_with_stats=with_stats,
+            formats_missing_stats=without_stats,
+            error=self.status.error,
+        )
 
     # -----------------------------------------------------------------
     # Original symmetric recommend (kept for tests + any direct caller)

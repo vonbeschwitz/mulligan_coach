@@ -98,7 +98,7 @@ def _purge_stale_dist_info(*pkg_names: str, retries: int = 10, delay_seconds: fl
     because it sees a dist-info dir without a METADATA file.
 
     Retry a handful of times with short sleeps — handles typically
-    release within 1–3 seconds once the launching process exits.
+    release within 1-3 seconds once the launching process exits.
     """
     site = _site_packages_dir()
     if not site.exists():

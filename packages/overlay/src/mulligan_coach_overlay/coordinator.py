@@ -181,6 +181,27 @@ class OverlayCoordinator:
         # the deck-loaded output and subsequent recommendations agree.
         self._current_primary_set: str | None = None
 
+    def replace_card_index(self, new_index: ArenaCardIndex) -> None:
+        """Swap in a freshly-built :class:`ArenaCardIndex`.
+
+        Called by the auto-updater after new parsed_cards JSONs have
+        been written to the user dir. Python attribute assignment is
+        atomic under the GIL, so a concurrent ``handle_event`` either
+        sees the old index or the new one — never half — and we don't
+        need a lock here.
+
+        The currently-loaded deck (held as resolved ``ParsedCard``
+        instances on ``self._current_deck``) is intentionally NOT
+        re-resolved. Re-resolving could quietly change what
+        ``recommend`` sees for the match in progress, which is more
+        surprising than the alternative (the match keeps running
+        against the snapshot taken at deck-submit time; the next
+        match picks up the new encodings). If the user wants the
+        refreshed encodings active immediately they can re-submit
+        the deck or wait for ``MatchEnded`` to clear the slot.
+        """
+        self.card_index = new_index
+
     def handle_event(self, event: LogEvent) -> CoordinatorOutput | None:
         """Process one tailer event.
 
