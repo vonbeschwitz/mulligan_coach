@@ -377,11 +377,18 @@ class UpdateRunner:
         * ``ratings`` → ``<data>/processed/seventeenlands/ratings/<SET>/PremierDraft.parquet``
         * ``parsed_cards`` → ``<data>/processed/parsed_cards/<SET>.json``
         * ``model`` → ``<models>/<name>/`` (zip extraction target).
+
+        Defence in depth: every constructed path is asserted to resolve
+        inside its expected root via :func:`_assert_within`. The manifest
+        parser already rejects unsafe ``set_code`` / ``name`` values with
+        a regex allowlist, but a containment check here means a future
+        bug in the parser can't silently regress into a path-traversal
+        write primitive against a compromised manifest publisher.
         """
         if artifact.kind == "ratings":
             if not artifact.set_code:
                 raise ValueError("ratings artifact requires set_code")
-            return (
+            dest = (
                 self.user_data_root
                 / "processed"
                 / "seventeenlands"
@@ -389,15 +396,45 @@ class UpdateRunner:
                 / artifact.set_code
                 / "PremierDraft.parquet"
             )
+            _assert_within(dest, self.user_data_root)
+            return dest
         if artifact.kind == "parsed_cards":
             if not artifact.set_code:
                 raise ValueError("parsed_cards artifact requires set_code")
-            return self.user_data_root / "processed" / "parsed_cards" / f"{artifact.set_code}.json"
+            dest = self.user_data_root / "processed" / "parsed_cards" / f"{artifact.set_code}.json"
+            _assert_within(dest, self.user_data_root)
+            return dest
         if artifact.kind == "model":
             if not artifact.name:
                 raise ValueError("model artifact requires name")
-            return self.user_models_root / artifact.name
+            dest = self.user_models_root / artifact.name
+            _assert_within(dest, self.user_models_root)
+            return dest
         raise ValueError(f"unknown artifact kind: {artifact.kind!r}")
+
+
+def _assert_within(candidate: Path, root: Path) -> None:
+    """Raise :class:`ValueError` if *candidate* doesn't resolve inside *root*.
+
+    Defence in depth for the manifest path-traversal class. Even with
+    the parse-time regex allowlist on ``set_code`` / ``name``, this
+    second check means we never write outside the expected user-data /
+    user-models roots — a hostile manifest gets a clean "skipped" outcome
+    rather than corrupting unrelated files.
+
+    Uses :meth:`Path.resolve` to normalise ``..`` segments and to handle
+    Windows' "joining with an absolute path discards the left operand"
+    quirk. ``strict=False`` because the destination usually doesn't
+    exist yet (we're about to write it); resolution is purely syntactic.
+    """
+    candidate_resolved = candidate.resolve(strict=False)
+    root_resolved = root.resolve(strict=False)
+    try:
+        candidate_resolved.relative_to(root_resolved)
+    except ValueError as exc:
+        raise ValueError(
+            f"artifact destination {candidate_resolved} escapes root {root_resolved}"
+        ) from exc
 
 
 def _extract_zip_safely(zip_path: Path, dest_dir: Path) -> None:

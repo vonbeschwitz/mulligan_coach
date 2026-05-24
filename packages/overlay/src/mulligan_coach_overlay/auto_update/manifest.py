@@ -47,10 +47,32 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 log = logging.getLogger(__name__)
+
+
+# These two patterns are the primary defence against a hostile manifest
+# planting attacker-controlled bytes at attacker-controlled paths. The
+# `set_code` and `name` fields are joined into local file paths inside
+# `auto_update.runner._artifact_destination`; without a strict allowlist
+# at parse time, a manifest entry like ``{"name": "../../AppData/.../Startup"}``
+# would let a compromised publisher write outside the overlay's data dirs
+# (e.g. drop an autostart payload). Regex anchors + character allowlist
+# + length cap reject path separators, drive letters, traversal tokens,
+# and anything Windows would refuse as a filename component.
+_SAFE_SET_CODE_PATTERN = re.compile(r"^[A-Z0-9]{2,8}$")
+"""Magic set codes in current use are 2-5 uppercase alphanumeric chars
+(TLA, TMT, ECL, SOS, P22, …). The 8-char ceiling is generous future-
+proofing without admitting separators or punctuation."""
+
+_SAFE_MODEL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
+"""Model bundles ship under names like ``choice_v6`` / ``win_v1``.
+Allowing letters, digits, underscores, and hyphens covers any reasonable
+future naming without admitting dots (NTFS edge cases on trailing dots),
+path separators, drive letters, or traversal tokens."""
 
 
 AUTO_UPDATE_SCHEMA_VERSION = 1
@@ -256,10 +278,22 @@ def _parse_one_artifact(entry: Any, index: int) -> ManifestArtifact | None:
         if not isinstance(set_code, str) or not set_code:
             raise ManifestParseError(f"artifact[{index}] kind={kind!r} requires 'set_code' string")
         set_code = set_code.upper()
+        if not _SAFE_SET_CODE_PATTERN.match(set_code):
+            # Rejects path separators, traversal tokens, drive letters,
+            # whitespace, and any Unicode — see _SAFE_SET_CODE_PATTERN.
+            raise ManifestParseError(
+                f"artifact[{index}] kind={kind!r} has unsafe 'set_code' "
+                f"(must match {_SAFE_SET_CODE_PATTERN.pattern}; got {set_code!r})"
+            )
     elif kind == "model":
         name = entry.get("name")
         if not isinstance(name, str) or not name:
             raise ManifestParseError(f"artifact[{index}] kind='model' requires 'name' string")
+        if not _SAFE_MODEL_NAME_PATTERN.match(name):
+            raise ManifestParseError(
+                f"artifact[{index}] kind='model' has unsafe 'name' "
+                f"(must match {_SAFE_MODEL_NAME_PATTERN.pattern}; got {name!r})"
+            )
 
     size_bytes_raw = entry.get("size_bytes")
     size_bytes: int | None

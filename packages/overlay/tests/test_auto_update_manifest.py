@@ -172,6 +172,94 @@ def test_negative_size_bytes_rejected() -> None:
         parse_manifest(json.dumps(_valid_payload(artifacts=[_valid_artifact(size_bytes=-1)])))
 
 
+# ---------------------------------------------------------------------------
+# Path-traversal rejection (defence against a hostile manifest publisher).
+# A compromised manifest source must not be able to plant attacker-controlled
+# bytes outside the overlay's user-data dirs via ``set_code`` / ``name``
+# components that contain separators, traversal tokens, or drive letters.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_set_code",
+    [
+        "../../etc/passwd",
+        "..",
+        "TLA/foo",
+        "TLA\\foo",
+        "C:TLA",
+        "TLA ",
+        "TLA.json",
+        "",
+        "X" * 16,  # too long
+    ],
+)
+def test_unsafe_set_code_rejected(bad_set_code: str) -> None:
+    """Path-separator / traversal / drive-letter values fail at parse time."""
+    payload = _valid_payload(artifacts=[_valid_artifact(set_code=bad_set_code)])
+    with pytest.raises(ManifestParseError):
+        parse_manifest(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    [
+        "../../AppData/Roaming/evil",
+        "..",
+        "choice_v6/../evil",
+        "choice/v6",
+        "choice\\v6",
+        "C:choice_v6",
+        "-leading-hyphen",
+        ".hidden",
+        "choice v6",
+        "",
+        "x" * 128,  # too long
+    ],
+)
+def test_unsafe_model_name_rejected(bad_name: str) -> None:
+    """Model names with separators or traversal tokens fail at parse time."""
+    payload = _valid_payload(
+        artifacts=[
+            {
+                "kind": "model",
+                "name": bad_name,
+                "url": "https://example.invalid/x.zip",
+                "sha256": "e" * 64,
+                "version": "v1",
+            }
+        ]
+    )
+    with pytest.raises(ManifestParseError):
+        parse_manifest(json.dumps(payload))
+
+
+@pytest.mark.parametrize("safe_set_code", ["TLA", "TMT", "ECL", "SOS", "P22", "MH2", "10", "Y26"])
+def test_safe_set_codes_accepted(safe_set_code: str) -> None:
+    """All real-world Magic set code shapes still parse."""
+    payload = _valid_payload(artifacts=[_valid_artifact(set_code=safe_set_code)])
+    manifest = parse_manifest(json.dumps(payload))
+    assert manifest.artifacts[0].set_code == safe_set_code
+
+
+@pytest.mark.parametrize("safe_name", ["choice_v6", "win_v1", "choice-v6", "model_2026_05", "x"])
+def test_safe_model_names_accepted(safe_name: str) -> None:
+    """Reasonable model names still parse."""
+    payload = _valid_payload(
+        artifacts=[
+            {
+                "kind": "model",
+                "name": safe_name,
+                "url": "https://example.invalid/x.zip",
+                "sha256": "e" * 64,
+                "version": "v1",
+            }
+        ]
+    )
+    manifest = parse_manifest(json.dumps(payload))
+    assert manifest.artifacts[0].name == safe_name
+
+
 def test_size_bytes_optional() -> None:
     artifact = _valid_artifact()
     del artifact["size_bytes"]

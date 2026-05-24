@@ -25,7 +25,10 @@ from contextlib import contextmanager
 from http import HTTPStatus
 from pathlib import Path
 
+import pytest
 from mulligan_coach_overlay.auto_update import UpdateRunner
+from mulligan_coach_overlay.auto_update.manifest import ManifestArtifact
+from mulligan_coach_overlay.auto_update.runner import _assert_within
 
 
 def _sha256(data: bytes) -> str:
@@ -449,3 +452,55 @@ def test_unknown_artifact_kinds_skipped_silently(tmp_path: Path) -> None:
     # Only the known artifact appears in outcomes.
     assert [o.label for o in report.outcomes] == ["ratings:TLA"]
     assert report.status == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Defence-in-depth: containment assertion on the constructed destination.
+# Manifest-level validation already rejects traversal sequences, but this
+# second check means a future parser regression can't silently turn into a
+# path-traversal write primitive.
+# ---------------------------------------------------------------------------
+
+
+def test_assert_within_accepts_descendant(tmp_path: Path) -> None:
+    candidate = tmp_path / "sub" / "file.bin"
+    _assert_within(candidate, tmp_path)  # does not raise
+
+
+def test_assert_within_rejects_traversal(tmp_path: Path) -> None:
+    candidate = tmp_path / ".." / "outside.bin"
+    with pytest.raises(ValueError, match="escapes root"):
+        _assert_within(candidate, tmp_path)
+
+
+def test_assert_within_rejects_sibling(tmp_path: Path) -> None:
+    sibling = tmp_path.parent / "neighbour"
+    with pytest.raises(ValueError, match="escapes root"):
+        _assert_within(sibling, tmp_path)
+
+
+def test_runner_rejects_traversal_destination(tmp_path: Path) -> None:
+    """If the parser ever lets a traversal through, the runner still refuses.
+
+    Bypass the parser by handing the runner a hand-built
+    :class:`ManifestArtifact` whose ``name`` would escape the user-models
+    root. The destination resolver must raise before any download is
+    attempted.
+    """
+    user_data = tmp_path / "user" / "data"
+    user_models = tmp_path / "user" / "models"
+    runner = UpdateRunner(
+        manifest_url="http://example.invalid/manifest.json",
+        user_data_root=user_data,
+        user_models_root=user_models,
+    )
+    hostile = ManifestArtifact(
+        kind="model",
+        url="http://example.invalid/x.zip",
+        sha256="a" * 64,
+        version="v1",
+        # Enough ``..`` segments to escape past user_models_root.
+        name="../../../../../../../../etc/evil",
+    )
+    with pytest.raises(ValueError, match="escapes root"):
+        runner._artifact_destination(hostile)
