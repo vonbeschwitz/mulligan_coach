@@ -539,7 +539,12 @@ class OverlayWindow(QWidget):
         # mull% sit beside it instead of being pushed to a second line.
         verdict_row.addWidget(self._verdict_label)
         verdict_row.addStretch(1)
-        self._mull_label = QLabel("Mull —")
+        # Empty default: on fresh launch (no Arena events yet) the
+        # pane just shows the "Waiting for mulligan…" verdict label
+        # without a dangling "Mull —" placeholder next to it. Each
+        # render path that needs a placeholder (``_render_computing``,
+        # ``_render_missing``) sets it explicitly.
+        self._mull_label = QLabel("")
         self._mull_label.setStyleSheet(f"color: {_TEXT_PRIMARY}; font-size: 12px;")
         self._mull_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         verdict_row.addWidget(self._mull_label)
@@ -1113,6 +1118,14 @@ def main(argv: list[str] | None = None) -> int:
     # %LOCALAPPDATA%\MulliganCoach\logs so the user can inspect or
     # report errors. No-op from source.
     configure_frozen_logging()
+    # Default-on autostart for fresh installs: the FIRST time a
+    # frozen EXE launches on this account, write the Start-with-
+    # Windows registry entry so the friend doesn't have to discover
+    # the gear-menu toggle. A marker file in the user state dir
+    # records that we did this; subsequent launches leave the
+    # registry alone so a deliberate un-tick from the gear menu
+    # sticks. No-op from source (autostart.supported() is False).
+    autostart.enable_default_if_first_run(user_data.user_state_root())
 
     app = QApplication(argv if argv is not None else sys.argv)
     # Tooltip styling MUST live at the QApplication stylesheet level —

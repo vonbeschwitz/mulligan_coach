@@ -14,6 +14,7 @@ the host's real Run key.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 import pytest
 from mulligan_coach_overlay import autostart
@@ -66,3 +67,60 @@ def test_enable_disable_noop_when_unsupported(monkeypatch: pytest.MonkeyPatch) -
     # raised exception here would fail the test.
     autostart.enable()
     autostart.disable()
+
+
+def test_enable_default_noop_when_unsupported(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """First-run helper short-circuits when the platform doesn't support it.
+
+    Specifically: no marker file is written. We *want* the next launch
+    on a frozen build to retry — so a dev who runs from source first
+    doesn't accidentally suppress the default-on behaviour for the
+    EXE they ship later.
+    """
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    state = tmp_path / "state"
+    assert autostart.enable_default_if_first_run(state) is False
+    assert not (state / "_autostart_seeded.txt").exists()
+
+
+def test_enable_default_writes_marker_on_first_run(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """First call writes the marker; ``enable()`` is invoked once.
+
+    The marker contents are the resolved EXE path — exercised here
+    against a stubbed ``_executable_path`` so we don't touch the real
+    interpreter location during the test.
+    """
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(autostart, "_executable_path", lambda: Path("C:\\fake\\MulliganCoach.exe"))
+
+    enable_calls: list[None] = []
+    monkeypatch.setattr(autostart, "enable", lambda: enable_calls.append(None))
+
+    state = tmp_path / "state"
+    assert autostart.enable_default_if_first_run(state) is True
+    assert len(enable_calls) == 1
+    marker = state / "_autostart_seeded.txt"
+    assert marker.read_text(encoding="utf-8") == "C:\\fake\\MulliganCoach.exe"
+
+
+def test_enable_default_skips_when_marker_present(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Second launch must not touch the registry — that's how a
+    deliberate un-tick of the toggle survives across launches."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    enable_calls: list[None] = []
+    monkeypatch.setattr(autostart, "enable", lambda: enable_calls.append(None))
+
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "_autostart_seeded.txt").write_text("anything", encoding="utf-8")
+
+    assert autostart.enable_default_if_first_run(state) is False
+    assert enable_calls == []
