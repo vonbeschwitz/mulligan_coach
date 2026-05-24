@@ -504,3 +504,33 @@ def test_runner_rejects_traversal_destination(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="escapes root"):
         runner._artifact_destination(hostile)
+
+
+# ---------------------------------------------------------------------------
+# Manifest-URL scheme allowlist. The runner must refuse to hand
+# ``file:///...`` (and friends) to urlopen, even though the default URL is
+# HTTPS. Closes the case where a future code path lets the manifest URL be
+# rebound at runtime.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "file:///C:/Users/victim/secret.txt",
+        "ftp://example.invalid/manifest.json",
+        "data:application/json,%7B%7D",
+        "github.com/manifest.json",
+    ],
+)
+def test_runner_rejects_non_http_manifest_url(bad_url: str, tmp_path: Path) -> None:
+    """A manifest URL that isn't http(s) yields a clean failed UpdateReport."""
+    runner = UpdateRunner(
+        manifest_url=bad_url,
+        user_data_root=tmp_path / "data",
+        user_models_root=tmp_path / "models",
+    )
+    report = runner.run()
+    assert report.status == "failed"
+    assert report.manifest_error is not None
+    assert "disallowed scheme" in report.manifest_error

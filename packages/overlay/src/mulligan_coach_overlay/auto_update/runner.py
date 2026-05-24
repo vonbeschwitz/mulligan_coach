@@ -41,6 +41,7 @@ from .manifest import (
     ManifestArtifact,
     ManifestParseError,
     parse_manifest,
+    validate_fetch_url,
 )
 
 log = logging.getLogger(__name__)
@@ -203,7 +204,17 @@ class UpdateRunner:
         Failures (HTTP error, JSON parse error, schema validation)
         all funnel through :class:`_ManifestFetchError`. The caller
         ((run)) treats any of them as "no update this pass."
+
+        The manifest URL is validated against the
+        :data:`auto_update.manifest._ALLOWED_URL_SCHEMES` allowlist
+        before we hand it to ``urlopen`` — closes ``file://`` /
+        ``ftp://`` / ``data:`` attacks for an attacker who can
+        influence whichever config value the runner was built with.
         """
+        try:
+            validate_fetch_url(self.manifest_url, context="manifest_url")
+        except ValueError as exc:
+            raise _ManifestFetchError(str(exc)) from exc
         request = urllib.request.Request(
             self.manifest_url,
             headers={"User-Agent": "mulligan-coach-overlay/auto-update"},
