@@ -63,7 +63,13 @@ def bundle_root() -> Path | None:
 
 
 def configure_bundle_paths() -> None:
-    """Point the upstream path resolvers at the frozen bundle's data.
+    """Point the upstream path resolvers at the user data + model dirs.
+
+    Auto-update prep: data and model files live in a user-writable
+    location (see :mod:`user_data`) rather than inside the frozen
+    bundle. On first launch (or after an EXE upgrade) the bundled
+    defaults are copied into the user dir so the overlay works
+    immediately offline.
 
     Idempotent and safe to call early in any entry point. From source
     this is a no-op — the env vars are left alone so a developer
@@ -76,8 +82,33 @@ def configure_bundle_paths() -> None:
     root = bundle_root()
     if root is None:
         return
-    os.environ.setdefault("MULLIGAN_COACH_DATA_ROOT", str(root / "data"))
-    os.environ.setdefault("MULLIGAN_COACH_CHOICE_MODEL_DIR", str(root / "models" / "choice_v6"))
+    # Local import: ``user_data`` is overlay-internal and depends on
+    # nothing else, but importing it at module top would create a
+    # cycle if some future caller imports ``_frozen`` from inside
+    # ``user_data``.
+    from . import user_data
+
+    try:
+        user_data.seed_from_bundle(root)
+    except OSError as exc:
+        # Disk-full / permissions / file lock. Fall back to the
+        # bundled paths so the overlay still launches; the user
+        # won't have auto-update working, but they'll have a usable
+        # tool while they diagnose the disk issue. Logged loudly
+        # rather than silently because this state matters for
+        # support diagnostics.
+        logging.getLogger(__name__).error(
+            "seed_from_bundle failed; falling back to bundled data paths: %s", exc
+        )
+        os.environ.setdefault("MULLIGAN_COACH_DATA_ROOT", str(root / "data"))
+        os.environ.setdefault("MULLIGAN_COACH_CHOICE_MODEL_DIR", str(root / "models" / "choice_v6"))
+        return
+
+    os.environ.setdefault("MULLIGAN_COACH_DATA_ROOT", str(user_data.user_data_root()))
+    os.environ.setdefault(
+        "MULLIGAN_COACH_CHOICE_MODEL_DIR",
+        str(user_data.user_models_root() / "choice_v6"),
+    )
 
 
 def user_log_dir() -> Path:
