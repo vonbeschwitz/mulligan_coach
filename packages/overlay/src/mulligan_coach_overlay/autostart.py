@@ -36,6 +36,13 @@ _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 # Startup tab sees a recognisable entry.
 _ENTRY_NAME = "MulliganCoach"
 
+# Marker file name. Lives in the user state dir alongside the slice-1
+# ``_seeded_version.txt``. Presence means "we've already enabled
+# autostart at least once on this account" — so if the user later
+# unchecks the Start-with-Windows toggle, the next launch won't
+# re-enable it behind their back.
+_SEEDED_MARKER = "_autostart_seeded.txt"
+
 
 def supported() -> bool:
     """``True`` when the helper can read and write the autostart entry.
@@ -131,3 +138,50 @@ def disable() -> None:
         return
     except OSError:
         log.exception("could not delete autostart entry")
+
+
+def enable_default_if_first_run(state_dir: Path) -> bool:
+    """Enable autostart automatically on the *first* launch only.
+
+    Default-on behaviour the project owner asked for: shipping a
+    fresh EXE to a friend should land with "Start with Windows"
+    already ticked, so they don't have to discover the gear-menu
+    toggle to get the convenient behaviour. The very next time we
+    'd otherwise re-enable it, we check a marker file in the user
+    state dir — if it's present, we leave the registry alone so a
+    deliberate un-tick from the gear menu sticks across launches.
+
+    Returns ``True`` iff we just wrote the registry entry. ``False``
+    when:
+
+    * we're on a non-Windows / source build (``supported()`` =
+      ``False``);
+    * the marker is already present (we've done this before, so the
+      current state is whatever the user last asked for);
+    * the marker write itself failed (we'd otherwise re-enable on
+      every launch, which is the failure mode we're guarding against).
+
+    The marker carries the EXE path that we enabled, purely for
+    diagnostics — comparing it to the running EXE path tells you
+    whether the user moved the install dir since the seed.
+    """
+    if not supported():
+        return False
+    marker = state_dir / _SEEDED_MARKER
+    if marker.exists():
+        return False
+    try:
+        state_dir.mkdir(parents=True, exist_ok=True)
+        enable()
+        # Write the marker AFTER enable() so a registry-write failure
+        # doesn't leave us in "marker says we did, registry says we
+        # didn't" — the next launch can retry cleanly.
+        marker.write_text(str(_executable_path()), encoding="utf-8")
+    except OSError as exc:
+        # Disk full / permissions / antivirus blocking the write —
+        # log and bail; the user can still flip the toggle manually
+        # from the gear menu, and the next launch will retry.
+        log.warning("could not write autostart marker %s: %s", marker, exc)
+        return False
+    log.info("autostart: default-enabled on first launch (marker at %s)", marker)
+    return True
