@@ -1249,18 +1249,16 @@ def main(argv: list[str] | None = None) -> int:
 
 
 # Default manifest URL used when ``MULLIGAN_COACH_MANIFEST_URL`` is
-# not set in the environment. Pointed at the canonical "data-current"
-# release that slice 4's publisher CLI keeps up to date. Friends who
-# don't have a custom server can rely on this; power users can
-# override via the env var.
+# not set in the environment. Pointed at the floating ``data-current``
+# release on the public ``mulligan_coach_data`` repo, which the
+# publisher CLI (``packages/overlay/packaging/publish_data_release.py``)
+# keeps up to date. The split exists because the main ``mulligan_coach``
+# repo is private — the auto-updater needs anonymous downloads so
+# friends running the overlay don't carry a GitHub token.
 #
-# NOTE: until slice 4 ships the publisher tooling, this URL will
-# return 404 — :class:`UpdateRunner` handles that gracefully (logs
-# and continues) so the overlay still launches cleanly. The default
-# becomes useful as soon as the first manifest is published.
-_DEFAULT_MANIFEST_URL = (
-    "https://github.com/vonbeschwitz/mulligan_coach/releases/download/data-current/manifest.json"
-)
+# Power users can override via the env var (e.g. to point at a fork
+# or a local manifest while testing).
+_DEFAULT_MANIFEST_URL = "https://github.com/vonbeschwitz/mulligan_coach_data/releases/download/data-current/manifest.json"
 
 
 def _install_auto_update(service: Any, coordinator: OverlayCoordinator) -> QTimer | None:
