@@ -917,7 +917,7 @@ class OverlayWindow(QWidget):
             play_draw = "play" if output.on_the_play else "draw"
             self._context_label.setText(
                 f"mull #{output.mulligan_count} · on the {play_draw} · "
-                f"set {output.primary_set or '?'}"
+                f"set {output.primary_set or '?'} · based on 17Lands data"
             )
         # Re-size to fit the new content. In expanded mode the per-card
         # row count varies by hand, so a fixed height would either
@@ -973,7 +973,12 @@ class OverlayWindow(QWidget):
         self._verdict_label.setStyleSheet(
             f"color: {_TEXT_PRIMARY}; font-size: {font_size}px; font-weight: 700;"
         )
-        self._mull_label.setText("Mull —")
+        # No "Mull —" placeholder in the idle state — between matches
+        # there's nothing to bucket, so the dash is just visual noise
+        # next to the "Waiting…" text. The other render paths
+        # (computing / missing) keep the dash because they pair with
+        # a concrete verdict, not an idle one.
+        self._mull_label.setText("")
         self._stats_label.setText("")
         self._context_label.setText("")
         self.adjustSize()
