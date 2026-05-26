@@ -133,7 +133,11 @@ def load_decisions(parquet_path: Path, preset: str) -> pd.DataFrame:
     if preset not in PRESETS:
         raise SystemExit(f"unknown preset {preset!r}; choose from {sorted(PRESETS)}")
     df = pd.read_parquet(parquet_path)
-    df = df.dropna(subset=["p_keep_win", "p_mull_win", "p_keep_choice"]).copy()
+    # Only ``p_keep_choice`` is universally required — some review
+    # parquets are choice-model-only (e.g. the clear-keep-but-mulled
+    # cohort), with win-model arms left NaN. Presets that reference
+    # the win arms will exclude those rows via comparison-with-NaN.
+    df = df.dropna(subset=["p_keep_choice"]).copy()
     mask = PRESETS[preset](df)
     df = df.loc[mask].reset_index(drop=True)
     df["decision_key"] = df.apply(_decision_key, axis=1)

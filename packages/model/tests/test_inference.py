@@ -378,7 +378,7 @@ def test_recommend_rejects_bad_hand_size(tmp_path: Path) -> None:
 
 def test_recommend_rejects_bad_deck_size(tmp_path: Path) -> None:
     bundle, hand, deck = _train_tiny_model(tmp_path)
-    with pytest.raises(ValueError, match="deck=40 cards"):
+    with pytest.raises(ValueError, match="deck=40-42 cards"):
         recommend(
             bundle,
             hand=hand,

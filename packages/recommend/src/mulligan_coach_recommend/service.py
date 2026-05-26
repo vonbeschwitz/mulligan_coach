@@ -1014,8 +1014,9 @@ class RecommendationService:
             raise ValueError(f"cannot mulligan from mulligan_number={mulligan_number}; max is 6")
         if len(hand) != 7:
             raise ValueError(f"expected hand=7 cards (London mulligan); got {len(hand)}")
-        if len(deck) != 40:
-            raise ValueError(f"expected deck=40 cards (Limited); got {len(deck)}")
+        # Match the 40-42-card range the training pipeline accepts.
+        if not (40 <= len(deck) <= 42):
+            raise ValueError(f"expected deck=40-42 cards (Limited); got {len(deck)}")
         set_code = self.primary_set_of(deck)
         if set_code is None:
             raise ValueError("Deck has no non-basic cards — cannot pick a format.")
@@ -1139,8 +1140,11 @@ class RecommendationService:
             raise ValueError(f"cannot mulligan from mulligan_number={mulligan_number}; max is 6")
         if len(hand) != 7:
             raise ValueError(f"expected hand=7 cards (London mulligan); got {len(hand)}")
-        if len(deck) != 40:
-            raise ValueError(f"expected deck=40 cards (Limited); got {len(deck)}")
+        # Training pipeline accepts 40-42-card decks (see
+        # `mulligan_coach_model.training_rows.MAX_DECK_SIZE`). Match that
+        # here so we don't reject the same shapes the model trained on.
+        if not (40 <= len(deck) <= 42):
+            raise ValueError(f"expected deck=40-42 cards (Limited); got {len(deck)}")
         set_code = self.primary_set_of(deck)
         if set_code is None:
             raise ValueError("Deck has no non-basic cards — cannot pick a format.")

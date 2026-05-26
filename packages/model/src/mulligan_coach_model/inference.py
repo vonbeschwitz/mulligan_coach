@@ -307,8 +307,11 @@ def recommend(
         raise ValueError(f"cannot mulligan from mulligan_number={mulligan_number}; max is 6")
     if len(hand) != 7:
         raise ValueError(f"expected hand=7 cards (London mulligan); got {len(hand)}")
-    if len(deck) != 40:
-        raise ValueError(f"expected deck=40 cards (Limited); got {len(deck)}")
+    # Training pipeline accepts 40-42-card decks (the +1/+2 lists players
+    # sometimes run when torn between strong cards). Match that here so the
+    # inference API doesn't reject decks the model was trained to score.
+    if not (40 <= len(deck) <= 42):
+        raise ValueError(f"expected deck=40-42 cards (Limited); got {len(deck)}")
 
     rng = random.Random(seed)
     base_seed = rng.randint(0, 2**31 - 1)

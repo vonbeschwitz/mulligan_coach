@@ -185,6 +185,40 @@ Recommended order for building this out:
 
 Each step should be working and tested before starting the next.
 
+## Elite player cohorts
+
+When evaluating the recommendation pipeline against real player
+decisions, we use two pre-defined "elite player" cohorts on the
+17Lands replay-data parquets at
+`data/processed/seventeenlands/mulligan_decisions/`. Both filters are
+applied to the per-decision rows produced by
+`scripts/mulligan_decisions/build_dataset.py`.
+
+* **Premier-Draft elite:**
+  `rank in {"diamond", "mythic"}` AND
+  `user_n_games_bucket >= 500` AND
+  `user_game_win_rate_bucket >= 0.62`.
+  Yields ~4.8k games on TLA + ~0.3k on TMT (snapshot 2026-05-24).
+* **Traditional-Draft elite:**
+  `user_n_games_bucket >= 500` AND
+  `user_game_win_rate_bucket >= 0.68`.
+  Rank filter dropped — Trad's smaller population makes rank a noisy
+  signal and Bo3 already self-selects committed players. Yields
+  ~1.0k games on TLA + ~0.3k on TMT (snapshot 2026-05-24).
+
+Rationale for the WR cutoffs: Trad WRs run ~5pp hotter than Premier
+in the same data (Bo3 + costlier queue), so equal *absolute* WR
+cutoffs across event types don't correspond to equal skill
+percentiles. The Premier 0.62 and Trad 0.68 cutoffs were chosen to
+land in roughly the same place in each event's skill distribution
+while keeping each cohort large enough for stratified evaluation.
+
+Note that both `user_n_games_bucket` and `user_game_win_rate_bucket`
+are *scoped to the row's event_type* (Premier and Trad each have
+their own numbers per player — see the empirical check in
+`scripts/elite_first_mull_agreement.py`'s docstring), not a combined
+all-format lifetime stat.
+
 ## Scope and non-goals
 
 - **In scope:** Limited only (Premier Draft, Sealed). London mulligan rules. Win probability estimation and keep/mull recommendation.
