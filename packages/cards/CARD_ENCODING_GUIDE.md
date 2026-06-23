@@ -649,7 +649,114 @@ encoding guide §9 convention: `cards_drawn=1, cards_manipulated=2`.
 
 ---
 
-## 16. When to update this guide
+## 16. MSH (Marvel Super Heroes) additions
+
+Settled during the MSH encoding round on 2026-06-21; see
+`scripts/marvel_encoding/build_msh_patches.py` for the worked examples.
+
+### Teamwork N — encode the teamwork-enhanced outcome, no second Mode
+
+Teamwork N is an optional additional cost ("you may tap any number of
+creatures you control with total power N or more") that upgrades the
+spell's effect if paid. Treat it like kicker for role_features purposes
+— encode the BETTER (teamwork-paid) outcome using the existing
+max-value modal convention (§12) — but do **not** add a second cast
+Mode. Unlike kicker, the alt cost here is "tap OTHER permanents," which
+has no representation in the `Cost` model (no "tap creatures with
+total power >= N" cost component exists, by design). Examples:
+Helicarrier Strike (#15, removal_burn_damage=4, the teamwork value),
+Team Tactics (#155, combat_trick_granted_keywords includes the
+teamwork-only trample grant).
+
+### MDFC pairs where both faces are independently-castable creatures
+
+Cards like Tony Stark // The Invincible Iron Man (#80) are `modal_dfc`
+layout where BOTH faces are creatures with their own printed mana cost
+— not a `transform` DFC. Encode TWO `Mode(kind="cast")` entries, one
+per face, each with `EntersBattlefieldEffect`. Aggregate role_features
+across both faces per the modal-card principle in §12.
+
+Several of these cards' front faces also carry a "{cost}: Transform
+[name]. Activate only as a sorcery." activated ability — a
+permanent-resident upgrade path that doesn't require holding the back
+face in hand. Leave this unencoded: it's gated by a high mana cost
+(typically 4-6), is rarely relevant inside the turn 1-4 mulligan
+window, and the simulator has no "transformed" state to evaluate it
+against. Examples: #18 Jennifer Walters // The Sensational She-Hulk,
+#23 Monica Rambeau // Photon, #49 Bruce Banner // The Incredible Hulk,
+#80 Tony Stark // The Invincible Iron Man, #219 King T'Challa // Black
+Panther.
+
+### -N/-N until end of turn (instant) — extends the counter threshold
+
+§7's "-N/-N counters, N>=2 counts as removal" rule was written for
+permanent counters. Extend the same N>=2 threshold to temporary
+until-end-of-turn debuffs on instants — a -2/-2 or -4/-4 EOT instant
+kills the same creatures a permanent counter would, just for one
+combat. Examples: Dark Deed (#93, -4/-4 EOT → removal_destroy_or_exile),
+Widow's Bite (#122, the -2/-2 EOT mode → removal_destroy_or_exile,
+aggregated alongside the deathtouch-grant mode's combat-trick flag).
+
+### Mill N, take a permanent card — model as LookAtTopEffect
+
+"Mill two cards, you may put a permanent card from among them into
+your hand" (Rapid Rescue, #181) is modeled with `LookAtTopEffect(n=2)`
+per the existing §15 convention (cards_drawn+=1,
+cards_manipulated+=N-1) even though the unchosen cards go to the
+graveyard rather than the bottom of the library. The simulator never
+inspects graveyard/library order — only hand contents — so the
+distinction is immaterial.
+
+### Impulse draw ("exile, may play until end of next turn") — leave unencoded
+
+Decided 2026-06-22. Blazing Crescendo (#125) and Hex Magic (#133) both
+exile cards and let the player play them later, rather than drawing
+them to hand — this doesn't fit the existing `cards_drawn` convention
+(the card never enters hand). Leave both unencoded:
+
+- Blazing Crescendo's single exiled card is too conditional on having
+  mana available on a later turn to count as a reliable draw.
+- Hex Magic's exile-then-draw count equals your hand size at cast
+  time, which the encoder has no way to fix to a concrete N (unlike
+  the X=1-minimum convention for token bodies, there's no sensible
+  floor here — a card drawn this way is genuinely unbounded).
+
+### Triggered / recurring abilities are not modeled for card draw
+
+Decided 2026-06-22. This extends the existing conservatism around
+conditional/repeated draw (§2) into a general policy: card-draw
+triggers gated on a recurring event (upkeep, attack, "whenever you
+cast...", etc.) are left unencoded regardless of what permanent type
+they're printed on, because they're too far outside the turn 1-4
+mulligan window to size reliably.
+
+Super Intelligence (#77) — an Aura granting "at the beginning of the
+upkeep of enchanted creature's controller, that player draws a
+card" — is the canonical example. It sets neither `is_removal_aura`
+nor `is_pump_aura`; §5's binary doesn't have a bucket for a recurring
+value-engine Aura, and this policy means there's nothing else to flag,
+so the card falls through to `is_other` via the store invariant. Don't
+force auras of this shape into the pump/removal binary.
+
+### Edict effects and type-unrestricted "destroy target token" → removal_destroy_or_exile
+
+Decided 2026-06-22, on The Ruinous Wrecking Crew (#224, an X-cost ETB
+modal with a "destroy target token" mode and an "each player
+sacrifices a creature of their choice" mode among its options). Both
+modes independently justify `removal_destroy_or_exile=True`,
+aggregated per the Charm/modal convention (§12):
+
+- **Edicts** ("each player sacrifices a creature of their choice") are
+  removal of the opponent's choice — treat the same as targeted
+  destroy/exile.
+- **"Destroy target token"** counts even though the token type isn't
+  restricted to creatures — most tokens encountered in Limited are
+  creature tokens, and a false positive here is cheap.
+
+The card's other two modes (discard-then-draw, a net-0 loot; opponent
+loses 2 life) aren't separately encoded.
+
+## 17. When to update this guide
 
 Update when:
 

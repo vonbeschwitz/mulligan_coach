@@ -1,0 +1,1433 @@
+[
+  {
+    "set_code": "MSH",
+    "collector_number": "9",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: shield-counter damage prevention + hexproof grant to other Heroes \u2014 no role_features field models damage prevention or keyword-grant statics; left at is_creature only."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "15",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "removal_burn_damage": 4
+      },
+      "reasons": [
+        "llm: Teamwork 2 \u2014 base 2 dmg, 4 dmg if teamwork paid (tap creatures total power 2+). Encoded the teamwork-enhanced max value per the kicker/modal max-value convention (CLAUDE \u00a712). No second Mode: Teamwork's cost (tapping OTHER creatures) isn't representable in the Cost model."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "18",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{1}{W}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 1
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 2,
+              "color_pips": {
+                "W": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        },
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{3}{G}{W}{W}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 3
+                },
+                {
+                  "kind": "color",
+                  "color": "G",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 6,
+              "color_pips": {
+                "W": 2,
+                "G": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: modal_dfc, both faces independently castable from hand \u2014 two cast Modes per CLAUDE \u00a716. Both faces' 'opponents can't cast spells during your turn' stax text and She-Hulk's damage-redirect trigger have no role_features mapping."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "21",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_mana_rock": true
+      },
+      "reasons": [
+        "llm: clean {T}: Add {W} mana ability (already parsed); the harness + infinity-ability flicker engine is gated by a 6-mana activation and is a late-game value engine, not mulligan-relevant \u2014 left unencoded. Set is_mana_rock for the reliable mana ability."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "23",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{2}{W}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 2
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 3,
+              "color_pips": {
+                "W": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        },
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{2}{R}{W}{W}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 2
+                },
+                {
+                  "kind": "color",
+                  "color": "R",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 5,
+              "color_pips": {
+                "W": 2,
+                "R": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: modal_dfc, both faces independently castable \u2014 two cast Modes per CLAUDE \u00a716. Prowess + counter-distribution triggers have no role_features mapping."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "24",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "removal_destroy_or_exile": true
+      },
+      "reasons": [
+        "llm: Teamwork 4, modal 'Street Justice' (exile creature toughness 4+) / 'Legal Justice' (exile enchantment MV 4+). Aggregated per CLAUDE \u00a712: removal_destroy_or_exile from the creature-exile mode; the enchantment-exile mode is non-creature (is_other)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "28",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "cards_manipulated": 2
+      },
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{1}{W}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 1
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 2,
+              "color_pips": {
+                "W": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            },
+            {
+              "kind": "scry",
+              "n": 2
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: Saga, chapter I = Scry 2 (encoded per CLAUDE \u00a76/\u00a72). Chapters II (cheat a Hero MV<=3 onto the battlefield or draw) and III (board-wide +1/+1 counter) are not encoded per the chapter-I-only convention."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "32",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'Seismic Takedown' (tap a creature/land whenever you cast a noncreature spell) is a repeated, conditional value engine \u2014 no role_features field fits; left at is_creature only."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "49",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{U}",
+              "pips": [
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 1,
+              "color_pips": {
+                "U": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        },
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{2}{R}{R}{G}{G}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 2
+                },
+                {
+                  "kind": "color",
+                  "color": "R",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "R",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "G",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "G",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 6,
+              "color_pips": {
+                "R": 2,
+                "G": 2
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: modal_dfc, both faces independently castable \u2014 two cast Modes per CLAUDE \u00a716. Bruce Banner's own '{X}{X},{T}: Draw X cards, sorcery-speed' activated ability is left unencoded \u2014 repeatable, mana-gated activated draw is excluded by the same conservatism as the Sewer-veillance Cam precedent (CLAUDE \u00a72). Hulk's Enrage (extra-combat-on-damage) is a combat mechanic, not modeled."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "50",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: already-correct auto encoding (draw 1, -4/-0 debuff). The conditional cost reduction (targets an attacking creature) is the unconditional-baseline convention (CLAUDE \u00a79) \u2014 ignored."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "53",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: ETB auto-attach + static +1/+1/flying/ward{1} grant is standard Equipment territory (is_equipment auto-set by the store); no role_features field models Equipment static pump bonuses. The bail reason ('Equip {2}{U}' unrecognised) is a parser gap \u2014 the equip-cost ignorable-line regex doesn't yet handle a colored mana symbol in the equip cost; candidate for a future parser widening, not blocking here."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "60",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Improvise (cost reduction, not modeled) + 'noncreature spells you cast have improvise' (same). No role_features mapping."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "63",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: counter-granted hexproof + draw-triggered counter growth on itself \u2014 Kid Loki doesn't draw cards, it reacts to the player's draws. No role_features mapping."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "67",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'no maximum hand size' (no field) + Embiggen Fist's draw is gated on casting a targeted spell at your own creature \u2014 conditional triggered draw, left OFF per the Thoughtweft Charge precedent (CLAUDE \u00a72)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "69",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "creates_creatures": [
+          {
+            "power": "1",
+            "toughness": "1",
+            "colors": [
+              "U"
+            ],
+            "subtypes": [
+              "Merfolk"
+            ],
+            "keywords": []
+          }
+        ]
+      },
+      "reasons": [
+        "llm: 'whenever you cast a noncreature spell with blue pips, create that many 1/1 Merfolk' \u2014 variable-X token creation, encoded as a single 1/1 Merfolk body per the X=1-minimum convention (CLAUDE \u00a74). Namor's own variable power (= Merfolk you control) is not a modeled stat."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "72",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_pump_aura": true,
+        "removal_destroy_or_exile": true
+      },
+      "reasons": [
+        "llm: judgment call \u2014 Aura ETB permanently exiles a target creature ('until this Aura leaves the battlefield', same permanence shape as the Dimensional Exile precedent in CLAUDE \u00a75, hence removal_destroy_or_exile=True) while transforming YOUR enchanted creature into a copy of the exiled one. The enchanted-creature effect is a beneficial transformation, not a numeric pump, but CLAUDE \u00a75 requires exactly one of is_removal_aura/is_pump_aura \u2014 chose is_pump_aura as the better fit since the enchanted creature benefits. Flagging for owner review if this read is wrong."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "80",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{1}{U}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 1
+                },
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 2,
+              "color_pips": {
+                "U": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        },
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{4}{U}{R}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 4
+                },
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "R",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 6,
+              "color_pips": {
+                "U": 1,
+                "R": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: modal_dfc, both faces independently castable \u2014 two cast Modes per CLAUDE \u00a716. Tony Stark's own '{1},{T}: look at top 4, take an artifact' ability is a narrow tutor-like effect, left unencoded per the tutor precedent (CLAUDE \u00a710). Iron Man's free-artifact-drop combat trigger and the front face's pay-mana transform ability are permanent-resident value engines, not modeled."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "82",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_counterspell": true
+      },
+      "reasons": [
+        "llm: 'Counter target spell unless controller pays {2}' (or {4} with Teamwork) \u2014 is_counterspell regardless of the pay-cost escape clause."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "84",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: ETB tap + strip-abilities lockdown is neither destroy/exile nor bounce/tuck \u2014 no role_features mapping."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "87",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: connive-on-cast-black-spell is a repeated, conditional loot engine (left OFF per CLAUDE \u00a72 conservatism); Boast is an attack-gated graveyard-recursion ability on a permanent already in play, correctly left as an unencoded alt-cost-keyword bail."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "88",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'Villain spells cost {1} less' (cost reduction, not modeled) + conditional connive-on-Villain-ETB (repeated, conditional, left OFF per CLAUDE \u00a72)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "92",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: already-correct auto encoding (removal_destroy_or_exile=True from the base exile mode). Teamwork's lifegain bonus has no role_features field."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "93",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "removal_destroy_or_exile": true
+      },
+      "reasons": [
+        "llm: judgment call extending CLAUDE \u00a77's '-N/-N counters, N>=2 counts as removal' threshold from permanent counters to a temporary until-end-of-turn debuff on an instant \u2014 -4/-4 EOT kills the overwhelming majority of Limited creatures, same functional role as a kill spell. Flagging the extension for owner review."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "94",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: graveyard-to-hand recursion (Villain or Hero card) \u2014 not a library draw, not a bounce/tuck of a battlefield permanent. No role_features field fits."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "103",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: ETB targeted discard (opponent reveals N, you pick one, they discard) \u2014 no role_features field models hand disruption."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "118",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Teamwork 4, reanimate a creature card from graveyard straight to the battlefield \u2014 not a token (the real card returns), not a land fetch. No role_features field fits; same gap as #69's reanimation-adjacent shape. Left at is_other."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "120",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "cards_drawn": 2
+      },
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{2}{B}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 2
+                },
+                {
+                  "kind": "color",
+                  "color": "B",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 3,
+              "color_pips": {
+                "B": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "draw_cards",
+              "n": 2
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: clean 'draw two cards' (lose 2 life, no field). Conditional cost reduction (control a Villain) ignored per the unconditional-baseline convention (CLAUDE \u00a79)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "122",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "combat_trick_granted_keywords": [
+          "deathtouch"
+        ],
+        "removal_destroy_or_exile": true
+      },
+      "reasons": [
+        "llm: Teamwork 3, modal 'gains deathtouch EOT' (combat trick, instant) / '-2/-2 EOT' (removal per the N=2 threshold, CLAUDE \u00a77, extended to temporary debuffs same as #93). Aggregated per CLAUDE \u00a712."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "124",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_mass_removal": true,
+        "removal_destroy_or_exile": true,
+        "removal_burn_damage": 3
+      },
+      "reasons": [
+        "llm: modal 'Choose one or both' \u2014 3 dmg to each creature (mass removal, Blasphemous-Act-style per CLAUDE \u00a71) / destroy target land + ramp (non-creature, is_other). Aggregated per CLAUDE \u00a712."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "125",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "combat_trick_power": 3,
+        "combat_trick_toughness": 1
+      },
+      "reasons": [
+        "llm: instant +3/+1 EOT \u2014 clean combat trick. 'Exile top card, may play it until end of next turn' is an impulse-draw effect, decided 2026-06-22 to leave unencoded: the card never enters hand (distinct from the to-HAND look-at-top-N rules in \u00a715), and the single exiled card is too conditional on having mana available later to count as a reliable draw. See CLAUDE \u00a716."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "130",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'Trick Arrows' is a repeated, mana-gated, attack-triggered modal engine (Net / Explosive-to-player / Boomerang-loot) \u2014 each leaf is either non-creature-targeted (Explosive hits a player, not removal_burn_damage) or too conditional/repeated. Left unencoded per the established conservatism for repeated activated/triggered engines."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "133",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'exile your hand, draw that many cards, may play the exiled cards until end of next turn' \u2014 net cards-in-hand is unchanged (X exiled, X drawn back), so cards_drawn is not bumped. Decided 2026-06-22 to leave the impulse-play bonus unencoded too: X is hand-size-dependent, so there's no fixed N to assign even if we wanted to model it. See CLAUDE \u00a716."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "135",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_punch_fight": true
+      },
+      "reasons": [
+        "llm: Teamwork 4, modal 'destroy target noncreature artifact' (non-creature, is_other) / punch (creature deals dmg = power to opponent's creature, CLAUDE \u00a71 Tenderize-style). The detector's stale 'removal_damage_variable' noop tag was a partial guess, not an authoritative role_features set \u2014 corrected here to is_punch_fight."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "151",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: cost-reduction static (instant/sorcery MV>=4 cost less, scaled by her power) \u2014 not modeled, no role_features mapping."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "155",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "combat_trick_granted_keywords": [
+          "double strike",
+          "trample"
+        ]
+      },
+      "reasons": [
+        "llm: Teamwork 1, base grants double strike EOT, teamwork adds trample EOT \u2014 union of both keyword grants per the modal aggregation convention (CLAUDE \u00a712)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "158",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{1}{R}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 1
+                },
+                {
+                  "kind": "color",
+                  "color": "R",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 2,
+              "color_pips": {
+                "R": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "draw_cards",
+              "n": 2
+            },
+            {
+              "kind": "discard_card",
+              "n": 1
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: already-correct auto encoding (cards_drawn=1 net, cards_manipulated=2 gross) matching the Abandon Attachments 'discard 1, draw 2, net 1' precedent (CLAUDE \u00a72) \u2014 the optional sac-artifact-or-discard cost is treated as taken (the common, rational line). Added the matching DrawCardsEffect+DiscardCardEffect Mode the auto pass left empty."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "162",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: graveyard-to-hand recursion across 4 card types \u2014 same gap as #94/#118; no role_features field fits."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "166",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_punch_fight": true
+      },
+      "reasons": [
+        "llm: modal 'double power/toughness EOT' (sorcery \u2014 combat-trick fields suppressed per CLAUDE \u00a73) / fight. is_punch_fight from the fight mode only."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "168",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_punch_fight": true
+      },
+      "reasons": [
+        "llm: Teamwork 3, modal '+1/+1 counter on target creature' (sorcery, permanent counter, is_other per CLAUDE \u00a77) / fight. is_punch_fight from the fight mode only."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "176",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: repeated upkeep modal (own +1/+1 counter / remove-a-counter-then-draw) \u2014 the draw leg requires a creature with a counter to remove, too conditional/repeated. Left unencoded per CLAUDE \u00a72."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "181",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "cards_drawn": 1,
+        "cards_manipulated": 1
+      },
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{G}",
+              "pips": [
+                {
+                  "kind": "color",
+                  "color": "G",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 1,
+              "color_pips": {
+                "G": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "look_at_top",
+              "n": 2,
+              "accepts_land": true,
+              "accepts_nonland": true
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: 'Mill two cards, may put a permanent card from among them into your hand' modeled as LookAtTopEffect(n=2) per CLAUDE \u00a715 (cards_drawn+=1, cards_manipulated+=N-1=1) even though the unchosen card goes to the graveyard rather than the bottom of the library \u2014 immaterial for the simulator, which doesn't track graveyard/library order."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "183",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{2}{G}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 2
+                },
+                {
+                  "kind": "color",
+                  "color": "G",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 3,
+              "color_pips": {
+                "G": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "fetch_land",
+              "target_filter": "basic",
+              "destination": "battlefield_tapped",
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: 'search library for a basic land, put onto the battlefield tapped' \u2014 clean FetchLandEffect. The +1/+1 counter rider and 'target player' phrasing (assumed self-target, the rational case) have no role_features field."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "214",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'can't be blocked' evasion static \u2014 no role_features field for unblockable."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "219",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{1}{W}{U}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 1
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 3,
+              "color_pips": {
+                "W": 1,
+                "U": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        },
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{4}{W}{U}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 4
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 6,
+              "color_pips": {
+                "W": 1,
+                "U": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: modal_dfc, both faces independently castable \u2014 two cast Modes per CLAUDE \u00a716. King T'Challa's 'draw on a player's 2nd card each turn' is conditional on extra-draw synergy elsewhere (left OFF); Black Panther's 'draw on combat damage to a player' matches the combat-damage-triggered-draw exclusion (CLAUDE \u00a72, April the Reporter precedent) exactly."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "220",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Extort (repeated, optional, mana-gated 1-life drain per spell cast) \u2014 RoleFeatures has no life-gain/drain field at all, and the effect is repeated/conditional regardless. The attack-trigger power/toughness-swap rider is a combat mechanic, not modeled."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "226",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: custom Ward variant (poison counters, not modeled) + a death-triggered edict ('each opponent sacrifices a nontoken creature') \u2014 RoleFeatures has no edict/sacrifice-effect field, and the trigger is conditional (requires another deathtouch creature you control to die). Left unencoded."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "228",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "combat_trick_granted_keywords": [
+          "indestructible"
+        ]
+      },
+      "reasons": [
+        "llm: Flash creature, ETB may tap itself to grant indestructible to another creature EOT \u2014 matches the 'flash creature with ETB pump/keyword-grant effect' combat-trick exception (CLAUDE \u00a73) exactly."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "235",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'discard a card or pay {2}' additional cost + matching Ward variant \u2014 non-mana additional costs aren't modeled beyond the printed mana cost (CLAUDE's general Cost-model scope); no draw/removal/token effect to flag."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "237",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: tutor-to-battlefield (search library and/or graveyard for an artifact creature card) \u2014 tutor effects stay is_other per CLAUDE \u00a710. Not a land fetch."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "239",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: already-correct auto encoding (cast + late-game graveyard-reanimation activated mode). '+2/+0 per attached Equipment' is a variable stat with no role_features field."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "243",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "is_mana_rock": true
+      },
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{5}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 5
+                }
+              ],
+              "cmc": 5,
+              "color_pips": {},
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "enters_battlefield"
+            }
+          ]
+        }
+      ],
+      "mana_abilities": [
+        {
+          "cost": {
+            "mana": {
+              "raw": "",
+              "pips": [],
+              "cmc": 0,
+              "color_pips": {},
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": true,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "produces": [
+            [
+              "C",
+              "C",
+              "C"
+            ]
+          ],
+          "condition": null
+        }
+      ],
+      "reasons": [
+        "llm: '{T}: Add {C}{C}{C}' is a clean mana ability the auto pass mis-modeled as a generic 'activated_unknown' noop Mode instead of a ManaAbility \u2014 corrected here (mana_abilities populated, the redundant noop Mode dropped, is_mana_rock set). Improvise (cost reduction) and 'enters tapped' (no penalty field for non-land ETB-tapped artifacts) are not modeled."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "250",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: variable power (= legendary creatures controlled, not a modeled stat) + an ability-copying engine (ETB/attack-triggered keyword theft) \u2014 no role_features field fits."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "256",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'draw a card if attacking with power>=4' matches the combat-damage/combat-triggered-draw exclusion (CLAUDE \u00a72) exactly. The Power-up ability (+1/+1 x2 counters, once) is a pure stat boost \u2014 sim doesn't track stats (CLAUDE \u00a78) \u2014 left unencoded."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "75",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'Artifact spells you cast cost {1} less' (cost reduction, not modeled) + a sorcery-speed activated copy-effect engine ('{1},{T}: target artifact becomes a copy of a second target artifact') \u2014 niche value engine, no role_features field fits."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "77",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'At the beginning of the upkeep of enchanted creature's controller, that player draws a card' \u2014 decided 2026-06-22: left unencoded under the general policy of not modeling triggered abilities for card-draw purposes (recurring/upkeep triggers are too far outside the turn 1-4 mulligan window to size reliably). Neither is_removal_aura nor is_pump_aura is set \u2014 this Aura doesn't fit either bucket, which CLAUDE \u00a75's binary doesn't account for; the card falls through to is_other via the store invariant instead. See CLAUDE \u00a716."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "224",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "removal_destroy_or_exile": true
+      },
+      "reasons": [
+        "llm: '{X}{B}{R}, enters with X +1/+1 counters; ETB choose up to X \u2014 discard+draw / opponent loses 2 life / destroy target token / each player sacrifices a creature of their choice.' Decided 2026-06-22: removal_destroy_or_exile=True, justified independently by both the 'destroy target token' mode (type-unrestricted, but token removal counts) and the 'each player sacrifices a creature' edict mode (removal of the opponent's choice) \u2014 aggregated per the Charm/modal convention (CLAUDE \u00a712). The discard+draw mode (net 0, a loot) and opponent-loses-2-life mode aren't separately encoded. See CLAUDE \u00a716."
+      ]
+    }
+  },
+  {
+    "set_code": "MAR",
+    "collector_number": "87",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "cards_drawn": 0
+      },
+      "reasons": [
+        "llm: correcting a stale auto-guess. 'Mine Vibranium \u2014 {3}: Move all +1/+1 counters from target land to target creature; if one or more moved, gain that much life and draw a card' is gated on counters already being on a land (placed by the separate 'Survey the Realm' trigger) \u2014 board-state-dependent, mana-gated activated draw, same conservatism as the Sewer-veillance Cam precedent (CLAUDE \u00a72). The detector had auto-set cards_drawn=1; corrected to 0. 'Survey the Realm' (counter on a land on creature ETB) has no role_features field (not a creature buff, not a token)."
+      ]
+    }
+  },
+  {
+    "set_code": "MAR",
+    "collector_number": "88",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: both abilities ('Throw' damage-divide, ''Catch' auto-equip) require an Equipment already attached/in hand \u2014 synergy-dependent, no Equipment guaranteed. Left unencoded."
+      ]
+    }
+  },
+  {
+    "set_code": "MAR",
+    "collector_number": "97",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: 'double all damage dealt' + damage-triggered counter growth + regenerate \u2014 all combat mechanics; sim doesn't model combat (CLAUDE \u00a78). No role_features field fits."
+      ]
+    }
+  }
+]
