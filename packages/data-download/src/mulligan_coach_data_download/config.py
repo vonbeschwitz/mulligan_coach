@@ -32,12 +32,16 @@ DEFAULT_EVENT_TYPES: tuple[EventType, ...] = (
 )
 
 # Default set codes — the most recent Premier-Draft-supported sets as of
-# 2026-05-14. SHOULD be reviewed before each download run, since new sets
+# 2026-06-21. SHOULD be reviewed before each download run, since new sets
 # release every few months. Override at the CLI with --sets.
 #
 # The three-letter set codes are the ones 17Lands uses in dataset filenames
-# (e.g. ``game_data_public.TLA.PremierDraft.csv.gz``).
-DEFAULT_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS")
+# (e.g. ``game_data_public.TLA.PremierDraft.csv.gz``). MSH ("Marvel Super
+# Heroes") releases on Arena 2026-06-23; its bonus sheet (Scryfall code MAR)
+# is drafted as part of MSH packs and has no separate 17Lands dataset, so it
+# is NOT listed here — see packages/cards' run-detector --sets MSH,MAR
+# instead, which reads MAR cards straight from the Scryfall snapshot.
+DEFAULT_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS", "MSH")
 
 
 class DownloadSelection(BaseModel):

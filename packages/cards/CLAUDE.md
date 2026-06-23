@@ -421,7 +421,8 @@ Hand-crafted Scryfall-shaped dicts. No real data download required.
 After widening to handle Sagas (chapter I only), Classes (level-1 effect
 only), transform DFCs with uncastable back faces, and a few additional
 static-line tolerances (name-as-self-reference, "creature spells you cast
-have …"), across the four current Premier-Draft sets (TMT/ECL/TLA/SOS):
+have …"), across the five current Premier-Draft sets (TMT/ECL/TLA/SOS/MSH),
+plus MSH's bonus sheet (MAR):
 
 | Set | auto | llm_encoded | needs_human | needs_llm |
 |---|---|---|---|---|
@@ -429,6 +430,8 @@ have …"), across the four current Premier-Draft sets (TMT/ECL/TLA/SOS):
 | ECL | 218 (81.6%) | 49 (18.4%) | 0 | 0 |
 | TLA | 223 (79.4%) | 58 (20.6%) | 0 | 0 |
 | SOS | 189 (55.4%) | 152 (44.6%) | 0 | 0 |
+| MSH | 218 (79.6%) | 56 (20.4%) | 0 | 0 |
+| MAR | 4 (57.1%) | 3 (42.9%) | 0 | 0 |
 
 SOS has a lower auto rate because the Prepare layout (36 cards) always
 bails to NEEDS_LLM, the bonus-sheet reprints add 75 cards from older
@@ -437,10 +440,26 @@ Suspend, Morph, etc.), and SOS introduces several new triggered
 keywords (Repartee, Opus, Increment, Infusion) on otherwise vanilla
 creatures.
 
+MSH was hand-encoded as of 2026-06-21, **before the set's full card pool
+was spoiled** (Arena release is 2026-06-23) and **before 17Lands has
+any MSH game data** — see `scripts/marvel_encoding/build_msh_patches.py`
+and `CARD_ENCODING_GUIDE.md` §16 for the new conventions it settled
+(Teamwork N, dual-castable MDFC creature pairs, -N/-N-until-EOT as
+removal, mill-as-look-at-top). MAR (the "Marvel Source Material" bonus
+sheet) only had 7 of an eventual ~60 cards spoiled at encoding time —
+re-run `run-detector --sets MSH,MAR` after the full spoiler is out and
+again once 17Lands publishes MSH ratings (which will fold MAR cards in
+automatically via `_bonus_sheet_scryfall_entries` in `cli.py`, since
+they're part of the same draftable pool). All 59 needs_llm cards in
+this round resolved to `llm_encoded` (0 `needs_human`) — two were
+briefly flagged `needs_human` (#77 Super Intelligence, #224 The
+Ruinous Wrecking Crew) before the owner settled the conventions that
+resolved them on 2026-06-22; see `CARD_ENCODING_GUIDE.md` §16.
+
 Reproduce / refresh with:
 
 ```
-uv run mulligan-coach-cards run-detector --sets TMT,ECL,TLA,SOS
+uv run mulligan-coach-cards run-detector --sets TMT,ECL,TLA,SOS,MSH,MAR
 # Use --reparse-needs-human to re-parse previously human-flagged cards
 # after widening the parser further; --force overrides llm_encoded too.
 ```
