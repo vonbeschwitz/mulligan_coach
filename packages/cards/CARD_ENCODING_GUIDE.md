@@ -756,6 +756,69 @@ aggregated per the Charm/modal convention (§12):
 The card's other two modes (discard-then-draw, a net-0 loot; opponent
 loses 2 life) aren't separately encoded.
 
+### Bonus-sheet additions (decided 2026-06-23)
+
+MSH's 60-card bonus sheet (classic reprints, discovered via
+`_bonus_sheet_scryfall_entries` once 17Lands published MSH ratings —
+see `packages/cards/CLAUDE.md`'s "Current auto-classification rate"
+section for the correction story behind this) introduced needs_llm
+cards with a few new shapes:
+
+**Combat-gated sweepers count as removal.** Fight to the Death
+("destroy all blocking creatures and all blocked creatures") requires
+an active combat with declared blockers, but it's a dedicated removal
+spell, not a rarely-fired downside ability — treat it like
+`is_punch_fight` cards, which are flagged despite the sim not modeling
+combat (§8). This is distinct from the General Traag / Mouser Foundry
+"too situational" precedent (§10), which is about resource-gated
+activated abilities on creatures that usually never fire, not about
+ordinary combat-conditional removal spells.
+
+**"Choose one or more" sweepers aggregate like a Charm.** Final Act
+("choose one or more — destroy all creatures / all planeswalkers / all
+battles / exile all graveyards / opponents lose all counters") sets
+`removal_destroy_or_exile` + `is_mass_removal` from the
+destroy-all-creatures mode only; the other modes have no role_features
+field and aren't separately encoded. Same aggregation principle as
+Spree and Charms (§12), just without Spree's additional-cost structure.
+
+**Shuffle-into-library removal → `removal_destroy_or_exile`, not
+`is_top_library`.** Chaos Warp (shuffle target permanent into its
+owner's library, they reveal-and-maybe-replace from the top) is closer
+to full removal than to `is_top_library`: against a creature target,
+the creature is gone with certainty, and what comes back is a random
+gamble usually lower-impact in Limited. `is_top_library` is reserved
+for controlled, *recurring* placement on top of the library (Swat
+Away, Return to the Sewers) — a softer, more findable effect than a
+shuffle.
+
+**Mass-protection instants are not single-target combat tricks.**
+Heroic Intervention ("permanents you control gain hexproof and
+indestructible until end of turn") and Teferi's Protection (life total
+locked, protection from everything, all your permanents phase out)
+both grant protective effects board-wide, not to "target creature."
+`combat_trick_granted_keywords` (§3) is scoped to saving/winning ONE
+combat for a targeted creature; stretching it to cover symmetric,
+board-wide protection would misrepresent the field. Both cards are left
+at `is_other`.
+
+**Unrecognized old keywords get appended directly to
+`evergreen_keywords`.** Dauthi Voidwalker's Shadow is a pre-modern
+evergreen keyword the parser's vocabulary doesn't recognize. Since
+combat/evasion isn't simulated anyway, just append the lowercase
+keyword string to `evergreen_keywords` in the patch rather than leaving
+it as an unrecognised-line parser note.
+
+**Sac-an-artifact-or-creature draw stays unencoded, even when the cost
+is easy to pay.** Deadly Dispute (sacrifice an artifact or creature as
+an additional cost; draw 2 + make a Treasure) is structurally the same
+shape as the "sac-or-activated draw with mana cost" precedent
+(Sewer-veillance Cam, §2) even though its cost is far easier to satisfy
+in practice (any spare token/dork qualifies, unlike sacrificing the
+card's own permanent). Kept `is_other` for consistency with the
+existing precedent rather than carving out an exception — flagged in
+the card's `reasons` in case the owner wants to revisit.
+
 ## 17. When to update this guide
 
 Update when:
