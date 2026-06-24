@@ -1398,8 +1398,8 @@
     }
   },
   {
-    "set_code": "MAR",
-    "collector_number": "87",
+    "set_code": "MSH",
+    "collector_number": "bonus-mar-87",
     "status": "llm_encoded",
     "patch": {
       "role_features": {
@@ -1411,8 +1411,8 @@
     }
   },
   {
-    "set_code": "MAR",
-    "collector_number": "88",
+    "set_code": "MSH",
+    "collector_number": "bonus-mar-88",
     "status": "llm_encoded",
     "patch": {
       "reasons": [
@@ -1421,12 +1421,406 @@
     }
   },
   {
-    "set_code": "MAR",
-    "collector_number": "97",
+    "set_code": "MSH",
+    "collector_number": "bonus-mar-97",
     "status": "llm_encoded",
     "patch": {
       "reasons": [
         "llm: 'double all damage dealt' + damage-triggered counter growth + regenerate \u2014 all combat mechanics; sim doesn't model combat (CLAUDE \u00a78). No role_features field fits."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-otj-11",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{1}{W}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 1
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 2,
+              "color_pips": {
+                "W": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "noop",
+              "role_tag": "spree:base_plus_one_mode"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm bonus: Final Showdown Spree (base W + 1 for cheapest mode = 1W). Per CLAUDE \u00a712's Spree convention, role_features stays is_other \u2014 the 3 +modes (lose-all-abilities, indestructible grant, destroy-all-creatures) aren't mana/draw/fetch shaped, and the guide's Spree carve-out explicitly defers role_features bumps until a +mode is sim-relevant in that sense."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-mh1-7",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Ephemerate \u2014 blink your own creature (re-trigger ETBs), Rebound (automatic free recast next upkeep, not a player-paid alt cost \u2014 no second Mode needed). No role_features field fits blinking your own permanent for value; left at is_other."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-cmm-59",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Steelshaper's Gift \u2014 tutor for an Equipment card to hand. Tutor effects stay is_other per CLAUDE \u00a710 (Splinter's Technique precedent); not card draw."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-otj-75",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{1}{U}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 1
+                },
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 2,
+              "color_pips": {
+                "U": 1
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "noop",
+              "role_tag": "spree:base_plus_one_mode"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm bonus: Three Steps Ahead Spree (base U + 1 for cheapest mode = 1U). Same Spree convention as Final Showdown \u2014 role_features stays is_other (counter-target-spell, copy-permanent, and loot +modes aren't individually sim-relevant enough to break the documented Spree default)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-tdc-92",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Narset's Reversal \u2014 copies target instant/sorcery, then bounces the ORIGINAL SPELL to its owner's hand. is_bounce is defined for permanents, not spells on the stack, and this isn't a counter either (the spell still resolves, as a copy). No role_features field fits; left at is_other."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-arb-97",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "removal_destroy_or_exile": true,
+        "is_mass_removal": true
+      },
+      "reasons": [
+        "llm: Fight to the Death \u2014 'destroy all blocking creatures and all blocked creatures.' Combat-gated (needs declared blockers to exist), but this is a dedicated removal SPELL whose entire purpose is the wipe, not a rarely-fired downside ability \u2014 same treatment as is_punch_fight cards, which are flagged despite the sim not modeling combat (CLAUDE \u00a78). Distinguished from the General Traag / Mouser Foundry 'too situational' precedent (CLAUDE \u00a710), which is about resource-gated activated abilities on creatures, not about combat-conditional spells."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-msc-164",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "removal_destroy_or_exile": true
+      },
+      "reasons": [
+        "llm: Chaos Warp \u2014 shuffles target permanent into its owner's library (then they reveal-and-maybe-replace from the top). Against a creature target this is removal-equivalent (the creature is gone with certainty; what comes back is a random gamble, usually lower-impact in Limited) \u2014 closer to full removal than to is_top_library (which is specifically for controlled placement ON TOP, a softer/more recurring effect). Set removal_destroy_or_exile only \u2014 it hits one target, not mass removal."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-msc-166",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Seize the Day \u2014 untap a creature + extra combat/main phase. Pure combat-advantage effect, no removal/draw/pump field fits (sim doesn't model combat, CLAUDE \u00a78). Flashback mode dropped per CLAUDE \u00a714 (alt cost from graveyard)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-tdc-176",
+    "status": "llm_encoded",
+    "patch": {
+      "evergreen_keywords": [
+        "shadow"
+      ],
+      "reasons": [
+        "llm: Dauthi Voidwalker \u2014 Shadow is a pre-modern evergreen keyword the detector's vocabulary doesn't recognize; appended directly to evergreen_keywords (harmless since combat/evasion isn't simulated anyway). The graveyard-exile-and-replay ability is a multi-step, opponent-graveyard-dependent value engine \u2014 too conditional to size, same conservatism as Mine Vibranium (bonus-mar-87) and Sewer-veillance Cam (CLAUDE \u00a72). Left at is_creature only."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-soc-195",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "cards_drawn": 2,
+        "cards_manipulated": 5
+      },
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{6}{U}{U}",
+              "pips": [
+                {
+                  "kind": "generic",
+                  "color": null,
+                  "colors": null,
+                  "amount": 6
+                },
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "U",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 8,
+              "color_pips": {
+                "U": 2
+              },
+              "has_x": false,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "look_at_top",
+              "n": 7,
+              "accepts_land": true,
+              "accepts_nonland": true
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm: Dig Through Time \u2014 look at top 7, take 2. Multi-take Look-at-top-N per CLAUDE \u00a715: cards_drawn=2 (taken), cards_manipulated=5 (7-2 seen-not-taken). Delve (exile gy cards to pay generic) isn't modeled \u2014 the simulator doesn't track graveyard size, so the cast Mode uses the full printed cost {6}{U}{U}, same treatment as Convoke elsewhere (e.g. Return to the Ranks, bonus-m15-29)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-soc-213",
+    "status": "llm_encoded",
+    "patch": {
+      "role_features": {
+        "removal_destroy_or_exile": true,
+        "is_mass_removal": true
+      },
+      "reasons": [
+        "llm: Final Act \u2014 choose one or more: destroy all creatures / all planeswalkers / all battles / exile all graveyards / opponents lose all counters. 'Choose one or more' aggregates like a Charm (CLAUDE \u00a712); only the destroy-all-creatures mode maps to a role_features flag. The other modes aren't separately encoded."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-ons-286",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Steely Resolve \u2014 creatures of a chosen type gain shroud. A global static ability, not an Aura (no 'Enchant creature' line) and not a creature buff in the pump-aura sense (no P/T or combat keyword granted, and it's conditional on tribal overlap). No role_features field fits; left at is_other."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-cmm-295",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Heroic Intervention \u2014 permanents you control gain hexproof and indestructible until end of turn. A board-wide mass-protection instant, not a single-target combat trick \u2014 combat_trick_granted_keywords is scoped to saving/winning ONE combat for a targeted creature (CLAUDE \u00a73), and stretching it to cover symmetric board-wide protection would misrepresent the field. Left at is_other, same call as Teferi's Protection (bonus-2x2-32) below."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-mh3-63",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Harbinger of the Seas \u2014 'nonbasic lands are Islands,' a board-wide static land-type-changer (affects both players' nonbasic lands). No role_features field models land-type effects (is_mana_rock is for mana ABILITIES, not type changes); left at is_creature only."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-msc-794",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Deadly Dispute \u2014 additional cost: sacrifice an artifact or creature; draw 2 + make a Treasure. The sac cost is far easier to pay than most 'sacrifice a permanent' costs (any spare token/dork qualifies), but it's still the same shape as the documented 'sac-or-activated draw with mana cost' precedent (Sewer-veillance Cam, CLAUDE \u00a72) \u2014 gated by a resource the opening hand doesn't guarantee, especially T1-2. Left at is_other for consistency; flagging here in case the owner wants to revisit given how trivially payable the cost usually is."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-m15-29",
+    "status": "llm_encoded",
+    "patch": {
+      "modes": [
+        {
+          "kind": "cast",
+          "cost": {
+            "mana": {
+              "raw": "{X}{W}{W}",
+              "pips": [
+                {
+                  "kind": "x",
+                  "color": null,
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                },
+                {
+                  "kind": "color",
+                  "color": "W",
+                  "colors": null,
+                  "amount": null
+                }
+              ],
+              "cmc": 2,
+              "color_pips": {
+                "W": 2
+              },
+              "has_x": true,
+              "has_hybrid": false,
+              "has_phyrexian": false,
+              "has_colorless": false,
+              "has_snow": false
+            },
+            "tap": false,
+            "untap": false,
+            "sacrifice": null,
+            "discard_self": false
+          },
+          "effects": [
+            {
+              "kind": "noop",
+              "role_tag": "convoke:reanimate_x_small_creatures"
+            }
+          ]
+        }
+      ],
+      "reasons": [
+        "llm bonus: Return to the Ranks X+WW Convoke X reanimates \u2014 same card, same encoding as SOS's bonus-m15-29 copy (Convoke isn't modeled, printed cost used as-is, role_features stays is_other)."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-cn2-121",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Show and Tell \u2014 each player MAY put an artifact / creature / enchantment / land from hand onto the battlefield. Symmetric (opponent benefits equally) and entirely optional; no removal/draw/pump field fits, and treating it as ramp would overstate a combo piece that's low-value in a vacuum. Left at is_other."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-m21-25",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Light of Promise \u2014 Aura granting 'whenever you gain life, put that many +1/+1 counters on this creature.' A purely triggered, lifegain-dependent value engine with zero immediate effect \u2014 same shape as Super Intelligence (#77, CLAUDE \u00a716): neither is_removal_aura nor is_pump_aura fits, and per the triggered-abilities policy settled there, we don't force it into the binary. Falls through to is_other."
+      ]
+    }
+  },
+  {
+    "set_code": "MSH",
+    "collector_number": "bonus-2x2-32",
+    "status": "llm_encoded",
+    "patch": {
+      "reasons": [
+        "llm: Teferi's Protection \u2014 life total can't change, protection from everything, all your permanents phase out until your next turn. A board-wide fog/protection effect, not a single-target combat trick (same reasoning as Heroic Intervention, bonus-cmm-295, above) \u2014 'protection from everything' and phasing aren't expressible in combat_trick_granted_keywords' vocabulary anyway. Left at is_other."
       ]
     }
   }

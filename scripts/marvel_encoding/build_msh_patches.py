@@ -1,7 +1,24 @@
-"""Build patches.json for all MSH + MAR needs_llm cards.
+"""Build patches.json for all MSH needs_llm cards, including its bonus sheet.
 
 Run this script to (re)generate the Marvel Super Heroes encoding patches,
 then apply with packages/cards/scripts/apply_patches.py.
+
+IMPORTANT CORRECTION (2026-06-23): the original version of this script
+treated Scryfall's "MAR" set code as MSH's bonus sheet and produced a
+separate ``data/processed/parsed_cards/MAR.json``. That was wrong — "MAR"
+is Scryfall's pre-existing "Marvel Universe" masterpiece set (released
+2025-09-26 alongside *Marvel's Spider-Man*, unrelated to MSH). MSH's real
+bonus sheet (60 cards: classic reprints like Counterspell, Path to Exile,
+Rancor, Dauthi Voidwalker, plus 7 of those same "Marvel Universe"
+character cards) only became visible once 17Lands published MSH
+Premier-Draft ratings, at which point ``run-detector``'s existing
+``_bonus_sheet_scryfall_entries`` mechanism (the same one TLA/TMT/SOS use
+for their bonus sheets) folded all 60 cards directly into ``MSH.json``
+with synthetic ``bonus-<source-set>-<number>`` collector numbers — no
+separate set code needed. ``MAR.json`` has been deleted; the 3 character
+cards previously encoded under it (collector numbers 87/88/97) now live
+in ``MSH.json`` under ``bonus-mar-87`` / ``bonus-mar-88`` / ``bonus-mar-97``
+with their encodings carried over unchanged.
 
 The encoders here follow the rules in
 ``packages/cards/CARD_ENCODING_GUIDE.md``. New rules introduced by MSH
@@ -47,10 +64,18 @@ The encoders here follow the rules in
   exile-then-draw count is hand-size-dependent so there's no fixed N
   to assign.
 
-All 59 needs_llm cards in this batch resolved to either ``llm_encoded``
-(57) or were corrected from an initial ``needs_human`` flag back to
-``llm_encoded`` (2: #77, #224) once the owner settled the conventions
-above on 2026-06-22.
+All 59 needs_llm cards in the original MSH primary-set batch resolved to
+either ``llm_encoded`` (57) or were corrected from an initial
+``needs_human`` flag back to ``llm_encoded`` (2: #77, #224) once the owner
+settled the conventions above on 2026-06-22.
+
+A second round on 2026-06-23 encoded the 22 needs_llm cards that
+appeared once the 60-card bonus sheet was correctly folded in (see the
+correction note above and CARD_ENCODING_GUIDE.md §16's "Bonus-sheet
+additions" subsection for the new patterns it introduced: combat-gated
+sweepers, choose-one-or-more sweeper aggregation, shuffle-away removal,
+mass-protection instants not forced into combat-trick, and an
+unrecognized old keyword (Shadow) appended directly).
 """
 
 from __future__ import annotations
@@ -169,6 +194,7 @@ def llm(
     role_features: dict[str, Any] | None = None,
     modes: list[dict[str, Any]] | None = None,
     mana_abilities: list[dict[str, Any]] | None = None,
+    evergreen_keywords: list[str] | None = None,
     reasons: list[str] | None = None,
 ) -> dict[str, Any]:
     fields: dict[str, Any] = {}
@@ -178,6 +204,8 @@ def llm(
         fields["modes"] = modes
     if mana_abilities is not None:
         fields["mana_abilities"] = mana_abilities
+    if evergreen_keywords is not None:
+        fields["evergreen_keywords"] = evergreen_keywords
     if reasons is not None:
         fields["reasons"] = reasons
     return patch(set_code, collector, "llm_encoded", **fields)
@@ -986,13 +1014,15 @@ P(
 
 
 # ===========================================================================
-# MAR
+# Bonus sheet (folded into MSH via the 17Lands-ratings join — see the
+# correction note in the module docstring; these were briefly filed under
+# a standalone "MAR" set before that was corrected on 2026-06-23)
 # ===========================================================================
 
 P(
     llm(
-        "MAR",
-        "87",
+        "MSH",
+        "bonus-mar-87",
         role_features={"cards_drawn": 0},
         reasons=[
             "llm: correcting a stale auto-guess. 'Mine Vibranium — {3}: Move "
@@ -1010,8 +1040,8 @@ P(
 
 P(
     llm(
-        "MAR",
-        "88",
+        "MSH",
+        "bonus-mar-88",
         reasons=[
             "llm: both abilities ('Throw' damage-divide, ''Catch' auto-equip) "
             "require an Equipment already attached/in hand — synergy-dependent, "
@@ -1022,12 +1052,311 @@ P(
 
 P(
     llm(
-        "MAR",
-        "97",
+        "MSH",
+        "bonus-mar-97",
         reasons=[
             "llm: 'double all damage dealt' + damage-triggered counter growth + "
             "regenerate — all combat mechanics; sim doesn't model combat (CLAUDE "
             "§8). No role_features field fits.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-otj-11",
+        modes=[cast_mode("{1}{W}", [noop("spree:base_plus_one_mode")])],
+        reasons=[
+            "llm bonus: Final Showdown Spree (base W + 1 for cheapest mode = "
+            "1W). Per CLAUDE §12's Spree convention, role_features stays "
+            "is_other — the 3 +modes (lose-all-abilities, indestructible "
+            "grant, destroy-all-creatures) aren't mana/draw/fetch shaped, "
+            "and the guide's Spree carve-out explicitly defers role_features "
+            "bumps until a +mode is sim-relevant in that sense.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-mh1-7",
+        reasons=[
+            "llm: Ephemerate — blink your own creature (re-trigger ETBs), "
+            "Rebound (automatic free recast next upkeep, not a player-paid "
+            "alt cost — no second Mode needed). No role_features field fits "
+            "blinking your own permanent for value; left at is_other.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-cmm-59",
+        reasons=[
+            "llm: Steelshaper's Gift — tutor for an Equipment card to hand. "
+            "Tutor effects stay is_other per CLAUDE §10 (Splinter's "
+            "Technique precedent); not card draw.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-otj-75",
+        modes=[cast_mode("{1}{U}", [noop("spree:base_plus_one_mode")])],
+        reasons=[
+            "llm bonus: Three Steps Ahead Spree (base U + 1 for cheapest "
+            "mode = 1U). Same Spree convention as Final Showdown — "
+            "role_features stays is_other (counter-target-spell, copy-"
+            "permanent, and loot +modes aren't individually sim-relevant "
+            "enough to break the documented Spree default).",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-tdc-92",
+        reasons=[
+            "llm: Narset's Reversal — copies target instant/sorcery, then "
+            "bounces the ORIGINAL SPELL to its owner's hand. is_bounce is "
+            "defined for permanents, not spells on the stack, and this "
+            "isn't a counter either (the spell still resolves, as a copy). "
+            "No role_features field fits; left at is_other.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-arb-97",
+        role_features={"removal_destroy_or_exile": True, "is_mass_removal": True},
+        reasons=[
+            "llm: Fight to the Death — 'destroy all blocking creatures and "
+            "all blocked creatures.' Combat-gated (needs declared blockers "
+            "to exist), but this is a dedicated removal SPELL whose entire "
+            "purpose is the wipe, not a rarely-fired downside ability — same "
+            "treatment as is_punch_fight cards, which are flagged despite "
+            "the sim not modeling combat (CLAUDE §8). Distinguished from the "
+            "General Traag / Mouser Foundry 'too situational' precedent "
+            "(CLAUDE §10), which is about resource-gated activated "
+            "abilities on creatures, not about combat-conditional spells.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-msc-164",
+        role_features={"removal_destroy_or_exile": True},
+        reasons=[
+            "llm: Chaos Warp — shuffles target permanent into its owner's "
+            "library (then they reveal-and-maybe-replace from the top). "
+            "Against a creature target this is removal-equivalent (the "
+            "creature is gone with certainty; what comes back is a random "
+            "gamble, usually lower-impact in Limited) — closer to full "
+            "removal than to is_top_library (which is specifically for "
+            "controlled placement ON TOP, a softer/more recurring effect). "
+            "Set removal_destroy_or_exile only — it hits one target, not "
+            "mass removal.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-msc-166",
+        reasons=[
+            "llm: Seize the Day — untap a creature + extra combat/main "
+            "phase. Pure combat-advantage effect, no removal/draw/pump "
+            "field fits (sim doesn't model combat, CLAUDE §8). Flashback "
+            "mode dropped per CLAUDE §14 (alt cost from graveyard).",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-tdc-176",
+        evergreen_keywords=["shadow"],
+        reasons=[
+            "llm: Dauthi Voidwalker — Shadow is a pre-modern evergreen "
+            "keyword the detector's vocabulary doesn't recognize; appended "
+            "directly to evergreen_keywords (harmless since combat/evasion "
+            "isn't simulated anyway). The graveyard-exile-and-replay ability "
+            "is a multi-step, opponent-graveyard-dependent value engine — "
+            "too conditional to size, same conservatism as Mine Vibranium "
+            "(bonus-mar-87) and Sewer-veillance Cam (CLAUDE §2). Left at "
+            "is_creature only.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-soc-195",
+        role_features={"cards_drawn": 2, "cards_manipulated": 5},
+        modes=[cast_mode("{6}{U}{U}", [look_top(7, accepts_land=True, accepts_nonland=True)])],
+        reasons=[
+            "llm: Dig Through Time — look at top 7, take 2. Multi-take "
+            "Look-at-top-N per CLAUDE §15: cards_drawn=2 (taken), "
+            "cards_manipulated=5 (7-2 seen-not-taken). Delve (exile gy "
+            "cards to pay generic) isn't modeled — the simulator doesn't "
+            "track graveyard size, so the cast Mode uses the full printed "
+            "cost {6}{U}{U}, same treatment as Convoke elsewhere (e.g. "
+            "Return to the Ranks, bonus-m15-29).",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-soc-213",
+        role_features={"removal_destroy_or_exile": True, "is_mass_removal": True},
+        reasons=[
+            "llm: Final Act — choose one or more: destroy all creatures / "
+            "all planeswalkers / all battles / exile all graveyards / "
+            "opponents lose all counters. 'Choose one or more' aggregates "
+            "like a Charm (CLAUDE §12); only the destroy-all-creatures mode "
+            "maps to a role_features flag. The other modes aren't "
+            "separately encoded.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-ons-286",
+        reasons=[
+            "llm: Steely Resolve — creatures of a chosen type gain shroud. "
+            "A global static ability, not an Aura (no 'Enchant creature' "
+            "line) and not a creature buff in the pump-aura sense (no P/T "
+            "or combat keyword granted, and it's conditional on tribal "
+            "overlap). No role_features field fits; left at is_other.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-cmm-295",
+        reasons=[
+            "llm: Heroic Intervention — permanents you control gain "
+            "hexproof and indestructible until end of turn. A board-wide "
+            "mass-protection instant, not a single-target combat trick — "
+            "combat_trick_granted_keywords is scoped to saving/winning ONE "
+            "combat for a targeted creature (CLAUDE §3), and stretching it "
+            "to cover symmetric board-wide protection would misrepresent "
+            "the field. Left at is_other, same call as Teferi's Protection "
+            "(bonus-2x2-32) below.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-mh3-63",
+        reasons=[
+            "llm: Harbinger of the Seas — 'nonbasic lands are Islands,' a "
+            "board-wide static land-type-changer (affects both players' "
+            "nonbasic lands). No role_features field models land-type "
+            "effects (is_mana_rock is for mana ABILITIES, not type "
+            "changes); left at is_creature only.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-msc-794",
+        reasons=[
+            "llm: Deadly Dispute — additional cost: sacrifice an artifact "
+            "or creature; draw 2 + make a Treasure. The sac cost is far "
+            "easier to pay than most 'sacrifice a permanent' costs (any "
+            "spare token/dork qualifies), but it's still the same shape as "
+            "the documented 'sac-or-activated draw with mana cost' "
+            "precedent (Sewer-veillance Cam, CLAUDE §2) — gated by a "
+            "resource the opening hand doesn't guarantee, especially T1-2. "
+            "Left at is_other for consistency; flagging here in case the "
+            "owner wants to revisit given how trivially payable the cost "
+            "usually is.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-m15-29",
+        modes=[cast_mode("{X}{W}{W}", [noop("convoke:reanimate_x_small_creatures")])],
+        reasons=[
+            "llm bonus: Return to the Ranks X+WW Convoke X reanimates — "
+            "same card, same encoding as SOS's bonus-m15-29 copy (Convoke "
+            "isn't modeled, printed cost used as-is, role_features stays "
+            "is_other).",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-cn2-121",
+        reasons=[
+            "llm: Show and Tell — each player MAY put an artifact / "
+            "creature / enchantment / land from hand onto the battlefield. "
+            "Symmetric (opponent benefits equally) and entirely optional; "
+            "no removal/draw/pump field fits, and treating it as ramp would "
+            "overstate a combo piece that's low-value in a vacuum. Left at "
+            "is_other.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-m21-25",
+        reasons=[
+            "llm: Light of Promise — Aura granting 'whenever you gain "
+            "life, put that many +1/+1 counters on this creature.' A "
+            "purely triggered, lifegain-dependent value engine with zero "
+            "immediate effect — same shape as Super Intelligence (#77, "
+            "CLAUDE §16): neither is_removal_aura nor is_pump_aura fits, "
+            "and per the triggered-abilities policy settled there, we "
+            "don't force it into the binary. Falls through to is_other.",
+        ],
+    )
+)
+
+P(
+    llm(
+        "MSH",
+        "bonus-2x2-32",
+        reasons=[
+            "llm: Teferi's Protection — life total can't change, "
+            "protection from everything, all your permanents phase out "
+            "until your next turn. A board-wide fog/protection effect, not "
+            "a single-target combat trick (same reasoning as Heroic "
+            "Intervention, bonus-cmm-295, above) — 'protection from "
+            "everything' and phasing aren't expressible in "
+            "combat_trick_granted_keywords' vocabulary anyway. Left at "
+            "is_other.",
         ],
     )
 )

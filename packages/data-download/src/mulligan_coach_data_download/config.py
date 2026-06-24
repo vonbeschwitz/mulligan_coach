@@ -32,15 +32,19 @@ DEFAULT_EVENT_TYPES: tuple[EventType, ...] = (
 )
 
 # Default set codes — the most recent Premier-Draft-supported sets as of
-# 2026-06-21. SHOULD be reviewed before each download run, since new sets
+# 2026-06-23. SHOULD be reviewed before each download run, since new sets
 # release every few months. Override at the CLI with --sets.
 #
 # The three-letter set codes are the ones 17Lands uses in dataset filenames
-# (e.g. ``game_data_public.TLA.PremierDraft.csv.gz``). MSH ("Marvel Super
-# Heroes") releases on Arena 2026-06-23; its bonus sheet (Scryfall code MAR)
-# is drafted as part of MSH packs and has no separate 17Lands dataset, so it
-# is NOT listed here — see packages/cards' run-detector --sets MSH,MAR
-# instead, which reads MAR cards straight from the Scryfall snapshot.
+# (e.g. ``game_data_public.TLA.PremierDraft.csv.gz``). MSH's bonus sheet
+# (60 cards: classic reprints + 7 "Marvel Universe" character cards) has
+# no separate set code of its own — it's NOT Scryfall's "MAR" set (that's
+# an unrelated, pre-existing 2025 Marvel Universe masterpiece set). The
+# bonus sheet is discovered automatically from the 17Lands Premier-Draft
+# ratings parquet by packages/cards' run-detector (the same mechanism
+# TLA/TMT/SOS use for their own bonus sheets) and folded directly into
+# MSH.json — no extra set code needs to be listed here or passed to
+# run-detector.
 DEFAULT_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS", "MSH")
 
 
