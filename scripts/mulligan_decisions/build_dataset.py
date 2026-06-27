@@ -235,6 +235,14 @@ def build_decisions(
     quoted_game = ", ".join(f'"{c}"' for c in GAME_COLS)
     candidate_cols = ", ".join(f"candidate_hand_{i}" for i in range(1, 8))
 
+    # We drop the empty candidate slots *inside DuckDB* (the WHERE on the
+    # exploded CTE) rather than after the fact in pandas. The UNNEST turns
+    # each game into 7 rows (one per candidate_hand_i), but most slots are
+    # NULL — a player who kept their first hand only has candidate_hand_1.
+    # Filtering in SQL means the ~6x-larger NULL-laden frame never reaches
+    # pandas: it keeps peak memory down and avoids a full-width boolean-mask
+    # copy of the wide deck matrix (which OOM'd on larger sets when DuckDB's
+    # CSV type-sniffing brought the deck_* columns through as int64).
     sql = f"""
     WITH wide AS (
         SELECT
@@ -244,12 +252,16 @@ def build_decisions(
             {quoted_deck}
         FROM read_csv_auto({csv_literal})
         WHERE expansion = '{set_code}' AND event_type = '{event_type}'
+    ),
+    exploded AS (
+        SELECT
+            wide.* EXCLUDE ({candidate_cols}),
+            unnest([{candidate_cols}]) AS hand_arena_ids,
+            unnest([1, 2, 3, 4, 5, 6, 7]) AS hand_index
+        FROM wide
     )
-    SELECT
-        wide.* EXCLUDE ({candidate_cols}),
-        unnest([{candidate_cols}]) AS hand_arena_ids,
-        unnest([1, 2, 3, 4, 5, 6, 7]) AS hand_index
-    FROM wide
+    SELECT * FROM exploded
+    WHERE hand_arena_ids IS NOT NULL AND hand_arena_ids <> ''
     """
     # DuckDB -> Arrow -> pandas preserves int8/int16 dtypes so the wide
     # deck matrix stays memory-efficient (a plain .fetchdf() upcasts to
@@ -257,9 +269,8 @@ def build_decisions(
     arrow_table = con.execute(sql).to_arrow_table()
     con.close()
     df = arrow_table.to_pandas()
-    # Drop rows where this candidate slot is empty (player never saw an
-    # i-th hand). DuckDB emits NULL for missing CSV cells.
-    df = df[df["hand_arena_ids"].notna() & (df["hand_arena_ids"] != "")].reset_index(drop=True)
+    del arrow_table  # free the Arrow copy before any further pandas work
+    df = df.reset_index(drop=True)
     log.info("  %s: %d decision rows", set_code, len(df))
 
     if df.empty:
