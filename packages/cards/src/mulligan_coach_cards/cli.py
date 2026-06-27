@@ -295,7 +295,7 @@ def _bonus_sheet_scryfall_entries(
     scryfall_by_name: dict[str, dict[str, Any]],
     *,
     data_root: Path | None,
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
+) -> list[dict[str, Any]]:
     """For a set whose 17Lands Premier-Draft ratings parquet exists,
     return the Scryfall entries for any cards in the format that
     aren't in the primary set pool.
@@ -308,24 +308,30 @@ def _bonus_sheet_scryfall_entries(
     is the right source of truth for *which* cards are in the format
     — it lists every card a Premier-Draft player can encounter.
 
-    Returns ``(extras, mtga_ids_by_name)`` where:
+    Each returned dict is a Scryfall card ready to be parsed, with two
+    identifying fields rewritten:
 
-    * ``extras`` are Scryfall dicts ready to be parsed, with the
-      ``set`` field overridden to *set_code* so each resulting
-      ParsedCard reports the target set as its origin.
-    * ``mtga_ids_by_name`` is a name → Arena card ID map sourced
-      from the 17Lands parquet. The caller patches ``arena_id`` on
-      the parsed bonus-sheet cards from this map, because MTGJSON's
-      ``(oracle_id, set_code)`` index typically doesn't carry the
-      *reprint's* mtga_id under the current set code.
+    * ``set`` → *set_code*, so the resulting ``ParsedCard.set_code``
+      reports the current format rather than the reprint's origin set.
+    * ``collector_number`` → ``bonus-<srcset>-<srccn>``, so a
+      bonus-sheet card's source-set number can't collide with a primary
+      card's (which would break the collector_number-keyed ``mark`` and
+      apply-patches flows).
+
+    arena_id for these reprints is *not* set here — MTGJSON's
+    ``(oracle_id, set_code)`` index keys on the reprint's original
+    printing and returns None under the current set code. It's
+    backfilled from the same 17Lands ratings parquet by
+    :func:`_backfill_arena_ids_from_ratings`, which covers primary cards
+    (MTGJSON lags new sets) and bonus-sheet reprints alike.
 
     If the ratings parquet for *set_code* doesn't exist (e.g., a
-    set whose download step hasn't run yet), returns empty.
+    set whose download step hasn't run yet), returns ``[]``.
     """
     try:
         stats = load_premier_draft_stats(set_code, data_root=data_root)
     except FileNotFoundError:
-        return [], {}
+        return []
     # Names covered by the primary pool, including DFC front-face fallback.
     primary_names: set[str] = set()
     for c in primary_pool:
@@ -336,28 +342,20 @@ def _bonus_sheet_scryfall_entries(
         if " // " in str(n):
             primary_names.add(str(n).split(" // ", 1)[0])
     extras: list[dict[str, Any]] = []
-    arena_ids: dict[str, int] = {}
     missed: list[str] = []
-    for name, stats_row in stats.by_name.items():
+    for name in stats.by_name:
         if name in primary_names:
             continue
         match = scryfall_by_name.get(name)
         if match is None:
             missed.append(name)
             continue
-        # Clone the source dict and rewrite identifying fields so the
-        # parsed ParsedCard's ``set_code`` reports the current format
-        # and the ``collector_number`` is unique within the per-set
-        # JSON (a bonus-sheet card's source-set collector number can
-        # collide with a primary card's, breaking the
-        # collector_number-keyed `mark` and apply-patches flows).
         extra = dict(match)
         source_set = str(match.get("set", "?")).lower()
         source_cn = str(match.get("collector_number", "?"))
         extra["set"] = set_code.lower()
         extra["collector_number"] = f"bonus-{source_set}-{source_cn}"
         extras.append(extra)
-        arena_ids[name] = stats_row.mtga_id
     if missed:
         log.warning(
             "[%s] %d card name(s) from 17Lands ratings not in Scryfall: %s",
@@ -365,7 +363,52 @@ def _bonus_sheet_scryfall_entries(
             len(missed),
             sorted(missed)[:10],
         )
-    return extras, arena_ids
+    return extras
+
+
+def _backfill_arena_ids_from_ratings(
+    cards: list[ParsedCard],
+    set_code: str,
+    *,
+    data_root: Path | None,
+) -> int:
+    """Stamp ``arena_id`` from 17Lands' ``mtga_id`` onto any card whose
+    arena_id MTGJSON hasn't supplied yet. Mutates *cards* in place and
+    returns the number of cards backfilled.
+
+    Two populations need this on a freshly-rotated format:
+
+    * **Primary-set cards** — MTGJSON's ``(oracle_id, set_code)`` index
+      lags a set's Arena release by weeks, so every primary card parses
+      with ``arena_id=None`` until MTGJSON catches up.
+    * **Bonus-sheet reprints** — MTGJSON keys arena_id on the reprint's
+      *original* printing, so the lookup returns None under the current
+      format's set code.
+
+    17Lands publishes ``mtga_id`` for every card in the format the moment
+    ratings exist, so it's the right interim source for both. The
+    three-tier :meth:`StatsLookup.match` (arena_id → exact name →
+    front-face name) resolves DFCs whose ``ParsedCard.name`` is the joint
+    ``Front // Back`` form. Cards that already carry an arena_id (from
+    MTGJSON) are left untouched — MTGJSON stays authoritative; this only
+    fills gaps.
+
+    No-ops (returns 0) when the ratings parquet for *set_code* doesn't
+    exist yet.
+    """
+    try:
+        ratings = load_premier_draft_stats(set_code, data_root=data_root)
+    except FileNotFoundError:
+        return 0
+    n_backfilled = 0
+    for card in cards:
+        if card.arena_id is not None:
+            continue
+        hit = ratings.match(card)
+        if hit is not None:
+            card.arena_id = hit.mtga_id
+            n_backfilled += 1
+    return n_backfilled
 
 
 @app.command("run-detector")
@@ -388,9 +431,13 @@ def run_detector(
       ratings parquet for the format but not in the primary Scryfall
       set. Each reprint's Scryfall dict is rewritten to claim ``set=<code>``
       before parsing, so the resulting ``ParsedCard.set_code`` reports
-      the current format. arena_id for bonus-sheet cards is sourced
-      from 17Lands' ``mtga_id`` (MTGJSON's index keys on the original
-      set's printing and would return None here).
+      the current format.
+
+    After parsing, ``arena_id`` is backfilled from 17Lands' ``mtga_id``
+    for every card MTGJSON hasn't ingested yet — both primary cards on a
+    freshly-rotated format (MTGJSON lags a set's Arena release by weeks)
+    and bonus-sheet reprints (MTGJSON keys arena_id on the original
+    printing). See :func:`_backfill_arena_ids_from_ratings`.
     """
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     log.info("Loading Scryfall snapshot…")
@@ -428,7 +475,7 @@ def run_detector(
         if not pool:
             typer.echo(f"\n[{code}] no cards found in Scryfall snapshot — skipping.")
             continue
-        bonus_extras, bonus_arena_ids = _bonus_sheet_scryfall_entries(
+        bonus_extras = _bonus_sheet_scryfall_entries(
             code, pool, scryfall_by_name, data_root=data_root
         )
         if bonus_extras:
@@ -439,14 +486,18 @@ def run_detector(
             )
             pool.extend(bonus_extras)
         freshly_parsed = [parse_card(card, arena_id_index=arena_id_index) for card in pool]
-        # Backfill arena_id for bonus-sheet cards from 17Lands' mtga_id —
-        # MTGJSON's (oracle_id, set_code) index is keyed on the
-        # original printing and returns None for the reprint under the
-        # current format's set code.
-        if bonus_arena_ids:
-            for parsed in freshly_parsed:
-                if parsed.arena_id is None and parsed.name in bonus_arena_ids:
-                    parsed.arena_id = bonus_arena_ids[parsed.name]
+        # Backfill arena_id from 17Lands' mtga_id for every card MTGJSON
+        # hasn't ingested yet — primary cards on a freshly-rotated format
+        # and bonus-sheet reprints alike (see _backfill_arena_ids_from_ratings).
+        # Runs before merge_detector_run so preserved llm_encoded entries
+        # pick up the fresh arena_id via its carry-forward.
+        n_backfilled = _backfill_arena_ids_from_ratings(freshly_parsed, code, data_root=data_root)
+        if n_backfilled:
+            log.info(
+                "[%s] Backfilled arena_id for %d card(s) from 17Lands mtga_id.",
+                code,
+                n_backfilled,
+            )
         merged, n_preserved, n_rewritten = merge_detector_run(
             code,
             freshly_parsed,

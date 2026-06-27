@@ -16,7 +16,11 @@ from typing import Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from mulligan_coach_cards.cli import _bonus_sheet_scryfall_entries, app
+from mulligan_coach_cards.cli import (
+    _backfill_arena_ids_from_ratings,
+    _bonus_sheet_scryfall_entries,
+    app,
+)
 from mulligan_coach_cards.models import (
     ParsedCard,
     ParseStatus,
@@ -306,8 +310,7 @@ def _write_ratings(data_root: Path, set_code: str, rows: list[dict[str, Any]]) -
 def test_bonus_sheet_finds_reprints_outside_primary_pool(tmp_path: Path) -> None:
     """A card in the 17Lands ratings parquet but not in the primary set
     pool gets pulled in from another set's Scryfall entry, with its
-    ``set`` field rewritten to the target code and its mtga_id mapped
-    out for downstream arena_id backfill."""
+    ``set`` and ``collector_number`` rewritten to the target code."""
     primary = _scryfall_card(name="Local Card", set_code="tst", oracle_id="oid-local")
     bonus_source = _scryfall_card(name="Evolving Wilds", set_code="tmc", oracle_id="oid-wilds")
     scryfall_by_name = {"Local Card": primary, "Evolving Wilds": bonus_source}
@@ -321,9 +324,7 @@ def test_bonus_sheet_finds_reprints_outside_primary_pool(tmp_path: Path) -> None
         ],
     )
 
-    extras, arena_ids = _bonus_sheet_scryfall_entries(
-        "TST", [primary], scryfall_by_name, data_root=tmp_path
-    )
+    extras = _bonus_sheet_scryfall_entries("TST", [primary], scryfall_by_name, data_root=tmp_path)
     assert len(extras) == 1
     assert extras[0]["name"] == "Evolving Wilds"
     # Set was rewritten to the target so the parser will report set_code="TST".
@@ -331,7 +332,6 @@ def test_bonus_sheet_finds_reprints_outside_primary_pool(tmp_path: Path) -> None
     # Collector number rewritten so bonus-sheet entries don't collide
     # with primary set collector numbers in the resulting JSON.
     assert extras[0]["collector_number"] == "bonus-tmc-1"
-    assert arena_ids == {"Evolving Wilds": 98586}
 
 
 def test_bonus_sheet_returns_empty_when_no_ratings_parquet(tmp_path: Path) -> None:
@@ -339,11 +339,10 @@ def test_bonus_sheet_returns_empty_when_no_ratings_parquet(tmp_path: Path) -> No
     new set we haven't downloaded 17Lands data for yet), the helper
     returns empty rather than raising."""
     primary = _scryfall_card(name="Only Card", set_code="tst", oracle_id="oid-1")
-    extras, arena_ids = _bonus_sheet_scryfall_entries(
+    extras = _bonus_sheet_scryfall_entries(
         "TST", [primary], {"Only Card": primary}, data_root=tmp_path
     )
     assert extras == []
-    assert arena_ids == {}
 
 
 def test_bonus_sheet_skips_names_already_in_primary_pool(tmp_path: Path) -> None:
@@ -354,11 +353,8 @@ def test_bonus_sheet_skips_names_already_in_primary_pool(tmp_path: Path) -> None
 
     _write_ratings(tmp_path, "TST", [_ratings_row(name="Shared Card", mtga_id=1001)])
 
-    extras, arena_ids = _bonus_sheet_scryfall_entries(
-        "TST", [primary], scryfall_by_name, data_root=tmp_path
-    )
+    extras = _bonus_sheet_scryfall_entries("TST", [primary], scryfall_by_name, data_root=tmp_path)
     assert extras == []
-    assert arena_ids == {}
 
 
 def test_bonus_sheet_warns_on_names_not_in_scryfall(tmp_path: Path, caplog: Any) -> None:
@@ -378,11 +374,8 @@ def test_bonus_sheet_warns_on_names_not_in_scryfall(tmp_path: Path, caplog: Any)
         ],
     )
 
-    extras, arena_ids = _bonus_sheet_scryfall_entries(
-        "TST", [primary], scryfall_by_name, data_root=tmp_path
-    )
+    extras = _bonus_sheet_scryfall_entries("TST", [primary], scryfall_by_name, data_root=tmp_path)
     assert [e["name"] for e in extras] == ["Bitterblossom"]
-    assert arena_ids == {"Bitterblossom": 2}
 
 
 def test_bonus_sheet_handles_dfc_front_face_in_primary_pool(tmp_path: Path) -> None:
@@ -397,11 +390,56 @@ def test_bonus_sheet_handles_dfc_front_face_in_primary_pool(tmp_path: Path) -> N
     # 17Lands lists the card under its front-face name.
     _write_ratings(tmp_path, "TST", [_ratings_row(name="Bursting Sunrise", mtga_id=42)])
 
-    extras, arena_ids = _bonus_sheet_scryfall_entries(
+    extras = _bonus_sheet_scryfall_entries(
         "TST",
         [primary_dfc],
         {"Bursting Sunrise // Day's Glow": primary_dfc},
         data_root=tmp_path,
     )
     assert extras == []
-    assert arena_ids == {}
+
+
+# ---------------------------------------------------------------------------
+# _backfill_arena_ids_from_ratings — arena_id from 17Lands' mtga_id
+# ---------------------------------------------------------------------------
+
+
+def test_backfill_arena_ids_stamps_cards_missing_an_id(tmp_path: Path) -> None:
+    """Cards whose arena_id MTGJSON hasn't supplied get it from 17Lands'
+    ``mtga_id``; cards that already have one are left untouched; DFCs
+    resolve on their front-face name; cards absent from the ratings stay
+    None."""
+    cards = [
+        _make_card(name="No Arena Id", collector_number="1", oracle_id="o1"),
+        _make_card(name="Already Has Id", collector_number="2", oracle_id="o2"),
+        _make_card(name="Front Face // Back Face", collector_number="3", oracle_id="o3"),
+        _make_card(name="Not In Ratings", collector_number="4", oracle_id="o4"),
+    ]
+    cards[1].arena_id = 999  # MTGJSON already populated this — must be preserved.
+
+    _write_ratings(
+        tmp_path,
+        "TST",
+        [
+            _ratings_row(name="No Arena Id", mtga_id=111),
+            _ratings_row(name="Already Has Id", mtga_id=222),
+            _ratings_row(name="Front Face", mtga_id=333),
+        ],
+    )
+
+    n = _backfill_arena_ids_from_ratings(cards, "TST", data_root=tmp_path)
+
+    assert n == 2  # the missing-id card and the DFC front-face match.
+    assert cards[0].arena_id == 111
+    assert cards[1].arena_id == 999  # untouched — MTGJSON stays authoritative.
+    assert cards[2].arena_id == 333  # matched on the front face.
+    assert cards[3].arena_id is None  # not in the ratings → left None.
+
+
+def test_backfill_arena_ids_noop_without_ratings_parquet(tmp_path: Path) -> None:
+    """A brand-new set with no ratings parquet yet → no-op, returns 0,
+    leaves arena_ids untouched rather than raising."""
+    cards = [_make_card(name="Lonely", collector_number="1", oracle_id="o1")]
+    n = _backfill_arena_ids_from_ratings(cards, "TST", data_root=tmp_path)
+    assert n == 0
+    assert cards[0].arena_id is None
