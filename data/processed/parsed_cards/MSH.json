@@ -880,6 +880,42 @@
             "role_tag": "create_token"
           }
         ]
+      },
+      {
+        "kind": "land_cycle",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": true
+        },
+        "effects": [
+          {
+            "kind": "fetch_land",
+            "target_filter": "basic",
+            "subtype": null,
+            "destination": "hand",
+            "count": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -927,8 +963,7 @@
     },
     "status": "auto",
     "reasons": [
-      "unrecognised line: 'Basic landcycling {2}'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "effects: noop (create_token)"
     ]
   },
   {
@@ -5772,6 +5807,42 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "land_cycle",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": true
+        },
+        "effects": [
+          {
+            "kind": "fetch_land",
+            "target_filter": "basic",
+            "subtype": null,
+            "destination": "hand",
+            "count": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -5808,8 +5879,7 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "unrecognised line: 'Basic landcycling {2}'",
-      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+      "alternative modes: land_cycle"
     ]
   },
   {
@@ -15213,6 +15283,42 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "land_cycle",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": true
+        },
+        "effects": [
+          {
+            "kind": "fetch_land",
+            "target_filter": "basic",
+            "subtype": null,
+            "destination": "hand",
+            "count": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -15249,8 +15355,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "unrecognised line: 'Basic landcycling {2}'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "evergreen keywords: menace",
+      "alternative modes: land_cycle"
     ]
   },
   {
@@ -18885,6 +18991,42 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "land_cycle",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": true
+        },
+        "effects": [
+          {
+            "kind": "fetch_land",
+            "target_filter": "basic",
+            "subtype": null,
+            "destination": "hand",
+            "count": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -18921,8 +19063,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "unrecognised line: 'Basic landcycling {2}'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "evergreen keywords: reach",
+      "alternative modes: land_cycle"
     ]
   },
   {
@@ -19639,11 +19781,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "equipment: unrecognised line: 'Double all damage equipped creature would deal.'",
-      "equipment: unrecognised line: 'Equip worthy {1}'",
-      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+      "llm: equipment; '{2}{R}, Discard this card: 2 damage to each creature' captured as activated mass removal (is_mass_removal, removal_burn_damage=2). 'Double all damage' and 'Equip worthy {1}' are static/cost lines not simulator-relevant."
     ]
   },
   {
@@ -24773,6 +24913,42 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "land_cycle",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": true
+        },
+        "effects": [
+          {
+            "kind": "fetch_land",
+            "target_filter": "basic",
+            "subtype": null,
+            "destination": "hand",
+            "count": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -24809,8 +24985,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "unrecognised line: 'Basic landcycling {2}'",
-      "MV>=6 fast-path: card unlikely to affect mulligan-relevant turns"
+      "evergreen keywords: trample",
+      "alternative modes: land_cycle"
     ]
   },
   {
@@ -42549,6 +42725,39 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "cycle",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": true
+        },
+        "effects": [
+          {
+            "kind": "draw_cards",
+            "n": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -42584,8 +42793,7 @@
     },
     "status": "auto",
     "reasons": [
-      "enchantment: unrecognised line: 'Cycling {2}'",
-      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+      "enchantment"
     ]
   },
   {

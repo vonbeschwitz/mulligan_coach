@@ -1570,11 +1570,16 @@ _OTHER_TRIGGERED_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Cycling line. Covers plain "Cycling {2}" plus type-cycling
-# "Mountaincycling {2}" / "Plainscycling {1}{W}". Captures the type prefix
-# (or empty for plain cycling) and the cost.
+# Cycling line. Covers plain "Cycling {2}", type-cycling
+# "Mountaincycling {2}" / "Plainscycling {1}{W}", generic "Landcycling {2}",
+# and the two-word "Basic landcycling {2}" form (basic-land-only landcycling,
+# which Scryfall spells with a space — the previous one-word "basiclandcycling"
+# alternative never matched real oracle text). The optional ``basic`` group
+# distinguishes basic-only land-cycling from any-land land-cycling.
 _CYCLING_RE = re.compile(
-    r"^(?P<prefix>plains|island|swamp|mountain|forest|land|basiclands?|wastes?)?cycling\s+"
+    r"^(?P<basic>basic\s+)?"
+    r"(?P<prefix>plains|island|swamp|mountain|forest|land|wastes?)?"
+    r"cycling\s+"
     r"(?P<cost>(?:\{[^{}]+\})+)\.?$",
     re.IGNORECASE,
 )
@@ -1700,6 +1705,7 @@ def _build_cycling_mode(line: str) -> Mode | None:
     m = _CYCLING_RE.match(line)
     if m is None:
         return None
+    is_basic = bool(m.group("basic"))
     prefix = (m.group("prefix") or "").lower()
     cost_str = m.group("cost")
     try:
@@ -1710,15 +1716,18 @@ def _build_cycling_mode(line: str) -> Mode | None:
 
     effects: list[Effect]
     if not prefix:
+        # Plain cycling — discard the card to draw one.
         effects = [DrawCardsEffect(n=1)]
         return Mode(kind="cycle", cost=cost, effects=effects)
     if prefix == "land":
-        effects = [
-            FetchLandEffect(target_filter="any", destination="hand"),
-        ]
+        # "Landcycling" fetches any land; "Basic landcycling" only basics.
+        if is_basic:
+            effects = [FetchLandEffect(target_filter="basic", destination="hand")]
+        else:
+            effects = [FetchLandEffect(target_filter="any", destination="hand")]
         return Mode(kind="land_cycle", cost=cost, effects=effects)
-    if prefix in ("basicland", "basiclands", "wastes", "waste"):
-        # Wastecycling and basiclandcycling treat any basic.
+    if prefix in ("wastes", "waste"):
+        # Wastescycling fetches a Wastes (a basic colorless land).
         effects = [FetchLandEffect(target_filter="basic", destination="hand")]
         return Mode(kind="land_cycle", cost=cost, effects=effects)
     # Specific basic type — Plainscycling, Mountaincycling, etc.
@@ -1752,6 +1761,19 @@ def _build_channel_mode(line: str) -> Mode | None:
     if effects is None:
         return None
     return Mode(kind="channel", cost=cost, effects=effects)
+
+
+def _build_alt_play_mode(line: str) -> Mode | None:
+    """Cheap from-hand alternative modes: cycling / land-cycling / channel.
+
+    Shared by every per-type branch (creature, spell, equipment/vehicle,
+    enchantment/artifact) so an expensive card with one of these modes is
+    encoded the same way everywhere. These modes are mulligan-relevant even
+    on a high-mana-value card — the player can pitch it on turn 2 to fix
+    mana or dig — so leaving them off (which previously happened on every
+    non-creature type) made the simulator treat the card as a dead draw.
+    """
+    return _build_cycling_mode(line) or _build_channel_mode(line)
 
 
 def _build_activated_mode(
@@ -2050,12 +2072,9 @@ def _parse_creature(
         if _looks_like_self_static_modifier(chunk, name):
             continue
 
-        # 3. Cycling / land-cycling on the creature.
-        if cyc := _build_cycling_mode(chunk):
-            extra_modes.append(cyc)
-            continue
-        if ch := _build_channel_mode(chunk):
-            extra_modes.append(ch)
+        # 3. Cycling / land-cycling / channel on the creature.
+        if alt := _build_alt_play_mode(chunk):
+            extra_modes.append(alt)
             continue
         # 3b. Waterbending activated mode (TLA).
         if wb := _try_build_waterbend_mode(chunk, role_features):
@@ -2247,6 +2266,11 @@ def _parse_spell(
         # below); the rest of the text still parses for role_features.
         if chunk.lower().startswith("as an additional cost to cast this spell"):
             blockers.append(f"additional cost not modelled: {chunk!r}")
+            continue
+        # Cycling / land-cycling / channel on a spell (e.g. a sorcery with
+        # "Basic landcycling {2}" — a cheap mana-fixing pitch on turn 2).
+        if alt := _build_alt_play_mode(chunk):
+            extra_modes_spell.append(alt)
             continue
         # Waterbending activated mode (TLA) on a spell — rare but possible.
         if wb := _try_build_waterbend_mode(chunk, role_features):
@@ -2508,6 +2532,10 @@ def _parse_artifact_typed(
                 role_features.creates_creatures.append(body)
             _extract_triggered_signal(chunk, role_features)
             continue
+        # Cycling / land-cycling / channel on the equipment / vehicle.
+        if alt := _build_alt_play_mode(chunk):
+            extra_modes.append(alt)
+            continue
         # Waterbending activated mode (TLA).
         if wb := _try_build_waterbend_mode(chunk, role_features):
             extra_modes.append(wb)
@@ -2634,6 +2662,11 @@ def _parse_other_permanent(
         # doesn't fall to "unrecognised line".
         if direct_bodies := _match_token_creation(chunk):
             role_features.creates_creatures.extend(direct_bodies)
+            continue
+        # Cycling / land-cycling / channel on the enchantment / artifact
+        # (e.g. an enchantment with "Cycling {2}").
+        if alt := _build_alt_play_mode(chunk):
+            extra_modes.append(alt)
             continue
         # Waterbending activated mode (TLA).
         if wb := _try_build_waterbend_mode(chunk, role_features):
@@ -2779,6 +2812,8 @@ def _summarize_effect(e: Effect) -> str:
 # 5. No modal "Choose one — …" / "Choose two — …" structure — the modal
 #    bullet structure indicates effects we can't fold into a single role
 #    classification.
+# 6. No un-keyworded "{cost}, Discard this card: <effect>" ability — a cheap
+#    from-hand mode (like cycling/channel) that CAN matter on turns 1-3.
 # ---------------------------------------------------------------------------
 
 _COST_REDUCTION_RE = re.compile(
@@ -2787,6 +2822,16 @@ _COST_REDUCTION_RE = re.compile(
     r"\b(?:affinity for|convoke|delve|improvise|undaunted|emerge)\b",
     re.IGNORECASE,
 )
+# A "{cost}, Discard this card: <effect>" activated ability — the
+# un-keyworded sibling of cycling/channel. It's a cheap from-hand mode that
+# CAN matter on turns 1-4 (Visionary's Dance's "{2}, Discard this card: look
+# at the top two..." is a turn-2 filter), so a card carrying one must NOT be
+# silently fast-pathed past review just because its base mana value is high.
+# Cycling / land-cycling lines also contain this phrase in their reminder
+# text, but those parse cleanly to AUTO (with a cycle/land_cycle mode) before
+# the fast-path runs, so they're unaffected — this only catches the residual
+# cards whose discard ability the deterministic parser couldn't model.
+_DISCARD_SELF_ABILITY_RE = re.compile(r"discard this card\s*:", re.IGNORECASE)
 # Modal text — true modal cards offer the player a choice between bullet
 # options. We exclude "Choose up to one target X" because that's a target
 # specification, not a modal selection.
@@ -2813,6 +2858,8 @@ def _qualifies_for_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> bo
     oracle_text = str(card.get("oracle_text") or "")
     if _COST_REDUCTION_RE.search(oracle_text):
         return False
+    if _DISCARD_SELF_ABILITY_RE.search(oracle_text):
+        return False  # cheap from-hand "Discard this card:" mode — review it
     return not _MODAL_RE.search(oracle_text)
 
 
