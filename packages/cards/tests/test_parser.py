@@ -504,6 +504,112 @@ def test_creature_with_landcycling_emits_fetch_mode() -> None:
     assert fetch.destination == "hand"
 
 
+def test_basic_landcycling_two_word_fetches_basic() -> None:
+    # "Basic landcycling {2}" is spelled as two words by Scryfall; it
+    # previously fell to "unrecognised line" + MV fast-path, dropping the
+    # cheap mana-fixing mode. It should emit a land_cycle fetching a basic.
+    card = _scryfall(
+        name="Savage Land Dinosaur",
+        type_line="Creature — Dinosaur",
+        oracle_text=(
+            "Trample\n"
+            "Basic landcycling {2} ({2}, Discard this card: Search your library "
+            "for a basic land card, reveal it, put it into your hand, then shuffle.)"
+        ),
+        mana_cost="{5}{G}",
+        power="6",
+        toughness="6",
+        keywords=["Basic landcycling"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert not any("fast-path" in r for r in p.reasons)
+    cycle_mode = next(m for m in p.modes if m.kind == "land_cycle")
+    fetch = cycle_mode.effects[0]
+    assert isinstance(fetch, FetchLandEffect)
+    assert fetch.target_filter == "basic"
+    assert fetch.destination == "hand"
+
+
+def test_plain_landcycling_fetches_any_land() -> None:
+    card = _scryfall(
+        name="Anyland Cycler",
+        type_line="Creature — Scout",
+        oracle_text="Landcycling {2}",
+        mana_cost="{3}{G}",
+        power="2",
+        toughness="2",
+        keywords=["Landcycling"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    fetch = next(m for m in p.modes if m.kind == "land_cycle").effects[0]
+    assert isinstance(fetch, FetchLandEffect)
+    assert fetch.target_filter == "any"
+
+
+def test_sorcery_with_basic_landcycling_emits_mode() -> None:
+    # The cycling mode must be recognised on non-creature types too — this
+    # sorcery previously fast-pathed with the landcycling mode dropped.
+    card = _scryfall(
+        name="Borough Backup",
+        type_line="Sorcery",
+        oracle_text=(
+            "Create two 3/2 white Hero creature tokens with vigilance.\n"
+            "Basic landcycling {2} ({2}, Discard this card: Search your library "
+            "for a basic land card, reveal it, put it into your hand, then shuffle.)"
+        ),
+        mana_cost="{4}{W}",
+        keywords=["Basic landcycling"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert not any("fast-path" in r for r in p.reasons)
+    assert "land_cycle" in [m.kind for m in p.modes]
+
+
+def test_enchantment_with_cycling_emits_mode() -> None:
+    # Plain cycling on a non-creature enchantment (was "enchantment:
+    # unrecognised line: 'Cycling {2}'" + fast-path before the fix).
+    card = _scryfall(
+        name="Reconnaissance Mission",
+        type_line="Enchantment",
+        oracle_text=(
+            "Whenever a creature you control deals combat damage to a player, "
+            "you may draw a card.\n"
+            "Cycling {2} ({2}, Discard this card: Draw a card.)"
+        ),
+        mana_cost="{3}{U}",
+        keywords=["Cycling"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert not any("fast-path" in r for r in p.reasons)
+    cycle_mode = next(m for m in p.modes if m.kind == "cycle")
+    assert any(isinstance(e, DrawCardsEffect) for e in cycle_mode.effects)
+
+
+def test_high_mv_discard_self_ability_not_fast_pathed() -> None:
+    # Visionary's Dance: a 7-MV sorcery whose cheap "{2}, Discard this card:
+    # look at top 2" filter mode is mulligan-relevant. The un-keyworded
+    # discard-self ability isn't a cycling/channel keyword and the look-at-top
+    # effect isn't auto-recognised, so the card must route to NEEDS_LLM for
+    # hand review rather than being silently fast-pathed past it.
+    card = _scryfall(
+        name="Visionary's Dance",
+        type_line="Sorcery",
+        oracle_text=(
+            "Create two 3/3 blue and red Elemental creature tokens with flying.\n"
+            "{2}, Discard this card: Look at the top two cards of your library. "
+            "Put one of them into your hand and the other into your graveyard."
+        ),
+        mana_cost="{5}{U}{R}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert not any("fast-path" in r for r in p.reasons)
+
+
 def test_activated_destroy_artifact_auto_with_other_role() -> None:
     # Generalized destroy/exile regex picks up the artifact target.
     # Creature stats parse fine, the death-trigger life-gain is ignored

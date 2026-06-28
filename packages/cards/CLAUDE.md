@@ -385,7 +385,17 @@ added here.
   mana dorks, mana rocks).
 * **Conditional ETB-tapped (lands)** — "enters tapped (unless
   N or more lands / a basic land / a basic <type>)".
-* **Cycling / land-cycling / channel** — emitted as additional Modes.
+* **Cycling / land-cycling / channel** — emitted as additional Modes,
+  via the shared `_build_alt_play_mode` helper called from **every** type
+  branch (creature, spell, equipment/vehicle, enchantment/artifact). This
+  covers plain `Cycling {N}`, type-cycling (`Mountaincycling {N}`), generic
+  `Landcycling {N}`, and the two-word `Basic landcycling {N}` form. These
+  are cheap from-hand modes that matter at mulligan time even on a high-MV
+  card (pitch it turn 2 to fix mana / dig), so the **MV≥4 fast-path** also
+  refuses to auto-promote any NEEDS_LLM card carrying an un-keyworded
+  `{cost}, Discard this card:` ability — those route to review instead (e.g.
+  SOS Visionary's Dance, whose `{2}, Discard this card: look at top 2`
+  filter is hand-encoded as a `channel` mode + `LookAtTopEffect`).
 * **Static self-modifiers on creatures** — "This creature gets/has/'s
   power..." lines are ignored as noise (variable P/T creatures, etc.
   still auto-classify).
@@ -429,8 +439,8 @@ including each set's bonus sheet where one exists:
 | TMT | 161 (84.7%) | 29 (15.3%) | 0 | 0 |
 | ECL | 218 (81.6%) | 49 (18.4%) | 0 | 0 |
 | TLA | 223 (79.4%) | 58 (20.6%) | 0 | 0 |
-| SOS | 189 (55.4%) | 152 (44.6%) | 0 | 0 |
-| MSH | 256 (76.6%) | 78 (23.4%) | 0 | 0 |
+| SOS | 188 (55.1%) | 153 (44.9%) | 0 | 0 |
+| MSH | 255 (76.3%) | 79 (23.7%) | 0 | 0 |
 
 SOS has a lower auto rate because the Prepare layout (36 cards) always
 bails to NEEDS_LLM, the bonus-sheet reprints add 75 cards from older
