@@ -32752,6 +32752,42 @@
             "role_tag": "create_token"
           }
         ]
+      },
+      {
+        "kind": "channel",
+        "cost": {
+          "mana": {
+            "raw": "{2}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 2
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": true
+        },
+        "effects": [
+          {
+            "kind": "look_at_top",
+            "n": 2,
+            "accepts_land": true,
+            "accepts_nonland": true,
+            "destination": "hand"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -32778,7 +32814,23 @@
           "subtypes": [
             "Elemental"
           ],
-          "keywords": []
+          "keywords": [
+            "flying"
+          ]
+        },
+        {
+          "power": "3",
+          "toughness": "3",
+          "colors": [
+            "U",
+            "R"
+          ],
+          "subtypes": [
+            "Elemental"
+          ],
+          "keywords": [
+            "flying"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -32795,13 +32847,12 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_drawn": 1,
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: '{2}, Discard this card: Look at the top two cards of your library. Put one of them into your hand and the other into your graveyard.'",
-      "MV>=7 fast-path: card unlikely to affect mulligan-relevant turns"
+      "llm: 7-mv token sorcery with a cheap '{2}, Discard this card: look at top 2, take 1' filter mode (channel + LookAtTopEffect) \u2014 mulligan-relevant from turn 2; cards_drawn=1, cards_manipulated=1"
     ]
   },
   {
