@@ -237,11 +237,21 @@ def evaluate(
     log: logging.Logger,
     min_deck_size: int = 40,
     max_deck_size: int = 42,
+    allowed_draft_ids: set[str] | None = None,
 ) -> None:
     log.info("\n=== %s / %s ===", event_type, set_code)
     log.info("  Elite filter: %s", ELITE_DEFS[event_type])
 
     df = load_elite_decisions(event_type, set_code, log)
+    if allowed_draft_ids is not None:
+        before = len(df)
+        df = df.loc[df["draft_id"].astype(str).isin(allowed_draft_ids)].reset_index(drop=True)
+        log.info(
+            "  draft-id allowlist applied: %d -> %d rows (allowlist has %d ids)",
+            before,
+            len(df),
+            len(allowed_draft_ids),
+        )
     if df.empty:
         log.info("  no elite rows; skipping")
         return
@@ -439,7 +449,24 @@ def main() -> None:
         default=42,
         help="Upper bound (inclusive) on deck size. Defaults to 42.",
     )
+    ap.add_argument(
+        "--draft-ids-file",
+        type=Path,
+        default=None,
+        help=(
+            "Optional newline-delimited file of draft_ids. When given, only "
+            "elite decisions whose draft_id is in the file are evaluated. Use "
+            "to restrict to a model's held-out (test-split) drafts so an "
+            "in-sample set can be scored fairly."
+        ),
+    )
     args = ap.parse_args()
+
+    allowed_draft_ids: set[str] | None = None
+    if args.draft_ids_file is not None:
+        allowed_draft_ids = {
+            line.strip() for line in args.draft_ids_file.read_text().splitlines() if line.strip()
+        }
 
     log = setup_logger()
     log.info("==== Elite first-mulligan agreement check ====")
@@ -463,6 +490,7 @@ def main() -> None:
             log=log,
             min_deck_size=args.min_deck_size,
             max_deck_size=args.max_deck_size,
+            allowed_draft_ids=allowed_draft_ids,
         )
 
 

@@ -164,3 +164,65 @@ marginal_mulligan             4              9     13
 clear_mulligan                0             37     37
 total                       185             61    246
 ```
+
+---
+
+# choice_v7 (TLA + TMT + SOS) — runs 2026-06-28
+
+`models/choice_v7` = the choice_v6 methodology (same sweep, seed=0 split,
+Premier-val selection; see `packages/model/scripts/tune_choice_v7.py`) with
+**SOS folded into training**. Settings match the v6 runs above (`n_sims=300`,
+mn=0, 7-card hands, 40–42-card decks). Replay snapshots: SOS 2026-06-27,
+TLA/TMT ~2026-05.
+
+**Sample changes vs v6:** SOS is now **in-sample** for v7 (its games were in
+training). TLA/TMT remain in-sample. So the *full-set* SOS agreement below is
+in-sample and not directly comparable to v6's out-of-sample SOS number — see
+the held-out comparison further down for the fair test.
+
+## Full elite sets — v7 vs v6
+
+| Set | Event | n | v6 agree | v7 agree | v7 actual mull % | v7 pred mull % | v7 lift | v7 not-complete-disagree |
+|-----|-------|---|----------|----------|------------------|----------------|---------|--------------------------|
+| TLA | Premier | 4,375 | 95.09% | **94.93%** | 9.17%  | 6.61%  | +4.10  | 98.06% |
+| TLA | Trad    | 975   | 94.87% | **94.77%** | 21.33% | 21.03% | +16.10 | 98.56% |
+| TMT | Premier | 296   | 95.27% | **93.24%** | 7.09%  | 5.07%  | +0.33  | 97.30% |
+| TMT | Trad    | 246   | 92.28% | **92.28%** | 24.80% | 20.33% | +17.08 | 96.34% |
+| SOS | Premier | 1,546 | 92.50% *(out)* | **94.44%** *(in)* | 10.74% | 7.50% | +5.18 | 97.67% |
+| SOS | Trad    | 777   | 91.25% *(out)* | **94.59%** *(in)* | 15.83% | 16.34% | +10.42 | 98.20% |
+
+## Fair held-out SOS — v6 vs v7 on the SAME test-split drafts
+
+Restricted to v7's held-out (test-split) SOS drafts via
+`--draft-ids-file models/choice_v7/sos_heldout_draft_ids.txt`. On these rows
+v7 never trained (held-out) and v6 never saw any SOS (out-of-sample), so the
+two are judged on identical, fair-to-both hands.
+
+| Event | n | v6 agree | v7 agree | v6 not-complete-disagree | v7 not-complete-disagree |
+|-------|---|----------|----------|--------------------------|--------------------------|
+| SOS Premier | 90 | 91.11% | 91.11% | 95.56% | 96.67% |
+| SOS Trad    | 48 | 97.92% | 100.00% | 100.00% | 100.00% |
+
+## Headline read (v7)
+
+- **No regression on the production decision metric.** TLA is a tie (Premier
+  94.93% vs 95.09%, Trad 94.77% vs 94.87% — sub-noise on n=4,375/975). TMT
+  Premier dips to 93.24% (from 95.27%) but n=296 makes that ~1.6σ; TMT Trad is
+  identical.
+- **The fair held-out SOS comparison is a wash on this metric** — v6 and v7
+  make *identical* keep/mull side-calls on the 90 held-out Premier decisions,
+  and v7 is marginally better on "not-complete-disagree" (96.67% vs 95.56%) and
+  on Trad (100% vs 97.92%, n=48). The held-out elite subset is tiny (138
+  decisions) and the keep/mull-side metric is coarse — most elite 7s are obvious
+  keeps — so it cannot resolve the calibration gain.
+- **The real SOS win shows up in log-loss, not side-agreement.** On 62,079
+  held-out SOS feature rows, v7 cuts log-loss ~9% (0.1935→0.1761 Premier) and
+  lifts accuracy 0.919→0.927 vs v6. See
+  `models/choice_v7/compare_v6_v7_heldout.log`
+  (`packages/model/scripts/compare_choice_v6_v7_heldout.py`). The elite
+  agreement check confirms v7 doesn't *break* anything; the log-loss eval is
+  where the SOS improvement is measurable.
+- **TMT is the one soft spot:** v7 is slightly worse on TMT (Premier lift +0.33
+  vs v6's +2.36; held-out log-loss +0.014), consistent with TMT's training share
+  shrinking once SOS (the largest set) joined. TMT is small and no longer the
+  priority format, so this is an acceptable trade for the SOS gain.
