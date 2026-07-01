@@ -388,6 +388,42 @@ Always start the cast Mode's effects with `EntersBattlefieldEffect()`
   power 4 or greater, add {G}{G} instead.`) → `produces=[["G"]]`. The
   conditional doubling is dropped.
 
+### Additional costs → assume the resource ISN'T available
+
+When a card carries a mandatory *additional* cost to cast (beyond its
+mana cost), decide whether that cost is reliably payable in the
+turn 1–4 window. **Bump the cast Mode's `cost.mana` (not the printed
+`mana_cost`, which stays Scryfall-true — same split as Spree, §12) to
+the cheapest cost we can guarantee.** The rule of thumb:
+
+- **Reliably payable → ignore it, keep the printed cost.** Pay-life and
+  discard-a-card are (almost) always available, so a spell with "pay N
+  life" or "discard a card" as an additional cost keeps its printed mana
+  cost. Example: **Redirect Lightning** ("pay 5 life or pay {2}") stays
+  `{R}` — you can always pay the life.
+- **Not reliably payable → assume it isn't, and pay the mana
+  equivalent.** Sacrificing an artifact/creature, or tapping other
+  creatures, needs board state we can't count on early. If the cost
+  offers a mana alternative, use it; if it's a fixed mana add-on, add
+  it. Examples (TLA): **Deadly Precision** ("pay {4} or sacrifice an
+  artifact or creature") → cast Mode `{4}{B}`; **Benevolent River
+  Spirit** (mandatory "waterbend {5}", where tapping your creatures is
+  only optional *help*) → cast Mode `{5}{U}{U}`.
+- **Optional additional cost ("you may …") → keep the printed cost.**
+  The card does something at its base cost; the extra is a kicker-style
+  upgrade (aggregate role_features to the paid outcome per §12, but the
+  base Mode stays castable). Examples: the "you may waterbend {N}"
+  spells (Secret of Bloodbending, Spirit Water Revival, Ruinous
+  Waterbending) and sac-kicker (TMT Stomped by the Foot).
+- **Caller-chosen X that can be 0 → keep the printed cost.** A
+  *mandatory* "waterbend {X}" is payable at X=0 (no resource needed), so
+  the base mana cost is reliably available. Examples: Crashing Wave,
+  Foggy Swamp Visions.
+- **Conditional cost *reducers* ("costs {N} less if …") → keep the full
+  printed cost.** Assuming the discount isn't active is already the
+  conservative call, so no change (The Great Henge, Blasphemous Act,
+  Gran-Gran).
+
 ---
 
 ## 10. Examples of "keep current encoding"
@@ -819,7 +855,123 @@ card's own permanent). Kept `is_other` for consistency with the
 existing precedent rather than carving out an exception — flagged in
 the card's `reasons` in case the owner wants to revisit.
 
-## 17. When to update this guide
+## 17. TLA / TMT alt-cost review (2026-06-30)
+
+A focused pass over every alternative-casting-cost card in TLA and TMT,
+mirroring the SOS alt-cost cleanup. Findings and conventions applied:
+
+### Mana kicker → second `Mode(kind="cast")` + role_features MAX
+
+The four TLA mana-kicker spells had only the base cast mode, and one had
+role_features pinned to the *unkicked* outcome. Fixed to the §12/§14
+convention (Burst Lightning is the reference: two cast modes, scalar
+role_features = the kicked value):
+
+- **#138 Firebending Lesson** ({R}, Kicker {4}: 2 dmg → 5 dmg) —
+  `removal_burn_damage` 2 → **5** (the kicked value, per §12), plus the
+  {4}{R} kicked cast mode. This was the one genuine functional bug: the
+  model was seeing a 2-damage spell, not the 5-damage removal it usually
+  is.
+- **#1 Aang's Journey** ({2}, Kicker {2}) — added the {4} kicked cast
+  mode (still a basic-land-to-hand fetch; the extra Shrine tutor is a
+  nonland card that stays `is_other`). role_features unchanged.
+- **#123 Zuko's Conviction** ({B}, Kicker {4}) — added the {4}{B} kicked
+  cast mode (reanimate; unmodeled, `is_other`). role_features unchanged.
+- **#143 Jet's Brainwashing** ({R}, Kicker {3}) — added the {3}{R} kicked
+  cast mode (threaten; unmodeled, `is_other`). role_features unchanged.
+
+The second (kicked) cast mode is always the more expensive one, so the
+simulator — which casts the cheapest playable mode — never picks it;
+adding it is for consistency with the convention and any future
+mode-counting feature. The part that *matters* is the role_features MAX
+(Firebending Lesson).
+
+### Non-mana kicker → NO second cast mode
+
+**TMT #82 Stomped by the Foot** kicks by *sacrificing an artifact or
+creature* (not mana): base -2/-2, kicked -5/-5. Per the §16 Teamwork
+precedent for non-mana alt costs, we do **not** add a second cast mode
+(the base is already castable; a sac-cost mode would be strictly more
+restrictive). role_features already sits at `removal_destroy_or_exile`
+(correct for both -N/-N modes per §16), so no change.
+
+### Sneak (TMT) → drop the alt cost, keep the normal-cost cast mode
+
+Sneak is a from-hand alternative cost ("You may cast this spell for {N}
+if you also return an unblocked attacker you control to hand during the
+declare blockers step"). Although hand-resident, the discount is gated on
+a mid-combat board state (an unblocked attacker) the simulator can't
+represent, and the sneak cost is usually *cheaper* than the printed cost
+— so encoding it as a second cast mode would make these creatures look
+castable a turn or two early (the trap §14 warns about for graveyard
+costs; same reasoning as Force of Negation's free pitch). Convention:
+**encode only the normal `Mode(kind="cast")` at the printed cost; drop
+the sneak cost.** `sneak` is already in
+`keywords.py:IGNORABLE_KEYWORD_LINES` so these auto-classify. Verified
+all 26 TMT Sneak cards use the printed cost, not the sneak cost.
+
+### Graveyard / exile-resident costs — verified correct (no change)
+
+All TLA flashback/foretell spells (#133 Fire Nation Attacks, #153
+Solstice Revelations, #154 Sozin's Comet, #192 Rockalanche) already carry
+only their normal-cost cast mode with the alt cost dropped, per §14. Iroh,
+Grand Lotus (#227) is a creature that *grants* flashback — correct as a
+plain creature. Force of Negation (free pitch) and Hama (grants a
+waterbend cast to an *exiled* card, not to itself) are also correct.
+
+### Additional (non-mana) costs → sim-cost bump
+
+A follow-up pass (same day) checked every "additional cost to cast"
+card. Two understated their castability because the cast Mode used only
+the printed mana cost even though a resource we can't guarantee is
+required. Bumped the **cast Mode** cost (printed `mana_cost` unchanged),
+per the new rule in §9:
+
+- **Deadly Precision** ({B}, "pay {4} or sacrifice an artifact or
+  creature") → cast Mode `{4}{B}` (assume no sac fodder).
+- **Benevolent River Spirit** ({U}{U}, mandatory "waterbend {5}") → cast
+  Mode `{5}{U}{U}` (assume no creatures to tap).
+
+Everything else was correctly left alone — pay-life additional costs
+(Redirect Lightning), optional "you may waterbend {N}" upgrades,
+X=0-payable "waterbend {X}" (Crashing Wave, Foggy Swamp Visions), and
+conditional cost reducers. See §9 for the full decision table.
+
+### Bonus-sheet "special guest" backlog — all encoded (2026-06-30)
+
+The alt-cost review surfaced a backlog of un-encoded (`needs_llm`)
+"special guest" bonus-sheet reprints — 17 in TLA, 6 in TMT — that
+`check_deck_encodings` rejected. At the owner's request they were all
+hand-encoded in the same pass; both sets are now 0 `needs_llm` / 0
+`needs_human`. Decisions worth remembering (all consistent with the
+rules above):
+
+- **Alt-cost cards** confirmed the §14 split: Cityscape Leveler
+  (unearth), Join the Dance (flashback, → two 1/1 Human tokens), Waves
+  of Aggression (retrace), Underworld Breach (escape, → `is_other`) all
+  drop their graveyard-resident alt cost; Shattering Spree (replicate,
+  destroy artifact → `is_other`) drops the variable-copy cost.
+- **Mass-protection instants** Teferi's Protection and Heroic
+  Intervention → `is_other` (§16), not combat tricks.
+- **Recurring triggered draw** Mystic Remora → `is_other`; its
+  parser-set `cards_drawn=1` was cleared per §16 (triggered/upkeep draw
+  isn't modeled).
+- **Return of the Wildspeaker** (modal instant) aggregates per §12:
+  `cards_drawn=1` (variable draw, min 1) + `combat_trick_power/toughness=3`
+  (the mass +3/+3 mode).
+- **Prosperity** ("each player draws X") → `cards_drawn=1` + a
+  `DrawCardsEffect(n=1)` on the cast mode (X=1 minimum, §9).
+- **Imprisoned in the Moon** (turns a creature/pw into a do-nothing
+  land) → `is_removal_aura` (§5 "loses all abilities" bucket).
+- **Tutors** Eladamri's Call / Cruel Tutor → `is_other` (§10).
+- **Dark Depths** → `is_land` only; the {30}-of-activations Marit Lage
+  is far too gated to model as token creation.
+- **Umezawa's Jitte** → `is_equipment` only (counter-gated modal
+  abilities aren't mulligan-relevant); Metallic Mimic / Arcbound
+  Ravager → `is_creature` only; Intruder Alarm / Training Grounds /
+  Rhythm of the Wild → `is_other`.
+
+## 18. When to update this guide
 
 Update when:
 

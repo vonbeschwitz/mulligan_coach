@@ -27044,11 +27044,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "equipment: unrecognised line: '\u2022 Equipped creature gets +2/+2 until end of turn.'",
-      "equipment: unrecognised line: '\u2022 Target creature gets -1/-1 until end of turn.'",
-      "equipment: unrecognised line: '\u2022 You gain 2 life.'"
+      "llm_encoded: equipment; counter-gated modal abilities not mulligan-relevant"
     ]
   },
   {
@@ -27447,7 +27445,7 @@
         "effects": [
           {
             "kind": "noop",
-            "role_tag": "default_cast_unencoded_effects"
+            "role_tag": "extra_combat"
           }
         ]
       }
@@ -27483,9 +27481,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "alternative-cost keyword(s) present: retrace"
+      "llm_encoded: extra combat phase (not modeled); retrace (gy-resident) dropped"
     ]
   },
   {
@@ -27716,10 +27714,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed",
-      "unrecognised line: 'Each other creature you control of the chosen type enters with an additional +1/+1 counter on it.'"
+      "llm_encoded: lord that buffs future same-type creatures; is_creature only"
     ]
   },
   {
@@ -28261,34 +28258,6 @@
             "kind": "enters_battlefield"
           }
         ]
-      },
-      {
-        "kind": "activated",
-        "cost": {
-          "mana": {
-            "raw": "",
-            "pips": [],
-            "cmc": 0,
-            "color_pips": {},
-            "has_x": false,
-            "has_hybrid": false,
-            "has_phyrexian": false,
-            "has_colorless": false,
-            "has_snow": false
-          },
-          "tap": false,
-          "untap": false,
-          "sacrifice": {
-            "target": "artifact"
-          },
-          "discard_self": false
-        },
-        "effects": [
-          {
-            "kind": "noop",
-            "role_tag": "activated_unknown"
-          }
-        ]
       }
     ],
     "mana_abilities": [],
@@ -28322,10 +28291,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed",
-      "unrecognised line: 'Modular 1'"
+      "llm_encoded: modular / sac-for-counter pump; is_creature only"
     ]
   },
   {
@@ -28738,9 +28706,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment: unrecognised line: 'Nontoken creatures you control have riot.'"
+      "llm_encoded: riot/anti-counter anthem enchantment; no modeled role"
     ]
   },
   {
@@ -29096,9 +29064,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment: unrecognised line: \"Each nonland card in your graveyard has escape. The escape cost is equal to the card's mana cost plus exile three other cards from your graveyard.\""
+      "llm_encoded: grants escape to gy cards (combo); escape is on other cards, not itself"
     ]
   },
   {

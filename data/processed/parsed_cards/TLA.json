@@ -73,6 +73,42 @@
             "count": 1
           }
         ]
+      },
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{4}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              }
+            ],
+            "cmc": 4,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "fetch_land",
+            "target_filter": "basic",
+            "subtype": null,
+            "destination": "hand",
+            "count": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -5905,8 +5941,14 @@
         "kind": "cast",
         "cost": {
           "mana": {
-            "raw": "{U}{U}",
+            "raw": "{5}{U}{U}",
             "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
               {
                 "kind": "color",
                 "color": "U",
@@ -5920,7 +5962,7 @@
                 "amount": null
               }
             ],
-            "cmc": 2,
+            "cmc": 7,
             "color_pips": {
               "U": 2
             },
@@ -5979,7 +6021,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 4/5 flying ward {2} with additional waterbend {5} cost; ETB scry 2 already captured. Effectively a 7-mana creature for casting"
+      "llm: 4/5 flying ward {2} with additional waterbend {5} cost; ETB scry 2 already captured. Effectively a 7-mana creature for casting",
+      "effective-cost: sim cost bumped {U}{U}->{5}{U}{U}; mandatory additional cost 'waterbend {5}' -> pay {5} in mana (creatures to tap not reliable)"
     ]
   },
   {
@@ -12859,8 +12902,14 @@
         "kind": "cast",
         "cost": {
           "mana": {
-            "raw": "{B}",
+            "raw": "{4}{B}",
             "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
               {
                 "kind": "color",
                 "color": "B",
@@ -12868,7 +12917,7 @@
                 "amount": null
               }
             ],
-            "cmc": 1,
+            "cmc": 5,
             "color_pips": {
               "B": 1
             },
@@ -12924,7 +12973,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 1-mana destroy creature with additional cost (pay {4} or sacrifice). removal_destroy_or_exile already captured"
+      "llm: 1-mana destroy creature with additional cost (pay {4} or sacrifice). removal_destroy_or_exile already captured",
+      "effective-cost: sim cost bumped {B}->{4}{B}; additional cost 'pay {4} or sacrifice an artifact or creature' -> assume {4} (sac fodder not reliable)"
     ]
   },
   {
@@ -16692,6 +16742,47 @@
             "role_tag": "default_cast_unencoded_effects"
           }
         ]
+      },
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{4}{B}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "B": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "kicker:reanimate_creature_from_gy"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -18780,7 +18871,48 @@
         "effects": [
           {
             "kind": "noop",
-            "role_tag": "default_cast_unencoded_effects"
+            "role_tag": "burn_2_creature"
+          }
+        ]
+      },
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{4}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "R": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "kicker:burn_5_creature"
           }
         ]
       }
@@ -18801,7 +18933,7 @@
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
-      "removal_burn_damage": 2,
+      "removal_burn_damage": 5,
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
@@ -19444,6 +19576,47 @@
           {
             "kind": "noop",
             "role_tag": "default_cast_unencoded_effects"
+          }
+        ]
+      },
+      {
+        "kind": "cast",
+        "cost": {
+          "mana": {
+            "raw": "{3}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 3
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 4,
+            "color_pips": {
+              "R": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "kicker:threaten_creature"
           }
         ]
       }
@@ -39268,7 +39441,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "mass_protection"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -39302,9 +39480,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: \"Exile Teferi's Protection.\""
+      "llm_encoded: mass-protection instant, not a targeted combat trick (guide 16)"
     ]
   },
   {
@@ -39915,9 +40093,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment: unrecognised line: \"Creatures don't untap during their controllers' untap steps.\""
+      "llm_encoded: combo enchantment; no modeled role"
     ]
   },
   {
@@ -40151,11 +40329,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed",
-      "alternative-cost keyword(s) present: unearth",
-      "fix: ETB destroy/exile \u2192 removal_destroy_or_exile"
+      "llm_encoded: destroy nonland permanent = removal; unearth (gy-resident) dropped"
     ]
   },
   {
@@ -40239,7 +40415,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "draw_cards",
+            "n": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -40254,7 +40435,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -40270,12 +40451,12 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 0,
+      "cards_drawn": 1,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "no effects recognised (empty oracle text?)"
+      "llm_encoded: each player draws X; X=1 minimum -> cards_drawn=1"
     ]
   },
   {
@@ -41019,7 +41200,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "mass_protection"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -41053,9 +41239,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "no effects recognised (empty oracle text?)"
+      "llm_encoded: mass-protection instant, not a targeted combat trick (guide 16)"
     ]
   },
   {
@@ -41541,9 +41727,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised land text: 'Dark Depths enters with ten ice counters on it.'"
+      "llm_encoded: land with no mana ability; Marit Lage too gated to model"
     ]
   },
   {
@@ -41634,7 +41820,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
+      "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -41650,12 +41836,12 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment: unrecognised line: 'Cumulative upkeep {1}'"
+      "llm_encoded: recurring triggered draw not modeled (guide 16); cleared cards_drawn"
     ]
   },
   {
@@ -41986,7 +42172,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "modal:variable_draw_or_mass_pump"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -42001,7 +42192,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -42009,22 +42200,20 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": null,
-      "combat_trick_toughness": null,
+      "combat_trick_power": 3,
+      "combat_trick_toughness": 3,
       "combat_trick_granted_keywords": [],
       "is_removal_aura": false,
       "is_pump_aura": false,
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 0,
+      "cards_drawn": 1,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: 'Choose one \u2014'",
-      "unrecognised line: '\u2022 Draw cards equal to the greatest power among non-Human creatures you control.'",
-      "unrecognised line: '\u2022 Non-Human creatures you control get +3/+3 until end of turn.'"
+      "llm_encoded: modal instant: variable draw (min 1) + mass +3/+3 EOT; aggregated per guide 12"
     ]
   },
   {
@@ -42350,7 +42539,7 @@
         "effects": [
           {
             "kind": "noop",
-            "role_tag": "default_cast_unencoded_effects"
+            "role_tag": "destroy_artifact"
           }
         ]
       }
@@ -42386,9 +42575,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "alternative-cost keyword(s) present: replicate"
+      "llm_encoded: destroy artifact = non-creature removal -> is_other; replicate not modeled"
     ]
   },
   {
@@ -42605,7 +42794,7 @@
         "effects": [
           {
             "kind": "noop",
-            "role_tag": "default_cast_unencoded_effects"
+            "role_tag": "make_two_1_1_humans"
           }
         ]
       }
@@ -42622,8 +42811,31 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
-      "creates_creatures": [],
+      "is_other": false,
+      "creates_creatures": [
+        {
+          "power": "1",
+          "toughness": "1",
+          "colors": [
+            "W"
+          ],
+          "subtypes": [
+            "Human"
+          ],
+          "keywords": []
+        },
+        {
+          "power": "1",
+          "toughness": "1",
+          "colors": [
+            "W"
+          ],
+          "subtypes": [
+            "Human"
+          ],
+          "keywords": []
+        }
+      ],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -42641,9 +42853,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "alternative-cost keyword(s) present: flashback"
+      "llm_encoded: two 1/1 Human tokens; flashback (gy-resident) dropped"
     ]
   },
   {
@@ -42748,7 +42960,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -42759,7 +42971,7 @@
       "combat_trick_power": null,
       "combat_trick_toughness": null,
       "combat_trick_granted_keywords": [],
-      "is_removal_aura": false,
+      "is_removal_aura": true,
       "is_pump_aura": false,
       "aura_pump_power": null,
       "aura_pump_toughness": null,
@@ -42767,9 +42979,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "aura static effect not classified"
+      "llm_encoded: aura turns creature/pw into a do-nothing land = removal aura"
     ]
   },
   {
@@ -43726,7 +43938,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "return_own_permanents"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -43760,9 +43977,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: 'Choose up to two target permanent cards in your graveyard that were put there from the battlefield this turn. Return them to the battlefield tapped.'"
+      "llm_encoded: returns your own permanents that died this turn; no modeled role"
     ]
   },
   {
@@ -43872,9 +44089,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment: unrecognised line: \"Activated abilities of creatures you control cost {2} less to activate. This effect can't reduce the mana in that cost to less than one mana.\""
+      "llm_encoded: activated-ability cost reducer; no modeled role"
     ]
   },
   {
@@ -43961,7 +44178,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "tutor_creature_to_hand"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -43995,9 +44217,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: 'Search your library for a creature card, reveal that card, put it into your hand, then shuffle.'"
+      "llm_encoded: creature tutor -> is_other (guide 10)"
     ]
   },
   {
@@ -45255,7 +45477,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "tutor_to_top"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -45289,9 +45516,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: 'Search your library for a card, then shuffle and put that card on top. You lose 2 life.'"
+      "llm_encoded: tutor to top of library -> is_other (guide 10)"
     ]
   },
   {
@@ -45543,7 +45770,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "lure_forced_block"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -45577,9 +45809,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "no effects recognised (empty oracle text?)"
+      "llm_encoded: combat effect (forced block); not modeled"
     ]
   },
   {
@@ -45651,7 +45883,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "skip_opponent_combat"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -45685,9 +45922,9 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "needs_llm",
+    "status": "llm_encoded",
     "reasons": [
-      "unrecognised line: 'Target opponent skips all combat phases of their next turn.'"
+      "llm_encoded: fog-style combat denial; not modeled"
     ]
   },
   {

@@ -519,13 +519,18 @@ encode the chapter-I / level-1 effect.
   the conditional doubling is dropped because `Predicate` has no
   "creature with power N+" kind. Adding one is a v2 task — until then,
   the simulator slightly underestimates these cards.
-* LLM-encoded cards with alt-cost keywords (evoke / flashback /
-  foretell / madness / jump-start / aftermath) historically only
-  encoded the standard cast Mode and dropped the alt-cost form. The
-  encoding guidance now requires a second `Mode(kind="cast")` for the
-  alt cost (see "Encoding alt-cost casts" above) — older entries (the
-  ECL Evoke incarnations and the few flashback/foretell sorceries) may
-  still be missing it. Re-encode when revisited.
+* LLM-encoded cards with **hand-resident** alt-cost keywords (evoke /
+  kicker / madness / morph / overload) historically only encoded the
+  standard cast Mode and dropped the alt-cost form. The encoding
+  guidance now requires a second `Mode(kind="cast")` for the alt cost
+  (see "Encoding alt-cost casts" above and `CARD_ENCODING_GUIDE.md`
+  §14). **Graveyard/exile-resident** alt costs (flashback / foretell /
+  jump-start / aftermath) correctly stay single-mode — do NOT add a
+  second cast mode for these. SOS, TLA, and TMT have been reviewed
+  against this rule (`CARD_ENCODING_GUIDE.md` §17: TLA kicker spells
+  got their kicked mode + role_features MAX; TMT Sneak and sac-kicker
+  correctly left single-mode). The ECL Evoke incarnations have not yet
+  been re-checked — re-encode when revisited.
 * The parser doesn't auto-detect "Look at the top N cards" patterns
   yet; cards using `LookAtTopEffect` are LLM-encoded by hand. A
   deterministic regex would land in `_match_spell_effect` —
