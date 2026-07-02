@@ -112,16 +112,37 @@ ratings automation.
   names explicitly). Landed before the first public EXE.
 * **Opus.**
 
-### Step 4 — recommend-service tests (review #5)
-* `packages/recommend/tests/test_service.py`: verdict-threshold boundaries,
-  seed determinism, opp_mulligan NaN convention vs training, deck-size
-  bounds. Align `coordinator.py` `_REQUIRED_DECK_SIZE` to service's 40–42.
+### Step 4 — recommend-service tests (review #5) — DONE
+* Added `packages/recommend/tests/test_service.py` (34 tests): verdict-
+  threshold boundary table (inclusive-upper-edge semantics via
+  `math.nextafter`), `_stable_seed` / `_deck_signature` determinism +
+  order-independence + `recommend_choice`'s seed derivation, the
+  `opp_mulligan_count_if_known` NaN convention (parametrised over
+  play/draw × known/unknown, must match what training cached), and the
+  deck-size / hand-size / mulligan-number / model-not-loaded guards.
+  `recommend_choice` is exercised end-to-end against a tiny synthetic
+  mono-G deck through the REAL `simulate` + `build_feature_row`, with
+  only the final XGBoost predictor stubbed — so the captured feature row
+  (hence the NaN assertion) is authentic and no trained bundle is needed.
+* Aligned overlay `coordinator.py`: `_REQUIRED_DECK_SIZE = 40` → range
+  `_MIN_DECK_SIZE = 40` / `_MAX_DECK_SIZE = 42`, matching the service's
+  `40 <= len(deck) <= 42`. Added coordinator tests that a 41-card deck
+  now reaches the service and a 43-card deck is still rejected
+  (`deck_unresolved`, service never called).
+* **Follow-up (not in this step's scope):** `website/app.py` has its own
+  `_REQUIRED_DECK_SIZE = 40` with the same over-rejection of legal 41/42
+  decks and a now-stale "model expects exactly 40" comment. Worth
+  aligning too — fold into Step 5 (which already touches the website).
 * **Opus.**
 
 ### Step 5 — train/serve consistency (review #2b) + degradation surfacing
 * Name-keyed `FormatStats` (reuse `StatsLookup.match` three-tier fallback);
   per-recommendation stats-coverage logging; `degradations: list[str]` on
   `ChoiceRecommendation` rendered in overlay footer + website.
+* Also fold in the Step 4 follow-up: align `website/app.py`
+  `_REQUIRED_DECK_SIZE` to 40–42 (+ fix its stale "expects exactly 40"
+  comment) so the website stops rejecting legal 41/42-card decks the
+  service accepts.
 * **Fable: consistency design (must reason about what TRAINING keyed on —
   fixing inference alone manufactures new skew). Opus: implementation.
   Fable: review.**
