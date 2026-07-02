@@ -70,6 +70,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xgboost as xgb
+from mulligan_coach_features import DEFAULT_KNOWN_SETS
 
 from .baseline import BaselineModel
 from .versioning import (
@@ -262,6 +263,36 @@ def _feature_columns(df_columns: Iterable[str]) -> list[str]:
     return [col for col in df_columns if col not in _NON_FEATURE_COLUMNS]
 
 
+def _assert_expansions_in_vocabulary(expansions: pd.Series) -> None:
+    """Refuse to train if any row's ``expansion`` is outside the feature
+    builder's one-hot vocabulary (:data:`DEFAULT_KNOWN_SETS`).
+
+    An unrepresented set has no ``set_code_<S>`` column, so it trains as
+    the all-zero *reference category* — silently colliding with every
+    other unknown set (the SOS/MSH bug this roadmap step kills). This is a
+    *coverage* check, deliberately distinct from the Step 1 version check
+    (which catches semantics *drift*): both must hold. There is no bypass
+    flag — a silently-unrepresentable set is exactly the failure mode we
+    want to make loud.
+    """
+    known = set(DEFAULT_KNOWN_SETS)
+    unknown = expansions[~expansions.isin(known)]
+    if unknown.empty:
+        return
+    # value_counts() sorts by frequency so the biggest offenders lead.
+    detail = ", ".join(f"{exp!r} ({n} rows)" for exp, n in unknown.value_counts().items())
+    raise ValueError(
+        f"Training rows contain expansion(s) outside the feature one-hot "
+        f"vocabulary DEFAULT_KNOWN_SETS={tuple(DEFAULT_KNOWN_SETS)}: {detail}. "
+        f"An unrepresented set trains as the all-zero reference category, "
+        f"silently colliding with other unknown sets. Fix by: (a) appending "
+        f"the set to DEFAULT_KNOWN_SETS in packages/features (bumping "
+        f"FEATURES_SEMANTICS_VERSION in the same PR), then (b) re-materialising "
+        f"the cache, or patching existing shards' set_code_* one-hots with "
+        f"packages/model/scripts/patch_set_onehots.py."
+    )
+
+
 def _per_row_base_margin(
     df: pd.DataFrame,
     baseline: BaselineModel,
@@ -437,6 +468,10 @@ def train_model(
     if len(df) == 0:
         raise ValueError("Loaded an empty feature dataframe; nothing to train on.")
     log.info("Loaded %d total rows", len(df))
+
+    # Coverage check (Step 2): every row's set must be representable in the
+    # one-hot vocabulary, or it silently trains as the reference category.
+    _assert_expansions_in_vocabulary(df["expansion"])
 
     feature_names = _feature_columns(df.columns)
     if not feature_names:

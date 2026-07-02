@@ -334,3 +334,29 @@ def test_train_choice_model_metadata_json_has_version_keys(tmp_path: Path) -> No
     assert payload["version_mismatch_allowed"] is False
     assert len(payload["shard_lineage"]) == 1
     assert payload["shard_lineage"][0]["n_sims_per_row"] == 200
+
+
+# ---------------------------------------------------------------------------
+# Train-time expansion-vocabulary assert (Step 2)
+# ---------------------------------------------------------------------------
+
+
+def test_train_choice_model_rejects_out_of_vocab_expansion(tmp_path: Path) -> None:
+    """A row whose expansion isn't in DEFAULT_KNOWN_SETS must raise (it would
+    otherwise train as the all-zero reference category)."""
+    df = _make_synthetic_frame(n_drafts=40, games_per_draft=4)
+    df.loc[df.index[:10], "expansion"] = "ZZZ"  # outside the vocabulary
+    p = _write_shard_dir(df, tmp_path / "shard", _meta(pipeline_versions()))
+    with pytest.raises(ValueError, match="ZZZ"):
+        train_choice_model(parquet_paths=[p], n_estimators=5)
+
+
+def test_train_choice_model_accepts_sos_after_v2_bump(tmp_path: Path) -> None:
+    """SOS is now in-vocabulary, so an all-SOS shard trains without error."""
+    df = _make_synthetic_frame(n_drafts=80, games_per_draft=4)
+    df["expansion"] = "SOS"
+    p = _write_shard_dir(df, tmp_path / "shard", _meta(pipeline_versions()))
+    result = train_choice_model(
+        parquet_paths=[p], n_estimators=5, max_depth=3, early_stopping_rounds=3
+    )
+    assert result.metadata.test.n_rows >= 0

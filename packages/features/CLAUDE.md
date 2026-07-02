@@ -184,14 +184,18 @@ implements it.
 
 `build_feature_row(hand, deck, aggregate_stats, shrunk, zscores,
 on_the_play, mulligan_number, event_type, set_code)` returns a flat
-`dict[str, float]` of 200 columns (196 features per the spec, with
-the three context one-hot families counted as one feature each):
+`dict[str, float]` of 202 columns (the three context one-hot families
+counted as one feature each):
 
-* **Context (3 / 7 columns)** — `on_the_play` + one-hot event_type
-  + one-hot set_code. Default vocabularies cover today's three
-  Premier Draft sets and three event types; new sets at inference
-  time produce all-zero columns rather than blowing up the row's
-  shape.
+* **Context (3 / 9 columns)** — `on_the_play` + one-hot event_type
+  + one-hot set_code. Default vocabularies cover the five current
+  Premier Draft sets (`DEFAULT_KNOWN_SETS = ("TMT", "ECL", "TLA",
+  "SOS", "MSH")`) and three event types; new sets at inference time
+  produce all-zero columns rather than blowing up the row's shape.
+  SOS + MSH were appended in the `FEATURES_SEMANTICS_VERSION` 1 -> 2
+  bump (roadmap Step 2), which is why the row grew from 200 to 202
+  columns; before it, SOS trained as the all-zero reference category
+  and MSH was indistinguishable from it at inference.
 * **Deck-level (16)** — curve percentages, removal %, color counts,
   avg WR of spells (shrunk).
 * **Hand-level (72)** — 13 basic counts + 42 role-by-MV grid
