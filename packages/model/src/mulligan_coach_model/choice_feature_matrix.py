@@ -88,6 +88,12 @@ from .feature_matrix import (
     _library_from_deck,
     feature_parquet_paths,
 )
+from .versioning import (
+    ShardMeta,
+    now_iso,
+    pipeline_versions,
+    stamp_or_check_shard_meta,
+)
 
 log = logging.getLogger(__name__)
 
@@ -737,6 +743,23 @@ def materialize_choice_feature_matrix(
         completed, next_chunk_idx = set(), 0
 
     _sweep_stale_tmp_files(output_dir)
+
+    # Stamp / check the pipeline-version sidecar before any expensive work
+    # (mirrors the win-model materialiser). Fresh dir or overwrite writes
+    # _meta.json; resume verifies the existing chunks match the live
+    # simulator + feature code or grace-stamps a legacy shard.
+    stamp_or_check_shard_meta(
+        output_dir,
+        current=ShardMeta(
+            pipeline_versions=pipeline_versions(),
+            set_code=set_code,
+            event_type=event_type,
+            n_sims_per_row=n_sims_per_row,
+            created_at=now_iso(),
+        ),
+        had_existing_chunks=bool(existing_chunks),
+        overwrite=overwrite,
+    )
 
     cache: KeptHandCache | None = None
     if cached_features_dir is not None:

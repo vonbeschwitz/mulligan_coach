@@ -38,6 +38,25 @@ comparison (see ``scripts/compare_calibration_methods.py``):
 
 The four-way split shape is retained: the "calibration" split is
 now simply a second held-out eval point alongside ``test``.
+
+Materialisation-invariant split
+-------------------------------
+
+``_grouped_split`` assigns each ``draft_id`` to a split via a
+``sha256(seed:draft_id)`` hash (see
+:func:`mulligan_coach_model.versioning.draftid_hash_unit`) rather than a
+numpy permutation over the *observed* set of draft_ids. The old
+permutation index depended on how many unique draft_ids were present and
+the order they first appeared, so re-materialising a cache reshuffled the
+train/val/test assignment and made cross-run held-out comparisons leak.
+The hash assignment depends only on ``(seed, draft_id)``.
+
+**Comparability note:** models trained with the old permutation split are
+NOT split-comparable with hash-split models — a draft that was in "test"
+under the old scheme may be in "train" under the new one. Each model's own
+held-out metrics remain the only honest cross-model comparison; do not
+compare a permutation-split model's test log-loss against a hash-split
+model's directly.
 """
 
 from __future__ import annotations
@@ -53,6 +72,14 @@ import pandas as pd
 import xgboost as xgb
 
 from .baseline import BaselineModel
+from .versioning import (
+    SPLIT_METHOD,
+    ShardLineageEntry,
+    check_training_lineage,
+    draftid_hash_unit,
+    gather_shard_lineage,
+    pipeline_versions,
+)
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +127,11 @@ class TrainingMetadata:
     Saved alongside the booster + baseline so :meth:`ModelBundle.load`
     can validate that the feature column order matches at inference
     time (mismatched order silently corrupts predictions).
+
+    The version-lineage fields (``pipeline_versions``, ``shard_lineage``,
+    ``version_mismatch_allowed``, ``split_method``) default to
+    "unknown / not recorded" so models trained before Step 1 still load
+    (:func:`load_train_result` tolerates their absence).
     """
 
     feature_names: tuple[str, ...]
@@ -109,6 +141,16 @@ class TrainingMetadata:
     test: SplitMetrics
     best_iteration: int
     seed: int
+    pipeline_versions: dict[str, int] | None = None
+    """Live simulator/feature versions at train time. ``None`` for models
+    trained before version stamping."""
+    shard_lineage: tuple[ShardLineageEntry, ...] = ()
+    """Per-shard-directory provenance of the training caches."""
+    version_mismatch_allowed: bool = False
+    """Whether the run was forced past a version-mismatch check."""
+    split_method: str | None = None
+    """How the train/val/calib/test split was drawn (``draftid_hash_v1``);
+    ``None`` for old permutation-split models."""
 
 
 @dataclass(frozen=True)
@@ -150,11 +192,25 @@ def _grouped_split(
 ) -> _Split:
     """Assign each unique ``draft_id`` to exactly one of four splits.
 
-    Random group assignment via a numpy-RNG shuffle. The proportions
-    are draft-level, so row-level proportions track to within
-    sampling noise.
+    Materialisation-invariant hash assignment (``SPLIT_METHOD`` =
+    ``draftid_hash_v1``): each draft's unit-interval position comes from
+    :func:`mulligan_coach_model.versioning.draftid_hash_unit`, which depends
+    only on ``(seed, draft_id)``. A draft therefore always lands in the same
+    band regardless of the dataset's composition, row order, or whether the
+    cache was re-materialised — unlike the old permutation index, whose
+    assignment depended on the count and first-appearance order of the
+    observed draft_ids.
 
-    Validates that the four fractions are in ``[0, 1)`` and sum to
+    Bands are cumulative and ordered val -> calib -> test -> train::
+
+        u < val_frac                       -> val
+        u < val_frac + calib_frac          -> calib
+        u < val_frac + calib_frac + test_frac -> test
+        else                               -> train
+
+    Split sizes are now binomial around the target fractions rather than
+    exact; at our draft counts (thousands) the deviation is fractions of a
+    percent. Validates that the four fractions are in ``(0, 1)`` and sum to
     less than 1 (the remainder is the training split).
     """
     for name, val in (("val", val_frac), ("calib", calib_frac), ("test", test_frac)):
@@ -164,28 +220,37 @@ def _grouped_split(
     if total_eval >= 1.0:
         raise ValueError(f"val_frac + calib_frac + test_frac must sum to < 1; got {total_eval}")
 
-    unique = draft_ids.unique()
-    rng = np.random.default_rng(seed)
-    shuffled = rng.permutation(unique)
-    n = len(shuffled)
-    n_val = round(n * val_frac)
-    n_calib = round(n * calib_frac)
-    n_test = round(n * test_frac)
-    n_train = n - n_val - n_calib - n_test
-    if n_train <= 0:
-        raise ValueError("Splits leave no rows for training; reduce val/calib/test fractions.")
+    val_cut = val_frac
+    calib_cut = val_frac + calib_frac
+    test_cut = val_frac + calib_frac + test_frac
 
-    train_ids = set(shuffled[:n_train].tolist())
-    val_ids = set(shuffled[n_train : n_train + n_val].tolist())
-    calib_ids = set(shuffled[n_train + n_val : n_train + n_val + n_calib].tolist())
-    test_ids = set(shuffled[n_train + n_val + n_calib :].tolist())
+    # One hash per unique draft_id, then map every row through the same
+    # assignment (cheap: the unique set is far smaller than the row count).
+    assignment: dict[object, str] = {}
+    for did in draft_ids.unique():
+        u = draftid_hash_unit(seed, did)
+        if u < val_cut:
+            assignment[did] = "val"
+        elif u < calib_cut:
+            assignment[did] = "calib"
+        elif u < test_cut:
+            assignment[did] = "test"
+        else:
+            assignment[did] = "train"
 
-    return _Split(
-        train=draft_ids.isin(train_ids).to_numpy(),
-        val=draft_ids.isin(val_ids).to_numpy(),
-        calib=draft_ids.isin(calib_ids).to_numpy(),
-        test=draft_ids.isin(test_ids).to_numpy(),
+    bucket = draft_ids.map(assignment)
+    split = _Split(
+        train=(bucket == "train").to_numpy(),
+        val=(bucket == "val").to_numpy(),
+        calib=(bucket == "calib").to_numpy(),
+        test=(bucket == "test").to_numpy(),
     )
+    if not split.train.any():
+        raise ValueError(
+            "Hash split assigned no rows to training (too few drafts for these "
+            "fractions). Add more data or reduce val/calib/test fractions."
+        )
+    return split
 
 
 def _feature_columns(df_columns: Iterable[str]) -> list[str]:
@@ -284,6 +349,11 @@ def _save_metadata(metadata: TrainingMetadata, path: Path) -> None:
         "test": _metrics_to_dict(metadata.test),
         "best_iteration": metadata.best_iteration,
         "seed": metadata.seed,
+        # Version lineage (Step 1). See mulligan_coach_model.versioning.
+        "pipeline_versions": metadata.pipeline_versions,
+        "shard_lineage": [e.to_json_dict() for e in metadata.shard_lineage],
+        "version_mismatch_allowed": metadata.version_mismatch_allowed,
+        "split_method": metadata.split_method,
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2))
@@ -307,6 +377,7 @@ def train_model(
     early_stopping_rounds: int = 20,
     baseline_l2_C: float = 10.0,
     seed: int = 0,
+    allow_version_mismatch: bool = False,
 ) -> TrainResult:
     """End-to-end training: baseline -> XGBoost.
 
@@ -338,6 +409,14 @@ def train_model(
     seed:
         Controls the train/val/calib/test draft assignment and the
         XGBoost RNG. Same seed -> same split.
+    allow_version_mismatch:
+        When ``False`` (default), a :class:`ShardVersionError` is raised if
+        any training shard was built under pipeline versions that differ
+        from the live simulator + feature code (the choice_v7 incident:
+        training on a cache older than the code). Pass ``True`` to train on
+        the mix anyway — the choice is recorded in ``metadata.json`` as
+        ``version_mismatch_allowed``. Legacy shards with no version sidecar
+        only warn, regardless of this flag.
 
     Returns
     -------
@@ -347,6 +426,12 @@ def train_model(
     paths = [parquet_paths] if isinstance(parquet_paths, Path) else list(parquet_paths)
     if not paths:
         raise ValueError("Need at least one parquet path to fit.")
+
+    # Version lineage: read each shard's _meta.json and refuse to mix
+    # mismatched simulator/feature semantics unless explicitly allowed.
+    shard_lineage = gather_shard_lineage(paths)
+    check_training_lineage(shard_lineage, allow_version_mismatch=allow_version_mismatch)
+
     log.info("Loading %d feature parquet shard(s)", len(paths))
     df = pd.concat([pd.read_parquet(p) for p in paths], ignore_index=True)
     if len(df) == 0:
@@ -445,6 +530,10 @@ def train_model(
         test=_compute_metrics(y[splits.test], p_test),
         best_iteration=best_iteration,
         seed=seed,
+        pipeline_versions=pipeline_versions(),
+        shard_lineage=tuple(shard_lineage),
+        version_mismatch_allowed=allow_version_mismatch,
+        split_method=SPLIT_METHOD,
     )
     log.info(
         "Done. test_log_loss=%.4f test_brier=%.4f test_accuracy=%.4f",
@@ -503,6 +592,16 @@ def load_train_result(model_dir: Path) -> TrainResult:
             n_rows=int(d["n_rows"]),
         )
 
+    # Version-lineage keys are absent on pre-Step-1 models; tolerate that.
+    raw_versions = payload.get("pipeline_versions")
+    pipeline_versions_loaded: dict[str, int] | None = (
+        {str(k): int(v) for k, v in raw_versions.items()}
+        if isinstance(raw_versions, dict)
+        else None
+    )
+    shard_lineage = tuple(
+        ShardLineageEntry.from_json_dict(e) for e in payload.get("shard_lineage", [])
+    )
     metadata = TrainingMetadata(
         feature_names=tuple(payload["feature_names"]),
         train=_mk_split(payload["train"]),
@@ -511,6 +610,10 @@ def load_train_result(model_dir: Path) -> TrainResult:
         test=_mk_split(payload["test"]),
         best_iteration=int(payload["best_iteration"]),
         seed=int(payload["seed"]),
+        pipeline_versions=pipeline_versions_loaded,
+        shard_lineage=shard_lineage,
+        version_mismatch_allowed=bool(payload.get("version_mismatch_allowed", False)),
+        split_method=payload.get("split_method"),
     )
     return TrainResult(
         booster=booster,

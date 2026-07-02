@@ -11,6 +11,8 @@ load, predict) rather than benchmark XGBoost itself.
 
 from __future__ import annotations
 
+import json
+import random
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +26,13 @@ from mulligan_coach_model.choice_train import (
     _grouped_split,
     load_choice_train_result,
     train_choice_model,
+)
+from mulligan_coach_model.versioning import (
+    ShardMeta,
+    ShardVersionError,
+    now_iso,
+    pipeline_versions,
+    write_shard_meta,
 )
 
 # ---------------------------------------------------------------------------
@@ -209,3 +218,119 @@ def test_split_metrics_dataclass_is_serialisable() -> None:
     """A sanity guard so future schema changes surface in the test suite."""
     sm = SplitMetrics(log_loss=0.5, brier=0.2, accuracy=0.8, n_rows=100, keep_rate=0.9)
     assert sm.keep_rate == 0.9
+
+
+# ---------------------------------------------------------------------------
+# Materialisation-invariant hash split (3-way)
+# ---------------------------------------------------------------------------
+
+
+def _bucket_of(ids: pd.Series, split: object) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for name in ("train", "val", "test"):
+        mask = getattr(split, name)
+        for did in ids[mask].unique():
+            out[str(did)] = name
+    return out
+
+
+def test_grouped_split_is_materialisation_invariant() -> None:
+    ids_a = pd.Series([f"d-{i}" for i in range(50) for _ in range(3)])
+    shuffled = [f"d-{i}" for i in range(30, 80)]
+    random.Random(2).shuffle(shuffled)
+    ids_b = pd.Series([d for d in shuffled for _ in range(2)])
+
+    sa = _grouped_split(ids_a, val_frac=0.2, test_frac=0.2, seed=11)
+    sb = _grouped_split(ids_b, val_frac=0.2, test_frac=0.2, seed=11)
+    ma, mb = _bucket_of(ids_a, sa), _bucket_of(ids_b, sb)
+    overlap = set(ma) & set(mb)
+    assert overlap
+    for did in overlap:
+        assert ma[did] == mb[did]
+
+
+def test_grouped_split_deterministic_and_seed_sensitive() -> None:
+    ids = pd.Series([f"d-{i}" for i in range(300)])
+    s1 = _grouped_split(ids, val_frac=0.1, test_frac=0.1, seed=0)
+    s2 = _grouped_split(ids, val_frac=0.1, test_frac=0.1, seed=0)
+    np.testing.assert_array_equal(s1.test, s2.test)
+    s3 = _grouped_split(ids, val_frac=0.1, test_frac=0.1, seed=1)
+    assert not np.array_equal(s1.test, s3.test)
+
+
+def test_grouped_split_approximate_fractions_on_10k_ids() -> None:
+    ids = pd.Series([f"d-{i}" for i in range(10_000)])
+    s = _grouped_split(ids, val_frac=0.10, test_frac=0.20, seed=5)
+    assert abs(s.val.mean() - 0.10) < 0.02
+    assert abs(s.test.mean() - 0.20) < 0.02
+    assert abs(s.train.mean() - 0.70) < 0.02
+
+
+# ---------------------------------------------------------------------------
+# Version lineage at training time
+# ---------------------------------------------------------------------------
+
+
+def _write_shard_dir(df: pd.DataFrame, shard_dir: Path, meta: ShardMeta | None) -> Path:
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    chunk = shard_dir / "chunk_00000000.parquet"
+    df.to_parquet(chunk)
+    if meta is not None:
+        write_shard_meta(shard_dir, meta)
+    return chunk
+
+
+def _meta(versions: dict[str, int], n_sims: int = 200) -> ShardMeta:
+    return ShardMeta(
+        pipeline_versions=versions,
+        set_code="TLA",
+        event_type="PremierDraft",
+        n_sims_per_row=n_sims,
+        created_at=now_iso(),
+    )
+
+
+def test_train_choice_model_raises_on_mixed_shard_versions(tmp_path: Path) -> None:
+    df = _make_synthetic_frame(n_drafts=60, games_per_draft=4)
+    live = pipeline_versions()
+    stale = {**live, "simulation": live["simulation"] + 1}
+    p1 = _write_shard_dir(df.iloc[:120], tmp_path / "a", _meta(live))
+    p2 = _write_shard_dir(df.iloc[120:], tmp_path / "b", _meta(stale))
+    with pytest.raises(ShardVersionError, match="differ from the live"):
+        train_choice_model(parquet_paths=[p1, p2], n_estimators=5)
+
+
+def test_train_choice_model_allow_version_mismatch_records_flag(tmp_path: Path) -> None:
+    df = _make_synthetic_frame(n_drafts=120, games_per_draft=5)
+    live = pipeline_versions()
+    stale = {**live, "features": live["features"] + 1}
+    p = _write_shard_dir(df, tmp_path / "shard", _meta(stale))
+    result = train_choice_model(
+        parquet_paths=[p],
+        n_estimators=10,
+        max_depth=3,
+        early_stopping_rounds=5,
+        allow_version_mismatch=True,
+    )
+    assert result.metadata.version_mismatch_allowed is True
+    assert result.metadata.pipeline_versions == live
+    assert result.metadata.split_method == "draftid_hash_v1"
+
+
+def test_train_choice_model_metadata_json_has_version_keys(tmp_path: Path) -> None:
+    df = _make_synthetic_frame(n_drafts=120, games_per_draft=5)
+    p = _write_shard_dir(df, tmp_path / "shard", _meta(pipeline_versions(), n_sims=200))
+    out = tmp_path / "model"
+    train_choice_model(
+        parquet_paths=[p],
+        output_dir=out,
+        n_estimators=10,
+        max_depth=3,
+        early_stopping_rounds=5,
+    )
+    payload = json.loads((out / "metadata.json").read_text())
+    assert payload["pipeline_versions"] == pipeline_versions()
+    assert payload["split_method"] == "draftid_hash_v1"
+    assert payload["version_mismatch_allowed"] is False
+    assert len(payload["shard_lineage"]) == 1
+    assert payload["shard_lineage"][0]["n_sims_per_row"] == 200

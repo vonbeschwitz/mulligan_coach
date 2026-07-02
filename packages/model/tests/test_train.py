@@ -15,7 +15,9 @@ exercises:
 
 from __future__ import annotations
 
+import json
 import math
+import random
 from pathlib import Path
 
 import numpy as np
@@ -31,6 +33,13 @@ from mulligan_coach_model.train import (
     _feature_columns,
     _grouped_split,
     _per_row_base_margin,
+)
+from mulligan_coach_model.versioning import (
+    ShardMeta,
+    ShardVersionError,
+    now_iso,
+    pipeline_versions,
+    write_shard_meta,
 )
 
 # ---------------------------------------------------------------------------
@@ -283,3 +292,179 @@ def test_train_model_rejects_empty_parquet(tmp_path: Path) -> None:
     p = _write_parquet(df, tmp_path / "empty.parquet")
     with pytest.raises(ValueError, match="empty"):
         train_model(parquet_paths=p, output_dir=None)
+
+
+# ---------------------------------------------------------------------------
+# Materialisation-invariant hash split (draftid_hash_v1)
+# ---------------------------------------------------------------------------
+
+
+def _bucket_of(ids: pd.Series, split: object) -> dict[str, str]:
+    """Map each draft_id to its split-band name for the 4-way _Split."""
+    out: dict[str, str] = {}
+    for name in ("train", "val", "calib", "test"):
+        mask = getattr(split, name)
+        for did in ids[mask].unique():
+            out[str(did)] = name
+    return out
+
+
+def test_grouped_split_is_materialisation_invariant() -> None:
+    """Same draft_id lands in the same band across two datasets with
+    different id sets and row orders — the property the permutation split
+    lacked."""
+    ids_a = pd.Series([f"draft-{i}" for i in range(50) for _ in range(3)])
+    shuffled = [f"draft-{i}" for i in range(30, 80)]
+    random.Random(1).shuffle(shuffled)
+    ids_b = pd.Series([d for d in shuffled for _ in range(2)])
+
+    sa = _grouped_split(ids_a, val_frac=0.2, calib_frac=0.2, test_frac=0.2, seed=7)
+    sb = _grouped_split(ids_b, val_frac=0.2, calib_frac=0.2, test_frac=0.2, seed=7)
+    ma, mb = _bucket_of(ids_a, sa), _bucket_of(ids_b, sb)
+
+    overlap = set(ma) & set(mb)
+    assert overlap  # ids 30..49 are shared
+    for did in overlap:
+        assert ma[did] == mb[did], f"{did}: {ma[did]} vs {mb[did]}"
+
+
+def test_grouped_split_disjoint_and_covers_every_row() -> None:
+    df = pd.DataFrame({"draft_id": [f"draft-{i}" for i in range(40) for _ in range(3)]})
+    s = _grouped_split(df["draft_id"], val_frac=0.2, calib_frac=0.2, test_frac=0.2, seed=3)
+    masks = [s.train, s.val, s.calib, s.test]
+    assert (np.sum(masks, axis=0) == 1).all()  # exactly one band per row
+    m = _bucket_of(df["draft_id"], s)
+    # No draft straddles two bands (guaranteed by per-draft assignment).
+    assert set(m.values()) <= {"train", "val", "calib", "test"}
+
+
+def test_grouped_split_deterministic_and_seed_sensitive() -> None:
+    ids = pd.Series([f"draft-{i}" for i in range(300)])
+    s1 = _grouped_split(ids, val_frac=0.1, calib_frac=0.1, test_frac=0.1, seed=0)
+    s2 = _grouped_split(ids, val_frac=0.1, calib_frac=0.1, test_frac=0.1, seed=0)
+    np.testing.assert_array_equal(s1.test, s2.test)
+    np.testing.assert_array_equal(s1.calib, s2.calib)
+    s3 = _grouped_split(ids, val_frac=0.1, calib_frac=0.1, test_frac=0.1, seed=1)
+    assert not np.array_equal(s1.test, s3.test)  # different seed reshuffles
+
+
+def test_grouped_split_approximate_fractions_on_10k_ids() -> None:
+    ids = pd.Series([f"draft-{i}" for i in range(10_000)])
+    s = _grouped_split(ids, val_frac=0.10, calib_frac=0.15, test_frac=0.20, seed=5)
+    # Each id appears once, so mask.mean() is the band's draft fraction.
+    assert abs(s.val.mean() - 0.10) < 0.02
+    assert abs(s.calib.mean() - 0.15) < 0.02  # 4-way calib band covered
+    assert abs(s.test.mean() - 0.20) < 0.02
+    assert abs(s.train.mean() - 0.55) < 0.02
+    assert s.calib.sum() > 0
+
+
+# ---------------------------------------------------------------------------
+# Version lineage at training time
+# ---------------------------------------------------------------------------
+
+
+def _write_shard_dir(df: pd.DataFrame, shard_dir: Path, meta: ShardMeta | None) -> Path:
+    """Write a one-chunk shard dir, optionally with a _meta.json sidecar."""
+    shard_dir.mkdir(parents=True, exist_ok=True)
+    chunk = shard_dir / "chunk_00000000.parquet"
+    df.to_parquet(chunk)
+    if meta is not None:
+        write_shard_meta(shard_dir, meta)
+    return chunk
+
+
+def _live_meta(n_sims: int = 200) -> ShardMeta:
+    return ShardMeta(
+        pipeline_versions=pipeline_versions(),
+        set_code="TLA",
+        event_type="PremierDraft",
+        n_sims_per_row=n_sims,
+        created_at=now_iso(),
+    )
+
+
+def test_train_model_raises_on_mixed_shard_versions(tmp_path: Path) -> None:
+    df = _synthetic_features_dataframe(n_drafts=60, games_per_draft=4)
+    live = pipeline_versions()
+    stale = {**live, "simulation": live["simulation"] + 1}
+    p1 = _write_shard_dir(df.iloc[:120], tmp_path / "a", _live_meta())
+    p2 = _write_shard_dir(
+        df.iloc[120:],
+        tmp_path / "b",
+        ShardMeta(
+            pipeline_versions=stale,
+            set_code="TLA",
+            event_type="PremierDraft",
+            n_sims_per_row=200,
+            created_at=now_iso(),
+        ),
+    )
+    with pytest.raises(ShardVersionError, match="differ from the live"):
+        train_model(parquet_paths=[p1, p2], output_dir=None, n_estimators=5)
+
+
+def test_train_model_allow_version_mismatch_proceeds_and_records(tmp_path: Path) -> None:
+    df = _synthetic_features_dataframe(n_drafts=120, games_per_draft=5)
+    live = pipeline_versions()
+    stale = {**live, "features": live["features"] + 1}
+    p = _write_shard_dir(
+        df,
+        tmp_path / "shard",
+        ShardMeta(
+            pipeline_versions=stale,
+            set_code="TLA",
+            event_type="PremierDraft",
+            n_sims_per_row=200,
+            created_at=now_iso(),
+        ),
+    )
+    result = train_model(
+        parquet_paths=[p],
+        output_dir=None,
+        n_estimators=10,
+        max_depth=3,
+        early_stopping_rounds=5,
+        allow_version_mismatch=True,
+    )
+    assert result.metadata.version_mismatch_allowed is True
+    assert result.metadata.pipeline_versions == live  # live at train time
+    assert result.metadata.split_method == "draftid_hash_v1"
+
+
+def test_train_model_metadata_json_has_version_keys(tmp_path: Path) -> None:
+    df = _synthetic_features_dataframe(n_drafts=120, games_per_draft=5)
+    p = _write_shard_dir(df, tmp_path / "shard", _live_meta(n_sims=200))
+    out = tmp_path / "model"
+    train_model(
+        parquet_paths=[p],
+        output_dir=out,
+        n_estimators=10,
+        max_depth=3,
+        early_stopping_rounds=5,
+    )
+    payload = json.loads((out / "metadata.json").read_text())
+    assert payload["pipeline_versions"] == pipeline_versions()
+    assert payload["split_method"] == "draftid_hash_v1"
+    assert payload["version_mismatch_allowed"] is False
+    assert isinstance(payload["shard_lineage"], list)
+    assert len(payload["shard_lineage"]) == 1
+    entry = payload["shard_lineage"][0]
+    assert entry["pipeline_versions"] == pipeline_versions()
+    assert entry["n_sims_per_row"] == 200
+    assert entry["unverified_legacy"] is False
+
+
+def test_train_model_legacy_shard_records_null_lineage(tmp_path: Path) -> None:
+    """A shard dir with no sidecar trains fine and records null lineage."""
+    df = _synthetic_features_dataframe(n_drafts=120, games_per_draft=5)
+    p = _write_shard_dir(df, tmp_path / "shard", meta=None)  # no _meta.json
+    result = train_model(
+        parquet_paths=[p],
+        output_dir=None,
+        n_estimators=5,
+        max_depth=3,
+        early_stopping_rounds=5,
+    )
+    assert len(result.metadata.shard_lineage) == 1
+    assert result.metadata.shard_lineage[0].pipeline_versions is None

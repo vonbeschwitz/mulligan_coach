@@ -17,6 +17,8 @@ Strategy:
 
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
 
 import duckdb
@@ -469,3 +471,80 @@ def test_model_bundle_load_matches_from_train_result(tmp_path: Path) -> None:
     p_memory = _predict(bundle_in_memory, hand, deck, n_sims=5, seed=7)
     p_disk = _predict(loaded, hand, deck, n_sims=5, seed=7)
     assert p_memory == pytest.approx(p_disk, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Load-time version warning (warn, never fail)
+# ---------------------------------------------------------------------------
+
+
+def _save_tiny_model_dir(tmp_path: Path) -> Path:
+    """Train + persist a tiny model; return its dir. metadata.json carries
+    live pipeline_versions (train_model stamps them)."""
+    import mulligan_coach_model.feature_matrix as fm
+    import mulligan_coach_model.training_rows as tr
+    from mulligan_coach_model import feature_parquet_paths
+
+    db_path = tmp_path / "games.duckdb"
+    con = duckdb.connect(str(db_path))
+    try:
+        _make_games_view(con, n_rows=80)
+    finally:
+        con.close()
+
+    _, deck = _make_hand_and_deck()
+    name_lookup = {c.name: c for c in deck}
+    fm_original = fm._build_format_stats
+    tr_original = tr.build_name_lookup
+    fm._build_format_stats = lambda *_a, **_kw: _FormatStats(shrunk={}, zscores={})
+    tr.build_name_lookup = lambda *_a, **_kw: name_lookup
+    try:
+        parquet_dir = tmp_path / "features"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=parquet_dir,
+            n_sims_per_row=3,
+            chunk_rows=20,
+        )
+        out_dir = tmp_path / "model"
+        train_model(
+            parquet_paths=feature_parquet_paths(parquet_dir),
+            output_dir=out_dir,
+            n_estimators=10,
+            max_depth=3,
+            learning_rate=0.1,
+            early_stopping_rounds=3,
+            val_frac=0.15,
+            calib_frac=0.15,
+            test_frac=0.15,
+            seed=0,
+        )
+    finally:
+        fm._build_format_stats = fm_original
+        tr.build_name_lookup = tr_original
+    return out_dir
+
+
+def test_bundle_load_no_warning_when_versions_match(tmp_path: Path) -> None:
+    model_dir = _save_tiny_model_dir(tmp_path)
+    bundle = ModelBundle.load(model_dir)
+    assert bundle.version_warning is None
+
+
+def test_bundle_load_warns_when_metadata_lacks_versions(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A pre-Step-1 metadata.json (no pipeline_versions) must set
+    version_warning and log — but never raise."""
+    model_dir = _save_tiny_model_dir(tmp_path)
+    meta_path = model_dir / "metadata.json"
+    payload = json.loads(meta_path.read_text())
+    payload.pop("pipeline_versions", None)  # simulate an old model
+    meta_path.write_text(json.dumps(payload))
+
+    with caplog.at_level(logging.WARNING, logger="mulligan_coach_model.inference"):
+        bundle = ModelBundle.load(model_dir)  # must not raise
+    assert bundle.version_warning is not None
+    assert "before pipeline-version stamping" in bundle.version_warning
+    assert any("ModelBundle.load" in rec.message for rec in caplog.records)

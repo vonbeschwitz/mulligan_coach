@@ -11,6 +11,8 @@ available locally, matching the pattern in test_choice_feature_matrix.
 
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -105,6 +107,29 @@ def test_choice_model_bundle_from_train_result(tmp_path: Path) -> None:
     bundle = ChoiceModelBundle.from_train_result(result)
     assert bundle.feature_names == result.metadata.feature_names
     assert bundle.best_iteration == result.metadata.best_iteration
+
+
+def test_choice_bundle_load_no_warning_when_versions_match(tmp_path: Path) -> None:
+    model_dir = _train_tiny_model(tmp_path)
+    bundle = ChoiceModelBundle.load(model_dir)
+    assert bundle.version_warning is None
+
+
+def test_choice_bundle_load_warns_when_metadata_lacks_versions(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A pre-Step-1 metadata.json (no pipeline_versions) sets version_warning
+    and logs — but never raises."""
+    model_dir = _train_tiny_model(tmp_path)
+    meta_path = model_dir / "metadata.json"
+    payload = json.loads(meta_path.read_text())
+    payload.pop("pipeline_versions", None)
+    meta_path.write_text(json.dumps(payload))
+
+    with caplog.at_level(logging.WARNING, logger="mulligan_coach_model.choice_inference"):
+        bundle = ChoiceModelBundle.load(model_dir)  # must not raise
+    assert bundle.version_warning is not None
+    assert "before pipeline-version stamping" in bundle.version_warning
 
 
 # ---------------------------------------------------------------------------

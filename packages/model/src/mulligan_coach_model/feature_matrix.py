@@ -86,6 +86,12 @@ from .training_rows import (
     TrainingRowStats,
     iter_training_rows,
 )
+from .versioning import (
+    ShardMeta,
+    now_iso,
+    pipeline_versions,
+    stamp_or_check_shard_meta,
+)
 
 log = logging.getLogger(__name__)
 
@@ -731,6 +737,23 @@ def materialize_feature_matrix(
 
     # Always sweep orphan tmp files (left by a prior crashed write).
     _sweep_stale_tmp_files(output_dir)
+
+    # Stamp / check the pipeline-version sidecar before any expensive work.
+    # Fresh dir or overwrite -> write _meta.json; resume -> verify the
+    # existing chunks were built by the same simulator + feature code
+    # (raises ShardVersionError on drift) or grace-stamp a legacy shard.
+    stamp_or_check_shard_meta(
+        output_dir,
+        current=ShardMeta(
+            pipeline_versions=pipeline_versions(),
+            set_code=set_code,
+            event_type=event_type,
+            n_sims_per_row=n_sims_per_row,
+            created_at=now_iso(),
+        ),
+        had_existing_chunks=bool(existing_chunks),
+        overwrite=overwrite,
+    )
 
     format_stats = _build_format_stats(set_code, data_root=data_root)
     log.info(

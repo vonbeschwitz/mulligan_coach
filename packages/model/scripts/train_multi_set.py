@@ -52,6 +52,13 @@ def main() -> None:
     ap.add_argument("--early-stopping-rounds", type=int, default=20)
     ap.add_argument("--baseline-l2-c", type=float, default=10.0)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument(
+        "--allow-version-mismatch",
+        action="store_true",
+        help="Train even if some shard's _meta.json pipeline versions differ "
+        "from the live simulator/feature code (recorded in metadata.json). "
+        "Default refuses the mix.",
+    )
     args = ap.parse_args()
 
     parquet_paths: list[Path] = []
@@ -82,6 +89,7 @@ def main() -> None:
         early_stopping_rounds=args.early_stopping_rounds,
         baseline_l2_C=args.baseline_l2_c,
         seed=args.seed,
+        allow_version_mismatch=args.allow_version_mismatch,
     )
     md = result.metadata
     logging.info(

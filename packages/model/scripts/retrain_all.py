@@ -87,6 +87,13 @@ def main() -> None:
         "Useful for picking up after a crash mid-chain.",
     )
     ap.add_argument(
+        "--allow-version-mismatch",
+        action="store_true",
+        help="Pass through to both training steps: train even if a shard's "
+        "_meta.json pipeline versions differ from the live code. Default "
+        "refuses the mix (the choice_v7 mixed-sim-version incident).",
+    )
+    ap.add_argument(
         "--log-root",
         type=Path,
         default=REPO_ROOT / "logs",
@@ -144,6 +151,8 @@ def main() -> None:
             "--output-dir",
             str(args.win_output_dir),
         ]
+        if args.allow_version_mismatch:
+            cmd.append("--allow-version-mismatch")
         rc = _run(label, cmd, log_dir / f"{label}.log")
         if rc != 0:
             raise SystemExit(f"{label} exit {rc}; see {log_dir / f'{label}.log'}")
@@ -192,6 +201,8 @@ def main() -> None:
             "--output-dir",
             str(args.choice_output_dir),
         ]
+        if args.allow_version_mismatch:
+            cmd.append("--allow-version-mismatch")
         rc = _run(label, cmd, log_dir / f"{label}.log")
         if rc != 0:
             raise SystemExit(f"{label} exit {rc}; see {log_dir / f'{label}.log'}")

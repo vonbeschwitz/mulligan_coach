@@ -273,3 +273,27 @@ deck. Useful for eyeballing feature values after pipeline changes.
   those bail to NEEDS_LLM in the parser today and never get multiple
   Modes attached. Re-evaluate when the parser gains support for those
   layouts.
+
+## Feature semantics version — when to bump `FEATURES_SEMANTICS_VERSION`
+
+`FEATURES_SEMANTICS_VERSION` (an `int` in
+`src/mulligan_coach_features/__init__.py`, currently `1`) identifies the
+*meaning* of a `build_feature_row` output. Like the simulator's version,
+it's stamped into feature-cache `_meta.json` sidecars and model
+`metadata.json` so stale caches and train/serve skew are caught rather
+than silently corrupting predictions.
+
+**Bump it — in the SAME PR as the change — on any change to the values
+or the column set `build_feature_row` emits for fixed inputs.** That
+includes:
+
+* adding / removing / renaming a feature column;
+* changing how any existing feature is computed (the deck-wide
+  castability change is the canonical trap — the *column names* were
+  unchanged but the *distribution* shifted, so a model trained on the old
+  values was subtly miscalibrated);
+* changing `DEFAULT_KNOWN_SETS` / `DEFAULT_KNOWN_EVENT_TYPES` — the
+  one-hot context vocabulary is part of the row's meaning, so a new set
+  added there changes the encoding of every row.
+
+Pure refactors that leave every emitted value identical do not bump.
