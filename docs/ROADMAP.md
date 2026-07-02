@@ -19,12 +19,13 @@ both.
   (website `app.py` + overlay `coordinator.py`). Win model `all3_v2` is legacy.
 * Model weights ship under hardcoded slot name `choice_v6`
   (`overlay/_frozen.py`, `_DEFAULT_CHOICE_MODEL_DIR`).
-* choice_v8 (TLA+TMT+SOS) being trained by a SEPARATE agent via untracked
-  `packages/model/scripts/tune_choice_v8.py` — training only (reads existing
-  `data/processed/choice_training/` caches; no simulation). Don't edit
-  packages/model until that agent commits+pushes (multi-Claude practice).
-  v8 inherits the v7 caveats: TLA/TMT caches predate sim changes #57/#58;
-  SOS trains as all-zero set one-hot (reference category).
+* choice_v8 (TLA+TMT+SOS) DONE 2026-07-02 (commit f4faf51): trained on
+  fresh TLA/TMT caches, ties v7 on honest held-out eval, resolves the
+  mixed-sim-version caveat; NOT promoted. It surfaced a `_grouped_split`
+  reproducibility bug (cross-run held-out comparisons silently leak) —
+  fold the fix into Step 1's versioning/reproducibility work. SOS still
+  trains as all-zero set one-hot (reference category) — Step 2 unchanged.
+  Step 0 ("wait for v8") is therefore complete.
 * Main repo `vonbeschwitz/mulligan_coach` PRIVATE; public
   `vonbeschwitz/mulligan_coach_data` hosts auto-update artifacts
   (tag `data-current`). EXE = unsigned PyInstaller folder (~325 MB), built
