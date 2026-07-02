@@ -1,0 +1,11 @@
+started 2026-06-30 23:35:36
+[2026-06-30 23:35:36] step1 materialize Premier (TLA TMT)
+
+==== RESUMED 2026-07-01 07:36:14 ====
+[2026-07-01 07:36:14] step1 materialize Premier (TLA TMT) [resume]
+[2026-07-01 22:36:39] mat_premier rc=0
+[2026-07-01 22:36:39] step2 materialize Trad (TLA TMT)
+[2026-07-02 01:27:21] mat_trad rc=0
+[2026-07-02 01:27:21] step3 tune_choice_v8
+[2026-07-02 01:57:16] train rc=0
+[2026-07-02 01:57:16] DONE 2026-07-02 01:57:16
