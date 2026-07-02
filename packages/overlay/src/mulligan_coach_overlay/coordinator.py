@@ -50,10 +50,14 @@ from .events import DeckSubmitted, LogEvent, MatchEnded, MulliganDecisionRequest
 
 log = logging.getLogger(__name__)
 
-# Limited deck size the recommender expects. Mirrors the website's
-# `_REQUIRED_DECK_SIZE` — kept here as a separate constant so the
-# overlay doesn't have to import a private website name.
-_REQUIRED_DECK_SIZE = 40
+# Limited deck-size bounds the recommender accepts. Mirrors the
+# choice service's own `40 <= len(deck) <= 42` check
+# (`recommend_choice`, which follows the training pipeline's
+# `mulligan_coach_model.training_rows.MAX_DECK_SIZE`) — kept as
+# separate constants here so the overlay doesn't reject legal 41/42-card
+# decks the service would happily accept.
+_MIN_DECK_SIZE = 40
+_MAX_DECK_SIZE = 42
 
 # Sim count for the overlay's choice-model call. The shared service
 # defaults to 1000 (what the website uses). Dropping to 200 here
@@ -298,11 +302,11 @@ class OverlayCoordinator:
                 ),
                 what="model_not_loaded",
             )
-        if len(self._current_deck) != _REQUIRED_DECK_SIZE:
+        if not (_MIN_DECK_SIZE <= len(self._current_deck) <= _MAX_DECK_SIZE):
             return MissingDataOutput(
                 reason=(
                     f"Deck has {len(self._current_deck)} cards; the trained "
-                    f"model expects exactly {_REQUIRED_DECK_SIZE}."
+                    f"model expects {_MIN_DECK_SIZE}-{_MAX_DECK_SIZE}."
                 ),
                 what="deck_unresolved",
             )

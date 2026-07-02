@@ -237,6 +237,57 @@ class TestMulliganRecommendation:
         assert service.last_call_kwargs["on_the_play"] is True
         assert len(service.last_call_kwargs["deck"]) == 40
 
+    def test_accepts_41_card_deck(self) -> None:
+        # A 41-card Limited deck is legal and the choice service accepts
+        # 40-42; the coordinator must reach the service, not reject it.
+        # (Regression: `_REQUIRED_DECK_SIZE` used to hard-code 40.)
+        deck_ids = list(range(1, 42))  # 41 cards
+        index = _build_index(deck_ids)
+        service = _FakeService(
+            status=_ready_status(),
+            rec=_fake_choice_recommendation(),
+        )
+        coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
+
+        coord.handle_event(DeckSubmitted(arena_ids=deck_ids))
+        out = coord.handle_event(
+            MulliganDecisionRequest(
+                hand_arena_ids=deck_ids[:7],
+                mulligan_count=0,
+                on_the_play=True,
+                opp_mulligan_count=None,
+                seat_id=1,
+            )
+        )
+        assert isinstance(out, RecommendationOutput)
+        assert service.last_call_kwargs is not None
+        assert len(service.last_call_kwargs["deck"]) == 41
+
+    def test_rejects_oversized_deck(self) -> None:
+        # 43 cards is above the service's 40-42 window -> deck_unresolved,
+        # and the service is never called.
+        deck_ids = list(range(1, 44))  # 43 cards
+        index = _build_index(deck_ids)
+        service = _FakeService(
+            status=_ready_status(),
+            rec=_fake_choice_recommendation(),
+        )
+        coord = OverlayCoordinator(index, service)  # type: ignore[arg-type]
+
+        coord.handle_event(DeckSubmitted(arena_ids=deck_ids))
+        out = coord.handle_event(
+            MulliganDecisionRequest(
+                hand_arena_ids=deck_ids[:7],
+                mulligan_count=0,
+                on_the_play=True,
+                opp_mulligan_count=None,
+                seat_id=1,
+            )
+        )
+        assert isinstance(out, MissingDataOutput)
+        assert out.what == "deck_unresolved"
+        assert service.last_call_kwargs is None
+
     def test_missing_hand_card_returns_missing_data(self) -> None:
         # Deck cards 1-40 are indexed; hand references 999 which isn't.
         deck_ids = list(range(1, 41))
