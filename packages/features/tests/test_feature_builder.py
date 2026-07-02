@@ -87,9 +87,35 @@ def test_context_unknown_event_and_set_zero_columns() -> None:
 
 
 def test_context_column_count() -> None:
-    """Default vocab → 7 columns: 1 on_the_play + 3 event + 3 set."""
+    """Default vocab → 9 columns: 1 on_the_play + 3 event + 5 set (v2)."""
     out = build_context_features(on_the_play=True, event_type="PremierDraft", set_code="TMT")
     assert len(out) == 1 + len(DEFAULT_KNOWN_EVENT_TYPES) + len(DEFAULT_KNOWN_SETS)
+
+
+def test_context_emits_five_set_one_hots() -> None:
+    """The v2 vocabulary bump emits exactly five ``set_code_*`` columns."""
+    out = build_context_features(on_the_play=True, event_type="PremierDraft", set_code="TLA")
+    set_cols = sorted(k for k in out if k.startswith("set_code_"))
+    assert set_cols == sorted(f"set_code_{s}" for s in DEFAULT_KNOWN_SETS)
+    assert len(set_cols) == 5
+
+
+def test_context_sos_and_msh_one_hot_correctly() -> None:
+    """SOS and MSH (added in the 1->2 bump) each light up their own column
+    and zero every other set column — no longer the all-zero reference
+    category they were in v1."""
+    for set_code in ("SOS", "MSH"):
+        out = build_context_features(on_the_play=True, event_type="PremierDraft", set_code=set_code)
+        assert out[f"set_code_{set_code}"] == 1.0
+        others = [f"set_code_{s}" for s in DEFAULT_KNOWN_SETS if s != set_code]
+        assert all(out[o] == 0.0 for o in others)
+
+
+def test_context_unknown_set_all_zero_under_v2_vocab() -> None:
+    """A set outside the v2 vocabulary still maps to all-zero one-hots
+    (the reference-category fallback for genuinely unknown sets)."""
+    out = build_context_features(on_the_play=True, event_type="PremierDraft", set_code="ZZZ")
+    assert all(out[f"set_code_{s}"] == 0.0 for s in DEFAULT_KNOWN_SETS)
 
 
 # ---------------------------------------------------------------------------
@@ -658,10 +684,10 @@ def test_simulation_additional_castability_uses_turn_4_per_card() -> None:
 def test_build_feature_row_total_column_count() -> None:
     """Sanity: the assembled row has the expected number of columns.
 
-    Context: 1 + 3 + 3 = 7 columns.
+    Context: 1 + 3 + 5 = 9 columns (the set one-hot grew from 3 to 5 in
+    the FEATURES_SEMANTICS_VERSION 1 -> 2 bump: SOS + MSH appended).
     Deck: 16. Hand: 72. Simulation: 105.
-    Total: 7 + 16 + 72 + 105 = 200 columns (196 features per the spec
-    with one-hot families counted as 1 each).
+    Total: 9 + 16 + 72 + 105 = 202 columns.
     """
     bear = f.vanilla_creature("Bear", "{1}{G}", arena_id=42)
     hand = [f.forest(), f.forest(), bear, bear, f.forest(), f.forest(), f.forest()]
@@ -682,7 +708,7 @@ def test_build_feature_row_total_column_count() -> None:
         event_type="PremierDraft",
         set_code="TLA",
     )
-    assert len(row) == 200
+    assert len(row) == 202
 
 
 def test_build_feature_row_no_key_collisions() -> None:

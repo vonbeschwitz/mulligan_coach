@@ -80,7 +80,14 @@ _HIGH_OH_THRESHOLD = 0.5
 # sets / event types at inference time should fall through to all-zero
 # columns; we keep these as defaults but let callers override.
 DEFAULT_KNOWN_EVENT_TYPES: tuple[str, ...] = ("PremierDraft", "Sealed", "TradDraft")
-DEFAULT_KNOWN_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA")
+# APPEND new sets — never reorder existing entries. The one-hot column
+# name for a set is stable (``set_code_<S>``), but the *order* here is
+# what a human sees when diffing a materialised feature row, so keeping
+# TMT/ECL/TLA first keeps old rows visually stable. SOS + MSH were added
+# in the FEATURES_SEMANTICS_VERSION 1 -> 2 bump (roadmap Step 2): before
+# that, SOS trained as the all-zero reference category and MSH (live on
+# Arena since 2026-06-26) was indistinguishable from it at inference.
+DEFAULT_KNOWN_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS", "MSH")
 
 
 # ---------------------------------------------------------------------------

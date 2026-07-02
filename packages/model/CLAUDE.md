@@ -553,6 +553,28 @@ train and test). Each model's own held-out metrics remain the only honest
 cross-model comparison; `metadata.json`'s `split_method` records which
 scheme a model used (`draftid_hash_v1`; absent on old models).
 
+### Set-vocabulary coverage assert + cache one-hot patch (Step 2)
+
+Both trainers refuse to train (`ValueError`, no bypass flag) when any
+row's `expansion` is outside the feature builder's
+`DEFAULT_KNOWN_SETS` one-hot vocabulary — an unrepresented set would
+silently train as the all-zero reference category, colliding with every
+other unknown set (the SOS/MSH bug). This is a *coverage* check,
+deliberately distinct from the version-lineage check above (which
+catches semantics *drift*); both must hold.
+
+When the vocabulary grows (append to `DEFAULT_KNOWN_SETS` + bump
+`FEATURES_SEMANTICS_VERSION`, same PR), existing caches can be upgraded
+WITHOUT re-simulation: `cache_patch.py` rewrites only the `set_code_*`
+columns of each chunk from its stored `expansion` column (pyarrow ops,
+atomic per chunk, validated before swap, idempotent), then bumps the
+shard's `_meta.json` features version via raw-JSON edit (preserving
+unknown keys, appending `patch_history`). CLI:
+`packages/model/scripts/patch_set_onehots.py` — scans both cache roots
+by default, `--dry-run` first, tee the output. The v1→v2 migration is
+pinned (`V2_KNOWN_SETS`, `set_onehots_v1`); a future vocabulary bump
+needs a NEW patch, not a reuse of this one (the module asserts this).
+
 ## scripts/
 
 Standalone analysis scripts that run against a trained model

@@ -53,7 +53,13 @@ from .seventeenlands_zscores import (
 # feature-cache ``_meta.json`` sidecars and the model ``metadata.json`` so
 # stale caches and train/serve skew are caught rather than silently
 # corrupting predictions.
-FEATURES_SEMANTICS_VERSION: int = 1
+#
+# Version history:
+#   1 -> 2 (roadmap Step 2): appended SOS + MSH to ``DEFAULT_KNOWN_SETS``.
+#     Adds two ``set_code_*`` columns and changes SOS rows' one-hot values
+#     (SOS was previously the all-zero reference category), so it is a
+#     value/column-set change and must bump.
+FEATURES_SEMANTICS_VERSION: int = 2
 
 __all__ = [
     "DEFAULT_KNOWN_EVENT_TYPES",

@@ -72,13 +72,20 @@ ratings automation.
   `docs/specs/step1_pipeline_versioning.md`.
 * **Fable: design/spec + final review. Opus: implementation.**
 
-### Step 2 — set-vocabulary fixes (review #2a, quick wins)
-* Add SOS+MSH to `DEFAULT_KNOWN_SETS`; assert in training that every row's
-  `expansion` is in vocab. (~1h, **Opus**.)
-* Patch script rewriting `set_code_*` one-hot columns in cached choice
-  parquets from the stored `expansion` column (avoids 17h/set
-  re-materialization). **Opus implements, Fable reviews** (it rewrites
-  training data — silent-corruption risk).
+### Step 2 — set-vocabulary fixes (review #2a) — DONE
+* `DEFAULT_KNOWN_SETS` extended to TMT/ECL/TLA/SOS/MSH;
+  `FEATURES_SEMANTICS_VERSION` bumped 1→2 (first real exercise of Step 1's
+  machinery). Both trainers hard-fail on out-of-vocabulary `expansion`
+  rows (no bypass flag). `cache_patch.py` +
+  `scripts/patch_set_onehots.py` upgrade existing v1 caches' `set_code_*`
+  one-hots in place from the stored `expansion` column (idempotent,
+  atomic, validated, meta bumped 1→2 with `patch_history`). See
+  `docs/specs/step2_set_vocabulary.md`.
+* **Owner action after merge:** run the patch tool — dry-run first, then
+  apply, tee both logs (see model CLAUDE.md). Production models predate
+  v2 and will log a load-time version warning; that is expected and
+  harmless (old models ignore the new columns).
+* **Fable: spec + review. Opus: implementation.**
 
 ### Step 3 — doc sweep + slot rename (review #4)
 * Mark `recommend_asymmetric` legacy everywhere (recommend/overlay
