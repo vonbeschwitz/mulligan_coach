@@ -139,7 +139,7 @@ def download_to_file(
         except OSError as exc:
             log.warning("could not remove stale tmp file %s: %s", tmp, exc)
 
-    last_error: Exception | None = None
+    last_error: BaseException | None = None
     for attempt in (1, 2):
         try:
             actual_sha = _stream_download(

@@ -61,7 +61,7 @@ too so the swap installs the matching xgboost-cpu wheel.
 """
 
 
-def _run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
+def _run(cmd: list[str], *, check: bool = True) -> subprocess.CompletedProcess[bytes]:
     """Run a command, streaming its output. Returns the completed process."""
     print(f"\n>>> {' '.join(cmd)}", flush=True)
     return subprocess.run(cmd, check=check, cwd=REPO_ROOT)
