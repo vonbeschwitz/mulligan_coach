@@ -351,7 +351,7 @@ def _parse_one_artifact(entry: Any, index: int) -> ManifestArtifact | None:
         )
 
     return ManifestArtifact(
-        kind=kind,  # type: ignore[arg-type]  # guarded by _KNOWN_KINDS
+        kind=kind,  # guarded by _KNOWN_KINDS
         url=url,
         sha256=sha256.lower(),
         version=version,

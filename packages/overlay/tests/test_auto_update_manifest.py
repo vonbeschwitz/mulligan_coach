@@ -8,6 +8,7 @@ the must-fail validation cases.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 from mulligan_coach_overlay.auto_update.manifest import (
@@ -17,7 +18,7 @@ from mulligan_coach_overlay.auto_update.manifest import (
 )
 
 
-def _valid_artifact(**overrides: object) -> dict:
+def _valid_artifact(**overrides: object) -> dict[str, Any]:
     """Build a known-valid ratings artifact, optionally overriding fields."""
     base = {
         "kind": "ratings",
@@ -31,7 +32,7 @@ def _valid_artifact(**overrides: object) -> dict:
     return base
 
 
-def _valid_payload(**overrides: object) -> dict:
+def _valid_payload(**overrides: object) -> dict[str, Any]:
     """Build a known-valid manifest dict, optionally overriding fields."""
     base = {
         "schema_version": AUTO_UPDATE_SCHEMA_VERSION,

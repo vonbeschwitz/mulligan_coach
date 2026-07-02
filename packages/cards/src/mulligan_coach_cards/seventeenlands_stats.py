@@ -240,7 +240,7 @@ def load_premier_draft_stats(set_code: str, *, data_root: Path | None = None) ->
     # the same way it was before.
     import pyarrow.parquet as pq  # local import — keep the recommend hot path light
 
-    rows: list[dict[str, Any]] = pq.read_table(path).to_pylist()
+    rows: list[dict[str, Any]] = pq.read_table(path).to_pylist()  # type: ignore[no-untyped-call]
 
     by_arena_id: dict[int, SeventeenLandsStats] = {}
     by_name: dict[str, SeventeenLandsStats] = {}

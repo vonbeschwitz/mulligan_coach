@@ -33,7 +33,7 @@ def _sha256_of(data: bytes) -> str:
 
 
 @contextmanager
-def _serve(serve_root: Path, route_overrides: dict[str, Exception] | None = None) -> Iterator[str]:
+def _serve(serve_root: Path, route_overrides: dict[str, int] | None = None) -> Iterator[str]:
     """Spin up an HTTP server rooted at *serve_root*.
 
     Yields the base URL (``http://127.0.0.1:<port>``) the test
@@ -43,7 +43,7 @@ def _serve(serve_root: Path, route_overrides: dict[str, Exception] | None = None
     Why an ephemeral port: lets tests run in parallel without
     fighting over a fixed port.
     """
-    route_overrides = route_overrides or {}
+    overrides: dict[str, int] = route_overrides or {}
 
     class _Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *args: object, **kwargs: object) -> None:
@@ -53,7 +53,7 @@ def _serve(serve_root: Path, route_overrides: dict[str, Exception] | None = None
             """Silence the default access log; tests don't want it on stderr."""
 
         def do_GET(self) -> None:
-            override = route_overrides.get(self.path)
+            override = overrides.get(self.path)
             if isinstance(override, int):
                 self.send_error(override, "test-injected error")
                 return

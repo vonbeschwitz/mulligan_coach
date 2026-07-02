@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from mulligan_coach_model import ChoiceModelBundle, ModelBundle
 from mulligan_coach_recommend import service as service_module
 from mulligan_coach_recommend.service import (
     FormatStats,
@@ -118,7 +119,7 @@ def test_reload_choice_model_swaps_on_success(
         assert model_dir == target
         return sentinel
 
-    monkeypatch.setattr(service_module.ChoiceModelBundle, "load", _fake_load)
+    monkeypatch.setattr(ChoiceModelBundle, "load", _fake_load)
     svc = _empty_service()
 
     assert svc.reload_choice_model(target) is True
@@ -161,7 +162,7 @@ def test_reload_choice_model_load_failure_preserves_previous_bundle(
     def _broken_load(model_dir: Path) -> object:
         raise RuntimeError("corrupt artifact")
 
-    monkeypatch.setattr(service_module.ChoiceModelBundle, "load", _broken_load)
+    monkeypatch.setattr(ChoiceModelBundle, "load", _broken_load)
 
     assert svc.reload_choice_model(target) is False
     assert svc.choice_bundle is previous
@@ -181,7 +182,7 @@ def test_reload_win_model_swaps_on_success(monkeypatch: pytest.MonkeyPatch, tmp_
     target = tmp_path / "all3_v2"
     target.mkdir()
     sentinel = object()
-    monkeypatch.setattr(service_module.ModelBundle, "load", lambda model_dir: sentinel)
+    monkeypatch.setattr(ModelBundle, "load", lambda model_dir: sentinel)
     svc = _empty_service()
 
     assert svc.reload_win_model(target) is True

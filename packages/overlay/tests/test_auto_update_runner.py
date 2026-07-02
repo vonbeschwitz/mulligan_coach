@@ -24,6 +24,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from http import HTTPStatus
 from pathlib import Path
+from typing import Any
 
 import pytest
 from mulligan_coach_overlay.auto_update import UpdateRunner
@@ -91,8 +92,8 @@ def _publish(
     ratings: dict[str, bytes] | None = None,
     parsed_cards: dict[str, bytes] | None = None,
     model_zips: dict[str, bytes] | None = None,
-    extra_artifacts: list[dict] | None = None,
-) -> dict:
+    extra_artifacts: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Write the served files and return the corresponding manifest dict.
 
     Helpers for each kind: ``ratings={"TLA": b"..."}`` produces both
@@ -100,7 +101,7 @@ def _publish(
     entry pointing back at the served URL. The URL is a placeholder
     — the test fills in the base URL at fetch time via :func:`_serve`.
     """
-    artifacts: list[dict] = []
+    artifacts: list[dict[str, Any]] = []
 
     if ratings:
         for set_code, payload in ratings.items():
@@ -160,7 +161,7 @@ def _publish(
     }
 
 
-def _write_manifest(serve_root: Path, manifest: dict, base_url: str) -> None:
+def _write_manifest(serve_root: Path, manifest: dict[str, Any], base_url: str) -> None:
     """Substitute the base URL into the manifest and write it to disk.
 
     The published manifest's URLs need to point at the actual base
