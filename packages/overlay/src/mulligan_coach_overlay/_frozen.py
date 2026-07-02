@@ -2,7 +2,7 @@
 
 When the overlay runs from source (``uv run mulligan-coach-overlay``)
 all data files resolve relative to the repo: ``data/processed/...``
-and ``models/choice_v6/`` sit a fixed number of parent dirs above
+and ``models/choice_prod/`` sit a fixed number of parent dirs above
 each package's ``__file__``. That logic is baked into
 ``mulligan_coach_cards.store._data_root``,
 ``mulligan_coach_cards.seventeenlands_stats._data_root``, and
@@ -25,7 +25,7 @@ Bundle layout the PyInstaller spec produces (under ``dist/MulliganCoach/``):
 * ``_internal/`` — PyInstaller's standard one-folder extracted libs.
 * ``_internal/data/processed/parsed_cards/<SET>.json``
 * ``_internal/data/processed/seventeenlands/ratings/<SET>/PremierDraft.parquet``
-* ``_internal/models/choice_v6/{xgboost.json, metadata.json, ...}``
+* ``_internal/models/choice_prod/{xgboost.json, metadata.json, ...}``
 
 PyInstaller exposes ``sys._MEIPASS`` as the path to ``_internal``
 when running frozen, so we point the env vars at subdirectories of
@@ -101,13 +101,15 @@ def configure_bundle_paths() -> None:
             "seed_from_bundle failed; falling back to bundled data paths: %s", exc
         )
         os.environ.setdefault("MULLIGAN_COACH_DATA_ROOT", str(root / "data"))
-        os.environ.setdefault("MULLIGAN_COACH_CHOICE_MODEL_DIR", str(root / "models" / "choice_v6"))
+        os.environ.setdefault(
+            "MULLIGAN_COACH_CHOICE_MODEL_DIR", str(root / "models" / "choice_prod")
+        )
         return
 
     os.environ.setdefault("MULLIGAN_COACH_DATA_ROOT", str(user_data.user_data_root()))
     os.environ.setdefault(
         "MULLIGAN_COACH_CHOICE_MODEL_DIR",
-        str(user_data.user_models_root() / "choice_v6"),
+        str(user_data.user_models_root() / "choice_prod"),
     )
 
 

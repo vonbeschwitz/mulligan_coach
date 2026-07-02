@@ -103,7 +103,7 @@ turn-by-turn, role-mix counts) land here as they're built.
 
 Monte Carlo engine. Pure function: `(hand, deck, on_play) -> playability_features`.
 
-- Fast vectorized implementation (numpy) targeting thousands of sims per second so the overlay can respond in well under a second.
+- Numpy-backed implementation with a per-game Python loop (`monte_carlo.py` → `simulate_one_game`); *not* fully vectorized across games. Fast enough that the overlay's small sim budget (a few hundred games) returns in well under a second, but bulk materialization for training is the slow path (~hours per set). Numba on the mana solver is the sanctioned fallback if that becomes a bottleneck.
 - Models the relevant subset of the rules: drawing, land drops (incl. ETB-tapped lands), casting spells given mana available, mana dorks, ramp spells, cantrips/card draw.
 - Outputs features like P(land drop turn N), P(cast on-curve turn N), P(stuck on lands), expected mana turn N, P(cast specific hand card by turn N), etc.
 - Does not attempt to model combat, opponent interaction, or game-winning conditions — that's the model's job.
@@ -155,7 +155,7 @@ PyQt6 transparent always-on-top window over MTG Arena.
 - **Package management:** [uv](https://github.com/astral-sh/uv) workspace. Fast, modern, handles the monorepo-style layout cleanly.
 - **Data:** DuckDB for game data (efficient querying of large CSVs), Parquet for processed feature tables, JSON/CSV for raw downloads.
 - **ML:** XGBoost, scikit-learn (preprocessing, evaluation), pandas, numpy.
-- **Simulation:** numpy (vectorized). Numba as a fallback if performance becomes a problem.
+- **Simulation:** numpy (per-game Python loop, not vectorized across games). Numba as the sanctioned fallback if performance becomes a problem.
 - **Website:** FastAPI + Jinja2 + HTMX. No JS framework needed.
 - **Overlay:** PyQt6.
 - **Testing:** pytest. Each sub-project has its own test suite.

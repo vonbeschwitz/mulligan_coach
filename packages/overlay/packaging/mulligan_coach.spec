@@ -11,7 +11,7 @@
 #
 # Output: ``dist/MulliganCoach/MulliganCoach.exe`` plus a sibling
 # ``_internal/`` directory holding Python, Qt, XGBoost's libs, the
-# choice_v6 model, parsed_cards JSON, and 17Lands ratings parquets.
+# choice_prod model, parsed_cards JSON, and 17Lands ratings parquets.
 # The whole ``dist/MulliganCoach/`` folder is what gets zipped and
 # shared.
 #
@@ -57,7 +57,7 @@ def _check_required(path: Path, what: str) -> Path:
     PyInstaller silently bundles whatever's at the given path; if the
     path doesn't exist it just adds nothing and the EXE fails at
     runtime with a confusing "model not loaded" error. Catching it
-    here gives the actual reason ("you forgot to train choice_v6").
+    here gives the actual reason ("you forgot to populate choice_prod").
     """
     if not path.exists():
         raise SystemExit(
@@ -71,10 +71,10 @@ def _check_required(path: Path, what: str) -> Path:
 # Inputs the bundle needs at runtime, sourced from the repo tree.
 # Each is shipped at the same relative path inside the bundle so the
 # overlay's `_frozen.configure_bundle_paths` (which points at
-# ``sys._MEIPASS / "data"`` and ``sys._MEIPASS / "models" / "choice_v6"``)
+# ``sys._MEIPASS / "data"`` and ``sys._MEIPASS / "models" / "choice_prod"``)
 # finds them.
 # ----------------------------------------------------------------------
-CHOICE_MODEL_DIR = _check_required(REPO_ROOT / "models" / "choice_v6", "choice_v6 model dir")
+CHOICE_MODEL_DIR = _check_required(REPO_ROOT / "models" / "choice_prod", "choice_prod model dir")
 PARSED_CARDS_DIR = _check_required(
     REPO_ROOT / "data" / "processed" / "parsed_cards", "parsed_cards dir"
 )
@@ -118,7 +118,7 @@ HIDDEN_IMPORTS = [
 # Data payload: (source path on disk, destination inside the bundle).
 # Destinations are relative to ``sys._MEIPASS`` at runtime.
 DATAS = [
-    (str(CHOICE_MODEL_DIR), "models/choice_v6"),
+    (str(CHOICE_MODEL_DIR), "models/choice_prod"),
     (str(PARSED_CARDS_DIR), "data/processed/parsed_cards"),
     (str(RATINGS_DIR), "data/processed/seventeenlands/ratings"),
 ]
