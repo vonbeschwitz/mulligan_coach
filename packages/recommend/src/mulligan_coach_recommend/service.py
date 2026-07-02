@@ -3,7 +3,7 @@
 Production path (overlay + website)
 -----------------------------------
 
-The shipped verdict comes from the **choice model** (``models/choice_v6``
+The shipped verdict comes from the **choice model** (``models/choice_prod``
 by default), via :meth:`RecommendationService.recommend_choice`. The
 choice model predicts ``P(skilled player would keep | hand)``; we
 bucket that into four levels using fixed thresholds
@@ -84,17 +84,21 @@ log = logging.getLogger(__name__)
 #
 # Two models, two paths:
 #
-# * ``choice_v6`` is the production keep/mull recommender — XGBoost
+# * ``choice_prod`` is the production keep/mull recommender — XGBoost
 #   trained on 17Lands replay-data mulligan decisions across
 #   PremierDraft + TradDraft, filtered to competent players. The
 #   overlay and website both read its P(keep) prediction and bucket
 #   into the four-level verdict (clear / marginal x keep / mull).
-#   This is the only model required for normal operation.
+#   This is the only model required for normal operation. The slot
+#   name is deliberately version-neutral: promoting a newly-trained
+#   model means copying its weights into ``models/choice_prod`` (the
+#   specific version it holds is recorded in that dir's metadata.json),
+#   so shipping new weights doesn't require a code/slot-name change.
 # * ``all3_v2`` is the legacy win-model bundle (P(win | hand)).
 #   Optional and only consulted by a couple of analysis scripts
 #   (replay-mulligan benchmarks etc.) — the production verdict is
 #   choice-model only. Load is best-effort; missing is fine.
-_DEFAULT_CHOICE_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "choice_v6"
+_DEFAULT_CHOICE_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "choice_prod"
 _DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[4] / "models" / "all3_v2"
 _DEFAULT_EVENT_TYPE = "PremierDraft"
 
@@ -505,7 +509,7 @@ class ChoiceRecommendation:
     """Result of :meth:`RecommendationService.recommend_choice`.
 
     The production keep/mull verdict, driven by the choice model
-    (``models/choice_v6``). The model predicts ``P(skilled player
+    (``models/choice_prod``). The model predicts ``P(skilled player
     would keep | hand)``; we bucket that into four levels using
     fixed thresholds (see :data:`CHOICE_CLEAR_KEEP_THRESHOLD` etc.):
 
@@ -1132,7 +1136,7 @@ class RecommendationService:
         """
         if self.choice_bundle is None:
             raise RuntimeError(
-                "Choice model not loaded. Train models/choice_v6 "
+                "Choice model not loaded. Train models/choice_prod "
                 "(see packages/model/CLAUDE.md) or set "
                 "MULLIGAN_COACH_CHOICE_MODEL_DIR to its directory."
             )
@@ -1524,7 +1528,7 @@ def _choice_model_dir() -> Path:
 def load_service(set_codes: list[str]) -> RecommendationService:
     """Build the :class:`RecommendationService` for the given sets.
 
-    The **choice model** (``models/choice_v6`` by default) is the
+    The **choice model** (``models/choice_prod`` by default) is the
     production load target — ``status.model_loaded`` reflects whether
     that bundle came up. The legacy **win model** (``models/all3_v2``)
     is loaded best-effort alongside it but its absence doesn't fail
@@ -1549,7 +1553,7 @@ def load_service(set_codes: list[str]) -> RecommendationService:
     else:
         err = (
             f"Choice-model directory {choice_model_dir} does not exist. "
-            "Train models/choice_v6 or set MULLIGAN_COACH_CHOICE_MODEL_DIR."
+            "Train models/choice_prod or set MULLIGAN_COACH_CHOICE_MODEL_DIR."
         )
         log.warning("%s", err)
 

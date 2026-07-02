@@ -78,9 +78,11 @@ Three layers, each replaceable without touching the others:
    game for the file lock.
 
 3. **Coordinator + UI** (`headless.py`, `gui.py`). Wires the tailer
-   events to `RecommendationService.recommend_asymmetric`. Holds the
-   "current match deck" (from the most recent `DeckSubmitted`), resets
-   on `MatchEnded`, and presents the verdict.
+   events to `RecommendationService.recommend_choice` (the production
+   choice model; the older `recommend_asymmetric` win-model path is
+   legacy and no longer displayed). Holds the "current match deck"
+   (from the most recent `DeckSubmitted`), resets on `MatchEnded`, and
+   presents the verdict.
 
 4. **Arena window watcher** (`arena_window.py`). Polls Win32 every
    250 ms for Arena's main HWND and emits one of four states —
@@ -175,11 +177,11 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   through a `QAbstractNativeEventFilter`). Avoid Ctrl-based
   combos here — Arena's full-control binds Ctrl, and a global
   hotkey on Ctrl+anything ate combos the player needed in-game.
-* While the keep arm runs, the worker emits a synthetic
-  ``ComputingOutput`` (before the blocking
-  ``recommend_asymmetric`` call) so the panel can flash a
-  "Running simulation…" amber state. Lets the user tell the
-  difference between Arena-log delivery delay and sim time.
+* While the simulation runs, the worker emits a synthetic
+  ``ComputingOutput`` (before the blocking ``recommend_choice``
+  call) so the panel can flash a "Running simulation…" amber
+  state. Lets the user tell the difference between Arena-log
+  delivery delay and sim time.
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as

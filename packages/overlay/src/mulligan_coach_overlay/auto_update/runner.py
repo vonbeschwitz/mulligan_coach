@@ -63,7 +63,7 @@ ReloadRatingsCb = Callable[[set[str]], None]
 ReloadParsedCardsCb = Callable[[set[str]], None]
 """``fn({"TLA"})`` — called once when any parsed_cards artifact swapped."""
 ReloadModelCb = Callable[[str], None]
-"""``fn("choice_v6")`` — called when a model artifact swapped."""
+"""``fn("choice_prod")`` — called when a model artifact swapped."""
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,7 @@ class _ArtifactOutcome:
     """
 
     label: str
-    """Human-readable identifier (``"ratings:TLA"``, ``"model:choice_v6"``).
+    """Human-readable identifier (``"ratings:TLA"``, ``"model:choice_prod"``).
     Built by :meth:`ManifestArtifact.label`; surfaced in log lines."""
     status: str
     """One of ``"up_to_date"``, ``"refreshed"``, ``"failed"``."""
@@ -142,7 +142,7 @@ class UpdateRunner:
         Callback fired with the set of set_codes whose JSON files
         were swapped.
     reload_model:
-        Callback fired with the model name (e.g. ``"choice_v6"``)
+        Callback fired with the model name (e.g. ``"choice_prod"``)
         when a model artifact was swapped.
     timeout_seconds:
         Per-request socket timeout for the manifest fetch +

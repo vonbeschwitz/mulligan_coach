@@ -2,7 +2,7 @@
 
 Builds the Windows distribution of Mulligan Coach: a single folder
 containing `MulliganCoach.exe` plus the bundled Python runtime,
-PyQt6, XGBoost, the choice_v6 model, parsed-cards JSON, and 17Lands
+PyQt6, XGBoost, the choice_prod model, parsed-cards JSON, and 17Lands
 ratings parquets. The folder is what gets zipped and sent to a
 friend.
 
@@ -45,7 +45,7 @@ dist/MulliganCoach/
     ├── <Python runtime, Qt, numpy, xgboost, ...>
     ├── data/processed/parsed_cards/{TLA,TMT,ECL,SOS}.json
     ├── data/processed/seventeenlands/ratings/<SET>/PremierDraft.parquet
-    └── models/choice_v6/{xgboost.json, metadata.json, sweep_results.json}
+    └── models/choice_prod/{xgboost.json, metadata.json, sweep_results.json}
 ```
 
 The frozen-mode shim in

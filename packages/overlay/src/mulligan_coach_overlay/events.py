@@ -52,8 +52,9 @@ class DeckSubmitted(BaseModel):
 class MulliganDecisionRequest(BaseModel):
     """Arena is asking the player to keep or mulligan the current hand.
 
-    Fields mirror what the website's
-    :meth:`RecommendationService.recommend_asymmetric` needs:
+    Fields mirror what
+    :meth:`RecommendationService.recommend_choice` needs (the same
+    inputs the legacy ``recommend_asymmetric`` took):
 
     * ``hand_arena_ids`` — the current opening-hand contents (always
       seven cards under London mulligan rules; the player will bottom

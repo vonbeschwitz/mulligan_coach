@@ -1324,9 +1324,10 @@ def _install_auto_update(service: Any, coordinator: OverlayCoordinator) -> QTime
 
         We track the legacy win model separately in slice 2's API;
         the auto-updater's ``reload_model`` callback gets the manifest
-        artifact's ``name``, so we filter here. Right now only
-        ``choice_v6`` matters — but a hypothetical ``choice_v7``
-        rolling out in the manifest would slot in here too.
+        artifact's ``name``, so we filter here. The production model
+        ships under the version-neutral slot ``choice_prod`` — the
+        ``choice_`` prefix test catches it (and any future
+        ``choice_*`` variant) without a code change.
         """
         if name.startswith("choice_"):
             service.reload_choice_model()

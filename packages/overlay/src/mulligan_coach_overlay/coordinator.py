@@ -6,8 +6,9 @@ Three things to do per match:
    :class:`ParsedCard` and stash it as the current deck.
 2. Listen for :class:`MulliganDecisionRequest`; look up the hand
    cards via the :class:`ArenaCardIndex`; call
-   :meth:`RecommendationService.recommend_asymmetric`; produce a
-   typed result for display.
+   :meth:`RecommendationService.recommend_choice` (the production
+   choice model; the legacy ``recommend_asymmetric`` win-model path
+   is not used here); produce a typed result for display.
 3. Listen for :class:`MatchEnded`; clear the per-match deck so the
    next match starts clean.
 
@@ -19,7 +20,7 @@ across both surfaces.
 
 The :class:`CoordinatorOutput` discriminator is the surface to the
 display layer. It's not the same shape as
-:class:`mulligan_coach_recommend.AsymmetricRecommendation` because:
+:class:`mulligan_coach_recommend.ChoiceRecommendation` because:
 
 * The display needs to know whether a recommendation could even be
   computed — was a deck loaded? Were all hand cards resolved? —
@@ -134,7 +135,7 @@ class ComputingOutput:
 
     Emitted by the tailer worker the moment a
     :class:`MulliganDecisionRequest` arrives, *before* the blocking
-    ``recommend_asymmetric`` call. Lets the UI render a "computing"
+    ``recommend_choice`` call. Lets the UI render a "computing"
     state so the user can tell when latency comes from sim time
     vs. when the Arena log delivery itself was slow.
 

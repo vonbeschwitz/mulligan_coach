@@ -65,7 +65,9 @@ HTMX, identical pattern to `simulation_viewer`:
   `hx-vals` and includes the whole form via `hx-include="#builder"`.
   Response: `_hand.html`, swapped into `#hand`.
 * `POST /recommend` validates the hand size and required context,
-  calls `recommend_asymmetric(...)`, and renders the result via
+  calls `recommend_choice(...)` (the production choice model — the
+  legacy `recommend_asymmetric` win-model path documented below is
+  no longer what the route serves), and renders the result via
   `_recommendation.html` into `#recommendation` (outside the form
   so the swap doesn't blow away form state).
 * `GET /card-image/{name:path}` returns a 307 to Scryfall's
@@ -108,8 +110,20 @@ a Plains would fail to resolve.
 
 ## Recommendation pipeline
 
+> **Legacy note.** The production verdict is now the **choice model**
+> via `RecommendationService.recommend_choice` (a single
+> `simulate → build_feature_row` pass; the route calls this). The
+> asymmetric win-model machinery described in this section — the
+> asymmetric sim budget, mulligan-arm prefetch cache, +4 pp mulligan
+> bias, and deeper-mulligan floor — is the **legacy** win-model path.
+> It's retained as an ensemble / sanity signal and for analysis
+> scripts, but it is not what `/recommend` serves. The BO1 hand
+> smoother (§0) still applies to any path that draws hands. Read the
+> rest of this section as the design history of that legacy path.
+
 The pipeline (now in `packages/recommend/src/mulligan_coach_recommend/service.py`)
-is the heart of the system. Four pieces compose:
+is the heart of the system. For the legacy asymmetric path, four
+pieces compose:
 
 ### 0. Arena BO1 hand smoother
 

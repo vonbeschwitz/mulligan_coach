@@ -25,7 +25,7 @@ equivalents), we maintain:
 
 * ``data/processed/parsed_cards/<SET>.json`` — per-set ParsedCards.
 * ``data/processed/seventeenlands/ratings/<SET>/PremierDraft.parquet``.
-* ``models/choice_v6/{xgboost.json, metadata.json, sweep_results.json}``.
+* ``models/choice_prod/{xgboost.json, metadata.json, sweep_results.json}``.
 * ``_seeded_version.txt`` — version stamp of the bundle this seed
   came from. Compared against the bundle's ``_bundle_version.txt``
   on each launch to decide whether to re-seed when the user has
@@ -117,7 +117,7 @@ def user_models_root() -> Path:
     """Where the recommend pipeline reads the choice (and legacy win) model.
 
     Matches the bundled layout: e.g. the choice model lives at
-    ``<user_models_root>/choice_v6/`` and is passed to the recommend
+    ``<user_models_root>/choice_prod/`` and is passed to the recommend
     service via ``MULLIGAN_COACH_CHOICE_MODEL_DIR``.
     """
     return user_state_root() / "models"

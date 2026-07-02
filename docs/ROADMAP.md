@@ -17,8 +17,9 @@ both.
 
 * Production verdict = choice model via `RecommendationService.recommend_choice`
   (website `app.py` + overlay `coordinator.py`). Win model `all3_v2` is legacy.
-* Model weights ship under hardcoded slot name `choice_v6`
-  (`overlay/_frozen.py`, `_DEFAULT_CHOICE_MODEL_DIR`).
+* Model weights ship under the version-neutral slot name `choice_prod`
+  (`overlay/_frozen.py`, `_DEFAULT_CHOICE_MODEL_DIR`) as of Step 3;
+  the slot currently holds the `choice_v6` weights.
 * choice_v8 (TLA+TMT+SOS) DONE 2026-07-02 (commit f4faf51): trained on
   fresh TLA/TMT caches, ties v7 on honest held-out eval, resolves the
   mixed-sim-version caveat; NOT promoted. It surfaced a `_grouped_split`
@@ -87,13 +88,28 @@ ratings automation.
   harmless (old models ignore the new columns).
 * **Fable: spec + review. Opus: implementation.**
 
-### Step 3 — doc sweep + slot rename (review #4)
-* Mark `recommend_asymmetric` legacy everywhere (recommend/overlay
-  CLAUDE.mds, README, coordinator docstring); fix recommend/CLAUDE.md test
-  claim; fix root CLAUDE.md "vectorized numpy" claim.
-* Rename model slot `choice_v6` → version-neutral (`choice_prod`) in
-  `_frozen.py`, `_DEFAULT_CHOICE_MODEL_DIR`, publish scripts. Must land
-  before the first public EXE.
+### Step 3 — doc sweep + slot rename (review #4) — DONE
+* Marked `recommend_asymmetric` legacy everywhere it read as production:
+  recommend/overlay CLAUDE.mds, recommend/README, website/CLAUDE.md
+  (route claim + a legacy banner on the "Recommendation pipeline"
+  section), coordinator.py + events.py docstrings. Fixed
+  recommend/CLAUDE.md's false "no tests" claim (it has
+  `test_recommend_reload.py`) and the root CLAUDE.md "vectorized numpy"
+  claim (reality: per-game Python loop; numba is the fallback).
+* Renamed the production model slot `choice_v6` → version-neutral
+  `choice_prod` across the whole ship chain: `service.py`
+  (`_DEFAULT_CHOICE_MODEL_DIR` + docstrings/errors), overlay `_frozen.py`
+  (both env-var defaults), `mulligan_coach.spec` (bundle source + dest),
+  `publish_data_release.py` (`_DEFAULT_MODEL_NAME` + rewritten
+  version-neutral docstring), `user_data.py`, packaging README, and the
+  auto-update docstring examples (manifest.py / runner.py / gui.py). The
+  slot holds the current production weights (copied from `choice_v6`;
+  `models/` is gitignored so the copy is local-only) and its actual
+  training version lives in the dir's `metadata.json`. Promoting a new
+  model = copy weights into `models/choice_prod`, no code change. Test
+  fixtures that use `choice_v6` as an arbitrary model name were left
+  as-is (they exercise the name-agnostic auto-update mechanism and pass
+  names explicitly). Landed before the first public EXE.
 * **Opus.**
 
 ### Step 4 — recommend-service tests (review #5)

@@ -11,7 +11,7 @@ What it does
 1. Walks the workspace's ``data/processed/parsed_cards/<SET>.json``
    and ``data/processed/seventeenlands/ratings/<SET>/PremierDraft.parquet``,
    computes a SHA256 for each, and stages them for upload as-is.
-2. Zips ``models/choice_v6/`` into a single asset (the auto-updater's
+2. Zips ``models/choice_prod/`` into a single asset (the auto-updater's
    model installer expects one zip per model bundle).
 3. Builds a manifest JSON shaped like the slice-3 schema
    (:mod:`mulligan_coach_overlay.auto_update.manifest`) describing
@@ -89,13 +89,17 @@ recommend service stops loading it because the env-driven path
 resolution still tries that set but ``_try_load_format_stats``
 gracefully returns ``None`` for missing parquets."""
 
-_DEFAULT_MODEL_NAME = "choice_v6"
-"""Production choice-model directory under ``models/``.
+_DEFAULT_MODEL_NAME = "choice_prod"
+"""Production choice-model *slot* directory under ``models/``.
 
-When training rolls a v7, bump this default. Slice-3's auto-update
-GUI installer also runs ``service.reload_choice_model()`` only for
-artifact names starting with ``choice_`` so a clean rename like
-``choice_v6 -> choice_v7`` doesn't need a coordinated client change."""
+Deliberately version-neutral: promoting a newly-trained model means
+copying its weights into ``models/choice_prod`` (its actual training
+version is recorded in that dir's ``metadata.json``), so this default
+— and every client that resolves ``models/choice_prod`` /
+``MULLIGAN_COACH_CHOICE_MODEL_DIR`` — stays stable across retrains and
+no coordinated client change is needed. The auto-update GUI installer
+also runs ``service.reload_choice_model()`` only for artifact names
+starting with ``choice_``, which ``choice_prod`` matches."""
 
 _SCHEMA_VERSION = 1
 """Mirrors ``AUTO_UPDATE_SCHEMA_VERSION`` in the overlay manifest module.
@@ -164,7 +168,7 @@ def _zip_model(model_dir: Path, dest_zip: Path) -> None:
     in :mod:`auto_update.runner`) drops the archive's contents
     straight into the destination model dir, so the zip must store
     files at their bare names (``xgboost.json`` etc.), not under a
-    ``choice_v6/`` prefix.
+    ``choice_prod/`` prefix.
 
     DEFLATE compression knocks the choice model bundle from ~25 MB
     down to ~5 MB — worth it on every download for the friends'

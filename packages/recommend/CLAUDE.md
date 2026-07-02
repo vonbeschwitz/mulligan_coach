@@ -8,8 +8,24 @@ out of `packages/website` so neither downstream package has to
 take a FastAPI dep just to call the recommender.
 
 Pure Python — no Qt, no FastAPI, no Jinja2. Composes the four
-upstream packages (cards, features, simulation, model) into one
-entry point.
+upstream packages (cards, features, simulation, model) into the
+recommendation entry points.
+
+## Production vs legacy entry point
+
+**`RecommendationService.recommend_choice` is the production verdict
+path.** Both the website (`app.py`) and the overlay (`coordinator.py`)
+call it. It runs the choice model (`P(a skilled player keeps this
+hand)`) over the simulator features and returns a `ChoiceRecommendation`.
+
+`recommend_asymmetric` (→ `AsymmetricRecommendation`) is the **legacy
+win-model path**: it runs the win model twice (keep vs. simulated
+mulligan-to-N-1) with the asymmetric sim budget, +4 pp mulligan bias,
+prefetch cache, and deeper-mulligan floor. It's kept because the win
+model is still useful as an ensemble / sanity signal and several
+analysis scripts drive it, but it is **not** what any shipped surface
+displays. When you read "asymmetric / cache / bias / floor" below,
+treat it as legacy machinery, not the current verdict.
 
 ## Layout
 
@@ -22,22 +38,27 @@ src/mulligan_coach_recommend/
 ```
 
 Kept as a single ~900-line `service.py` rather than splitting into
-sub-modules. The four logical pieces (format stats, asymmetric
-recommend + cache, mulligan-arm floor, model loading) live next to
-each other and reading them in order tells one coherent story. If
-the file grows past ~1500 lines or a piece develops its own tests,
-split then.
+sub-modules. The logical pieces (format stats, the production
+`recommend_choice` path, the legacy asymmetric recommend + cache,
+mulligan-arm floor, model loading) live next to each other and
+reading them in order tells one coherent story. If the file grows
+past ~1500 lines or a piece develops its own tests, split then.
 
 ## Design rationale
 
 See `packages/website/CLAUDE.md` § "Recommendation pipeline" — the
 full asymmetric / cache / bias / floor reasoning lives there, since
-the website is where the design was first proven. This package owns
-the implementation; the website's CLAUDE.md owns the why.
+the website is where that (now-legacy) design was first proven. This
+package owns the implementation; the website's CLAUDE.md owns the why.
+Note the production surfaces now call `recommend_choice`; the
+asymmetric write-up documents the legacy win-model path.
 
 ## Tests
 
-This package has no test suite of its own. Coverage comes from two
+`tests/test_recommend_reload.py` covers the `reload_*` swap + status
+logic (the seam the auto-update manifest fetcher calls after writing a
+fresh parquet / model bundle), using a stub bundle so no real parquet
+or trained model is needed. Additional coverage comes from two more
 places:
 
 * `packages/website/tests/test_app.py` exercises the service via
@@ -45,9 +66,9 @@ places:
 * `packages/model/tests/test_inference.py` exercises the pieces of
   the inference path that the service composes.
 
-Tests against the service in isolation can land here as new
-behaviour is added (e.g. when the recommend layer grows logic
-that doesn't show up cleanly through the website's route tests).
+More service-in-isolation tests are planned (verdict-threshold
+boundaries, seed determinism, `opp_mulligan` NaN convention, deck-size
+bounds — roadmap Step 4) and should land here as `test_service.py`.
 
 ## Privately re-exported helpers
 

@@ -21,7 +21,7 @@ On-disk shape (current ``schema_version=1``)
          "url": "...", "sha256": "abc...", "version": "2026-05-22"},
         {"kind": "parsed_cards",  "set_code": "TLA",
          "url": "...", "sha256": "def...", "version": "2026-05-15"},
-        {"kind": "model",         "name": "choice_v6",
+        {"kind": "model",         "name": "choice_prod",
          "url": "...", "sha256": "ghi...", "version": "2026-04-30"}
       ]
     }
@@ -105,7 +105,7 @@ _SAFE_SET_CODE_PATTERN = re.compile(r"^[A-Z0-9]{2,8}$")
 proofing without admitting separators or punctuation."""
 
 _SAFE_MODEL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$")
-"""Model bundles ship under names like ``choice_v6`` / ``win_v1``.
+"""Model bundles ship under names like ``choice_prod`` / ``win_v1``.
 Allowing letters, digits, underscores, and hyphens covers any reasonable
 future naming without admitting dots (NTFS edge cases on trailing dots),
 path separators, drive letters, or traversal tokens."""
@@ -162,7 +162,7 @@ class ManifestArtifact:
         Set identifier for per-set artifacts (``TLA`` / ``TMT`` /
         ``ECL`` / ``SOS``). ``None`` for ``kind="model"``.
     name:
-        Model name (e.g. ``choice_v6``) for ``kind="model"``.
+        Model name (e.g. ``choice_prod``) for ``kind="model"``.
         ``None`` for the per-set kinds.
     url:
         Direct download URL. GitHub Releases asset URLs are stable
