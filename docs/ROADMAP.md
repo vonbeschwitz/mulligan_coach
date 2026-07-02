@@ -60,10 +60,16 @@ ratings automation.
 * Let choice_v8 finish; ask that agent to commit+push. Manually record v8's
   cache lineage in its metadata/notes (it predates version stamping).
 
-### Step 1 — pipeline versioning (design review #1)
-* `PIPELINE_VERSION` stamps in chunk parquet metadata + model metadata.json;
-  refuse resume on mismatch; warn at bundle load. Legacy grace path for
-  existing unstamped shards.
+### Step 1 — pipeline versioning (design review #1) — DONE
+* `pipeline_versions()` stamps (`simulation` + `features` semantics ints)
+  in per-shard `_meta.json` sidecars + model `metadata.json`; materialiser
+  refuses resume on mismatch (offers `--overwrite`); training refuses to
+  mix mismatched shards unless `--allow-version-mismatch`; bundle load
+  warns (never fails). Legacy grace path stamps `unverified_legacy` on
+  pre-existing unstamped shards. Also replaced the permutation split with a
+  materialisation-invariant `sha256(draft_id)` hash split
+  (`draftid_hash_v1`) in both trainers. See
+  `docs/specs/step1_pipeline_versioning.md`.
 * **Fable: design/spec + final review. Opus: implementation.**
 
 ### Step 2 — set-vocabulary fixes (review #2a, quick wins)

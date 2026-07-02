@@ -477,3 +477,26 @@ exercises the exact (deck, hand, seed) triples the production
 pipeline uses — anything that flips a single trace under load
 will surface immediately. The baseline JSONs are gitignored; each
 contributor regenerates locally.
+
+## Semantics version — when to bump `SIMULATION_SEMANTICS_VERSION`
+
+`SIMULATION_SEMANTICS_VERSION` (an `int` in
+`src/mulligan_coach_simulation/__init__.py`, currently `1`) identifies
+the simulator's *output* semantics. It is stamped into every
+feature-cache shard's `_meta.json` and into each model's
+`metadata.json` (see `packages/model/src/mulligan_coach_model/versioning.py`)
+so a training run refuses to stitch two simulator semantics into one
+model, and a loaded model warns when the running code no longer matches.
+
+**Bump it — in the SAME PR as the change — whenever you alter
+`simulate()`'s output for a fixed `(hand, library, on_the_play, seed)`.**
+That includes policy changes, effect-resolution changes, new mechanics,
+and anything that changes how the RNG is consumed. The operational test
+is the equivalence harness: if `--check` against a pre-change baseline
+reports *any* aggregate-field or trace-hash diff, the version must bump.
+
+**Do NOT bump** for formatting / performance work that keeps
+bit-identical output — that's exactly what the equivalence harness
+exemption is for. Verify with `--save` before and `--check` after; if
+every field and trace hash matches, the semantics are unchanged and the
+existing caches stay valid.

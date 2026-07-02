@@ -11,6 +11,7 @@ per-card-WR features fall to 0 in both places.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 
 import duckdb
@@ -36,6 +37,13 @@ from mulligan_coach_model import (
     materialize_feature_matrix,
 )
 from mulligan_coach_model.feature_matrix import _FormatStats, _library_from_deck, _row_seed
+from mulligan_coach_model.versioning import (
+    SHARD_META_FILENAME,
+    ShardVersionError,
+    pipeline_versions,
+    read_shard_meta,
+    write_shard_meta,
+)
 
 # ---------------------------------------------------------------------------
 # Card factories — keep these self-contained so tests don't reach into
@@ -901,3 +909,182 @@ def test_feature_parquet_paths_returns_sorted_chunks(tmp_path: Path) -> None:
 
 def test_feature_parquet_paths_returns_empty_for_missing_dir(tmp_path: Path) -> None:
     assert feature_parquet_paths(tmp_path / "does_not_exist") == []
+
+
+# ---------------------------------------------------------------------------
+# Pipeline-version sidecar (_meta.json) integration
+# ---------------------------------------------------------------------------
+
+
+def test_materialize_writes_shard_meta_on_fresh_run(tmp_path: Path) -> None:
+    db_path = _build_test_games_db(tmp_path, n_rows=2)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=5,
+        )
+    finally:
+        _restore_patches(originals)
+
+    meta = read_shard_meta(out_dir)
+    assert meta is not None
+    assert meta.pipeline_versions == pipeline_versions()
+    assert meta.set_code == "TLA"
+    assert meta.event_type == "PremierDraft"
+    assert meta.n_sims_per_row == 3
+    assert meta.unverified_legacy is False
+    # The sidecar is NOT picked up as a data chunk.
+    assert (out_dir / SHARD_META_FILENAME).exists()
+    assert all(p.name != SHARD_META_FILENAME for p in feature_parquet_paths(out_dir))
+
+
+def test_materialize_resume_on_matching_meta_proceeds(tmp_path: Path) -> None:
+    db_path = _build_test_games_db(tmp_path, n_rows=4)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+        # Drop a chunk so the resume pass has work to do; matching meta
+        # means it proceeds without raising.
+        feature_parquet_paths(out_dir)[0].unlink()
+        stats = materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+    finally:
+        _restore_patches(originals)
+    assert stats.rows_skipped_resume == 2
+    assert stats.rows_written == 2
+
+
+def test_materialize_resume_version_mismatch_raises(tmp_path: Path) -> None:
+    db_path = _build_test_games_db(tmp_path, n_rows=4)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+        # Simulate a simulator-semantics bump between runs.
+        meta = read_shard_meta(out_dir)
+        assert meta is not None
+        bumped = {**meta.pipeline_versions, "simulation": meta.pipeline_versions["simulation"] + 1}
+        write_shard_meta(out_dir, replace(meta, pipeline_versions=bumped))
+        with pytest.raises(ShardVersionError, match="pipeline_versions"):
+            materialize_feature_matrix(
+                set_code="TLA",
+                duckdb_path=db_path,
+                output_dir=out_dir,
+                n_sims_per_row=3,
+                chunk_rows=2,
+            )
+    finally:
+        _restore_patches(originals)
+
+
+def test_materialize_resume_n_sims_mismatch_raises(tmp_path: Path) -> None:
+    db_path = _build_test_games_db(tmp_path, n_rows=4)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+        with pytest.raises(ShardVersionError, match="n_sims_per_row"):
+            materialize_feature_matrix(
+                set_code="TLA",
+                duckdb_path=db_path,
+                output_dir=out_dir,
+                n_sims_per_row=5,  # different sim budget
+                chunk_rows=2,
+            )
+    finally:
+        _restore_patches(originals)
+
+
+def test_materialize_resume_legacy_shard_warns_and_stamps(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    db_path = _build_test_games_db(tmp_path, n_rows=4)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+        # Simulate a pre-stamping shard: chunks present, no sidecar.
+        (out_dir / SHARD_META_FILENAME).unlink()
+        with caplog.at_level(logging.WARNING, logger="mulligan_coach_model.versioning"):
+            materialize_feature_matrix(
+                set_code="TLA",
+                duckdb_path=db_path,
+                output_dir=out_dir,
+                n_sims_per_row=3,
+                chunk_rows=2,
+            )
+    finally:
+        _restore_patches(originals)
+
+    meta = read_shard_meta(out_dir)
+    assert meta is not None
+    assert meta.unverified_legacy is True
+    assert any("legacy" in rec.message.lower() for rec in caplog.records)
+
+
+def test_materialize_overwrite_resets_meta(tmp_path: Path) -> None:
+    db_path = _build_test_games_db(tmp_path, n_rows=4)
+    originals = _patch_for_in_process_materialize()
+    try:
+        out_dir = tmp_path / "shard"
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+        )
+        # Corrupt the meta (legacy + wrong sim budget), then overwrite.
+        meta = read_shard_meta(out_dir)
+        assert meta is not None
+        write_shard_meta(out_dir, replace(meta, n_sims_per_row=999, unverified_legacy=True))
+        materialize_feature_matrix(
+            set_code="TLA",
+            duckdb_path=db_path,
+            output_dir=out_dir,
+            n_sims_per_row=3,
+            chunk_rows=2,
+            overwrite=True,
+        )
+    finally:
+        _restore_patches(originals)
+
+    meta2 = read_shard_meta(out_dir)
+    assert meta2 is not None
+    assert meta2.n_sims_per_row == 3
+    assert meta2.unverified_legacy is False

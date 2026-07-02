@@ -19,6 +19,7 @@ so they stay self-contained and fast.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,15 @@ from mulligan_coach_model.feature_matrix import (
     _chunk_path as _wm_chunk_path,
 )
 from mulligan_coach_model.training_rows import _BASIC_LANDS, _make_basic_land
+from mulligan_coach_model.versioning import (
+    SHARD_META_FILENAME,
+    ShardMeta,
+    ShardVersionError,
+    now_iso,
+    pipeline_versions,
+    read_shard_meta,
+    write_shard_meta,
+)
 
 
 def _has_real_tla_stats() -> bool:
@@ -533,6 +543,174 @@ def test_stats_starts_at_zero() -> None:
     assert s.rows_via_cache == 0
     assert s.rows_via_simulation == 0
     assert s.choice_row_stats.emitted == 0
+
+
+# ---------------------------------------------------------------------------
+# Pipeline-version sidecar (_meta.json) integration
+# ---------------------------------------------------------------------------
+
+
+def _write_choice_chunk_with_keys(out_dir: Path, chunk_idx: int = 0) -> None:
+    """Seed a choice-output chunk carrying only the resume key columns.
+
+    Enough for ``_load_completed_keys`` to parse on the resume path so the
+    version-check tests can reach ``stamp_or_check_shard_meta`` (which runs
+    before any format-stats / decisions I/O)."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    table = pa.table(
+        {
+            "draft_id": ["draft-1"],
+            "build_index": [0],
+            "match_number": [1],
+            "game_number": [1],
+            "mulligan_number": [0],
+        }
+    )
+    pq.write_table(table, out_dir / f"chunk_{chunk_idx:08d}.parquet")  # type: ignore[no-untyped-call]
+
+
+def test_choice_materialize_resume_version_mismatch_raises(tmp_path: Path) -> None:
+    """A bumped simulation version in the sidecar blocks resume — and does so
+    before any decisions parquet / format-stats work, so no real TLA data is
+    needed."""
+    out_dir = tmp_path / "choice_out"
+    _write_choice_chunk_with_keys(out_dir)
+    live = pipeline_versions()
+    stale = {**live, "simulation": live["simulation"] + 1}
+    write_shard_meta(
+        out_dir,
+        ShardMeta(
+            pipeline_versions=stale,
+            set_code="TLA",
+            event_type="PremierDraft",
+            n_sims_per_row=200,
+            created_at=now_iso(),
+        ),
+    )
+    with pytest.raises(ShardVersionError, match="pipeline_versions"):
+        materialize_choice_feature_matrix(
+            decisions_parquet=tmp_path / "unused_decisions.parquet",
+            cached_features_dir=None,
+            output_dir=out_dir,
+            set_code="TLA",
+            n_sims_per_row=200,
+        )
+
+
+def test_choice_materialize_resume_n_sims_mismatch_raises(tmp_path: Path) -> None:
+    out_dir = tmp_path / "choice_out"
+    _write_choice_chunk_with_keys(out_dir)
+    write_shard_meta(
+        out_dir,
+        ShardMeta(
+            pipeline_versions=pipeline_versions(),
+            set_code="TLA",
+            event_type="PremierDraft",
+            n_sims_per_row=200,
+            created_at=now_iso(),
+        ),
+    )
+    with pytest.raises(ShardVersionError, match="n_sims_per_row"):
+        materialize_choice_feature_matrix(
+            decisions_parquet=tmp_path / "unused_decisions.parquet",
+            cached_features_dir=None,
+            output_dir=out_dir,
+            set_code="TLA",
+            n_sims_per_row=50,  # different sim budget
+        )
+
+
+@pytest.mark.skipif(
+    not _HAS_REAL_TLA_STATS,
+    reason="Needs real TLA cards.json to build format_stats for a full run.",
+)
+def test_choice_materialize_writes_meta_on_fresh_run(tmp_path: Path) -> None:
+    decisions = tmp_path / "decisions.parquet"
+    _write_decisions_parquet(
+        [
+            _make_decision_record(
+                hand_names=["Forest"] * 4 + ["Plains"] * 3,
+                deck_counts={"Forest": 17, "Plains": 17, "Island": 6},
+                was_kept=True,
+                mulligan_number=0,
+                num_mulligans_in_game=0,
+            ),
+        ],
+        decisions,
+    )
+    cache_dir = tmp_path / "cached"
+    _write_cache_chunk(
+        [_make_cached_feature_row(draft_id="draft-1", match_number=1, game_number=1)],
+        cache_dir,
+    )
+    out_dir = tmp_path / "choice_out"
+    materialize_choice_feature_matrix(
+        decisions_parquet=decisions,
+        cached_features_dir=cache_dir,
+        output_dir=out_dir,
+        set_code="TLA",
+        chunk_rows=1,
+        n_sims_per_row=7,
+    )
+    meta = read_shard_meta(out_dir)
+    assert meta is not None
+    assert meta.pipeline_versions == pipeline_versions()
+    assert meta.set_code == "TLA"
+    assert meta.n_sims_per_row == 7
+    assert meta.unverified_legacy is False
+    # Sidecar is not counted as a data chunk.
+    assert all(p.name != SHARD_META_FILENAME for p in choice_parquet_paths(out_dir))
+
+
+@pytest.mark.skipif(
+    not _HAS_REAL_TLA_STATS,
+    reason="Needs real TLA cards.json to build format_stats for a full run.",
+)
+def test_choice_materialize_overwrite_resets_meta(tmp_path: Path) -> None:
+    decisions = tmp_path / "decisions.parquet"
+    _write_decisions_parquet(
+        [
+            _make_decision_record(
+                hand_names=["Forest"] * 4 + ["Plains"] * 3,
+                deck_counts={"Forest": 17, "Plains": 17, "Island": 6},
+                was_kept=True,
+                mulligan_number=0,
+                num_mulligans_in_game=0,
+            ),
+        ],
+        decisions,
+    )
+    cache_dir = tmp_path / "cached"
+    _write_cache_chunk(
+        [_make_cached_feature_row(draft_id="draft-1", match_number=1, game_number=1)],
+        cache_dir,
+    )
+    out_dir = tmp_path / "choice_out"
+    materialize_choice_feature_matrix(
+        decisions_parquet=decisions,
+        cached_features_dir=cache_dir,
+        output_dir=out_dir,
+        set_code="TLA",
+        chunk_rows=1,
+        n_sims_per_row=7,
+    )
+    # Corrupt the sidecar, then overwrite; the fresh run must rewrite it.
+    meta = read_shard_meta(out_dir)
+    assert meta is not None
+    write_shard_meta(out_dir, replace(meta, n_sims_per_row=999, unverified_legacy=True))
+    materialize_choice_feature_matrix(
+        decisions_parquet=decisions,
+        cached_features_dir=cache_dir,
+        output_dir=out_dir,
+        set_code="TLA",
+        chunk_rows=1,
+        n_sims_per_row=7,
+        overwrite=True,
+    )
+    meta2 = read_shard_meta(out_dir)
+    assert meta2 is not None
+    assert meta2.n_sims_per_row == 7
+    assert meta2.unverified_legacy is False
 
 
 # build_choice_row_fresh is exercised by the end-to-end test_materialize_resims_mulled_hands

@@ -464,6 +464,95 @@ Two files in `models/<name>/`:
 No `baseline.json` because the choice model doesn't use one. Load
 via `ChoiceModelBundle.load(model_dir)`.
 
+## Pipeline version lineage (`versioning.py`)
+
+`versioning.py` makes the simulator → feature-cache → model lineage a
+first-class artifact so a resumed materialisation can't silently stitch
+two simulator semantics into one shard, and a training run can't quietly
+train on a cache older than the live code (the choice_v7 incident).
+
+### Version identity
+
+`pipeline_versions()` returns
+`{"simulation": SIMULATION_SEMANTICS_VERSION, "features":
+FEATURES_SEMANTICS_VERSION}` — the two ints from the simulation and
+features packages. See each package's CLAUDE.md for the same-PR bump
+rules. Both are `1` today (version 1 == "current semantics").
+
+### `_meta.json` shard sidecar
+
+Every feature-cache shard directory
+(`data/processed/{model,choice}_training/<SET>/<EVENT>/`) carries a
+`_meta.json` (underscore keeps it out of the `chunk_*.parquet` glob) with
+the flat shape:
+
+```json
+{"pipeline_versions": {"simulation": 1, "features": 1},
+ "set_code": "TLA", "event_type": "PremierDraft",
+ "n_sims_per_row": 200, "created_at": "…ISO…",
+ "unverified_legacy": false}
+```
+
+Unknown keys are tolerated on read (forward compat). Both materialisers
+call `stamp_or_check_shard_meta` before any expensive work:
+
+* **Fresh dir / `overwrite=True`** — write the sidecar (overwrite also
+  deletes the old one first).
+* **Resume with a matching sidecar** — proceed, leaving it untouched.
+* **Resume with a mismatching sidecar** — raise `ShardVersionError`
+  naming exactly what differs (pipeline versions, `n_sims_per_row`,
+  set/event) and advising `--overwrite`. Mixing per-row sim budgets mixes
+  feature noise levels, so `n_sims_per_row` is a hard check too.
+* **Resume with chunks but NO sidecar (legacy shard)** — WARN, then stamp
+  the current versions with `unverified_legacy=true`. This is the grace
+  path for every shard built before stamping existed; it is *not*
+  verification, just a record that we couldn't verify.
+
+### Training checks + `--allow-version-mismatch`
+
+`train_model` / `train_choice_model` derive shard dirs as
+`{p.parent for p in parquet_paths}`, read each `_meta.json`, and:
+
+* record a per-shard `shard_lineage` in `metadata.json` (a legacy dir
+  with no sidecar is recorded as `pipeline_versions: null`);
+* raise `ShardVersionError` if any shard's versions differ from the live
+  `pipeline_versions()` (this also catches shards disagreeing with each
+  other), **unless** `allow_version_mismatch=True`.
+
+The kwarg is surfaced as `--allow-version-mismatch` on
+`train_multi_set.py`, `train_choice_model.py`, and `retrain_all.py`
+(which forwards it to both training steps). Default refuses the mix;
+passing it records `version_mismatch_allowed: true` in `metadata.json`.
+
+`metadata.json` gains four keys (all optional — old models load fine
+without them): `pipeline_versions`, `shard_lineage`,
+`version_mismatch_allowed`, `split_method`.
+
+### Load-time warning (warn, never fail)
+
+`ModelBundle.load` / `ChoiceModelBundle.load` compare the model's
+recorded `pipeline_versions` to the live ones. On mismatch or absence
+they log one WARNING and set `bundle.version_warning: str | None` — they
+never raise (frozen-EXE users can legitimately run skewed versions;
+surfacing it in the UI is a later roadmap step).
+
+### Materialisation-invariant split (`draftid_hash_v1`)
+
+`_grouped_split` in both `train.py` (4-way) and `choice_train.py` (3-way)
+assigns each `draft_id` to a split via
+`draftid_hash_unit(seed, draft_id)` =
+`sha256(f"{seed}:{draft_id}")[:8] / 2**64`, using cumulative-fraction
+bands (val → [calib →] test → train). Because the assignment depends only
+on `(seed, draft_id)`, re-materialising a cache no longer reshuffles the
+split. Split sizes are now binomial around the target fractions rather
+than exact — fine at our draft counts.
+
+**Comparability caveat:** models trained with the OLD permutation split
+are NOT split-comparable with hash-split models (a draft can move between
+train and test). Each model's own held-out metrics remain the only honest
+cross-model comparison; `metadata.json`'s `split_method` records which
+scheme a model used (`draftid_hash_v1`; absent on old models).
+
 ## scripts/
 
 Standalone analysis scripts that run against a trained model

@@ -25,7 +25,30 @@ from .trace import (
 )
 from .validate import DeckEncodingError, check_deck_encodings
 
+# ---------------------------------------------------------------------------
+# Simulator semantics version
+# ---------------------------------------------------------------------------
+#
+# Bump this integer in the SAME PR as ANY change that alters ``simulate()``
+# output for a fixed ``(hand, library, on_the_play, seed)`` — i.e. anything
+# that would make the equivalence harness
+# (``packages/simulation/scripts/equivalence_harness.py``) report a diff:
+# policy changes, effect resolution, new mechanics, or changes to how the
+# RNG is consumed.
+#
+# Do NOT bump for formatting / performance changes that keep bit-identical
+# output — those are exactly the changes the equivalence harness exempts
+# (verify with ``--save`` before / ``--check`` after; if every aggregate
+# field and trace hash matches, no bump).
+#
+# This constant is stamped into the feature-cache ``_meta.json`` sidecars
+# (see ``mulligan_coach_model.versioning``) so a training run can refuse to
+# stitch two simulator semantics into one model, and warned about at bundle
+# load when the running code no longer matches the trained model.
+SIMULATION_SEMANTICS_VERSION: int = 1
+
 __all__ = [
+    "SIMULATION_SEMANTICS_VERSION",
     "ActionEvent",
     "AggregateStats",
     "CardStats",

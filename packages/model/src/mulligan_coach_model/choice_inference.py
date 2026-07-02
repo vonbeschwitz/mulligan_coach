@@ -46,6 +46,7 @@ from mulligan_coach_simulation import simulate
 
 from .choice_train import ChoiceTrainResult, load_choice_train_result
 from .feature_matrix import _library_from_deck
+from .versioning import compute_version_warning
 
 log = logging.getLogger(__name__)
 
@@ -62,11 +63,17 @@ class ChoiceModelBundle:
     Built by :meth:`load` from a model directory (output of
     :func:`save_choice_train_result`) or from an in-memory
     :class:`ChoiceTrainResult` (the tests path).
+
+    ``version_warning`` is a non-fatal note set at load time when the
+    model's recorded pipeline versions don't match the live simulator +
+    feature code (or are absent, for pre-Step-1 models). It never blocks
+    loading.
     """
 
     booster: xgb.Booster
     feature_names: tuple[str, ...]
     best_iteration: int
+    version_warning: str | None = None
 
     @classmethod
     def load(cls, model_dir: Path) -> ChoiceModelBundle:
@@ -76,7 +83,10 @@ class ChoiceModelBundle:
         — the choice model doesn't use one.
         """
         result = load_choice_train_result(model_dir)
-        return cls.from_train_result(result)
+        bundle = cls.from_train_result(result)
+        if bundle.version_warning is not None:
+            log.warning("ChoiceModelBundle.load(%s): %s", model_dir, bundle.version_warning)
+        return bundle
 
     @classmethod
     def from_train_result(cls, result: ChoiceTrainResult) -> ChoiceModelBundle:
@@ -84,6 +94,7 @@ class ChoiceModelBundle:
             booster=result.booster,
             feature_names=result.metadata.feature_names,
             best_iteration=result.metadata.best_iteration,
+            version_warning=compute_version_warning(result.metadata.pipeline_versions),
         )
 
 

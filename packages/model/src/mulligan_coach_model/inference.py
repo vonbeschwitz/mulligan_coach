@@ -60,6 +60,7 @@ from mulligan_coach_simulation import simulate
 from .baseline import BaselineModel
 from .feature_matrix import _library_from_deck
 from .train import TrainResult, load_train_result
+from .versioning import compute_version_warning
 
 log = logging.getLogger(__name__)
 
@@ -81,12 +82,19 @@ class ModelBundle:
     time — a re-trained model with a different feature vocabulary
     just slots into the same call sites, with missing features
     defaulting to ``NaN`` (XGBoost's native missing-value path).
+
+    ``version_warning`` is a non-fatal note set at load time when the
+    model's recorded pipeline versions don't match the live simulator +
+    feature code (or are absent, for pre-Step-1 models). It never blocks
+    loading — frozen-EXE users legitimately run skewed versions; surfacing
+    it in the UI is a later roadmap step.
     """
 
     booster: xgb.Booster
     baseline: BaselineModel
     feature_names: tuple[str, ...]
     best_iteration: int
+    version_warning: str | None = None
 
     @classmethod
     def load(cls, model_dir: Path) -> ModelBundle:
@@ -97,7 +105,10 @@ class ModelBundle:
         ``xgboost.json``, ``metadata.json``.
         """
         result = load_train_result(model_dir)
-        return cls.from_train_result(result)
+        bundle = cls.from_train_result(result)
+        if bundle.version_warning is not None:
+            log.warning("ModelBundle.load(%s): %s", model_dir, bundle.version_warning)
+        return bundle
 
     @classmethod
     def from_train_result(cls, result: TrainResult) -> ModelBundle:
@@ -112,6 +123,7 @@ class ModelBundle:
             baseline=result.baseline,
             feature_names=result.metadata.feature_names,
             best_iteration=result.metadata.best_iteration,
+            version_warning=compute_version_warning(result.metadata.pipeline_versions),
         )
 
 

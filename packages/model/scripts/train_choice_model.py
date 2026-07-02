@@ -54,6 +54,13 @@ def main() -> None:
     ap.add_argument("--learning-rate", type=float, default=0.05)
     ap.add_argument("--early-stopping-rounds", type=int, default=20)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument(
+        "--allow-version-mismatch",
+        action="store_true",
+        help="Train even if some shard's _meta.json pipeline versions differ "
+        "from the live simulator/feature code (recorded in metadata.json). "
+        "Default refuses the mix (the choice_v7 mixed-sim-version incident).",
+    )
     args = ap.parse_args()
 
     parquet_paths: list[Path] = []
@@ -88,6 +95,7 @@ def main() -> None:
         learning_rate=args.learning_rate,
         early_stopping_rounds=args.early_stopping_rounds,
         seed=args.seed,
+        allow_version_mismatch=args.allow_version_mismatch,
     )
     md = result.metadata
     logging.info(
