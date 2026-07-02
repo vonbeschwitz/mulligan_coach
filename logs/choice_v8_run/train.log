@@ -1,0 +1,37 @@
+==== choice_v8 sweep (choice_v7 methodology + fresh TLA/TMT caches) ====
+Output dir: C:\Users\basti\Documents\Mulligan_Coach\models\choice_v8
+Sets: ('TLA', 'TMT', 'SOS')  Event types: ('PremierDraft', 'TradDraft')
+Configs to run: 6
+n_estimators=8000  early_stopping=50  seed=0
+
+Loading data...
+  TLA/PremierDraft: 105 chunks
+  TLA/TradDraft: 15 chunks
+  TMT/PremierDraft: 32 chunks
+  TMT/TradDraft: 6 chunks
+  SOS/PremierDraft: 110 chunks
+  SOS/TradDraft: 16 chunks
+Total rows=1392598  features=201
+Per-set rows: {'TLA': 592003, 'TMT': 180221, 'SOS': 620374}
+Split rows: train=1113878 val=139262 test=139458
+
+id  | lr      depth mcw subs   |  secs |    val_ll  val_p_ll  val_t_ll |   test_ll test_p_ll test_t_ll | best_it
+0   | 0.030   6     1   0.80   | 298.5 |    0.1731    0.1727    0.1763 |    0.1738    0.1733    0.1770 | 3117
+1   | 0.030   6     5   0.80   | 246.3 |    0.1732    0.1728    0.1763 |    0.1740    0.1735    0.1776 | 2650
+2   | 0.030   6     1   1.00   | 200.2 |    0.1739    0.1735    0.1769 |    0.1747    0.1742    0.1785 | 2330
+3   | 0.030   6     5   1.00   | 240.2 |    0.1736    0.1732    0.1762 |    0.1744    0.1739    0.1781 | 2819
+4   | 0.020   6     1   0.80   | 356.6 |    0.1731    0.1728    0.1758 |    0.1738    0.1732    0.1775 | 3840
+5   | 0.020   6     5   0.80   | 423.5 |    0.1730    0.1726    0.1758 |    0.1736    0.1731    0.1770 | 4631
+
+Sweep finished in 29.4 min
+
+==== Best config (lowest Premier-val log_loss) ====
+  id=5  config={'max_depth': 6, 'learning_rate': 0.02, 'min_child_weight': 5, 'subsample': 0.8}
+  best_iteration=4631  premier_val_log_loss=0.1726
+
+Test metrics for best model:
+  ALL     n=139458  log_loss=0.1736  brier=0.0520  acc=0.9286
+  Premier n=122199  log_loss=0.1731  brier=0.0518  acc=0.9290
+  Trad    n=17259  log_loss=0.1770  brier=0.0535  acc=0.9260
+
+Wrote model to C:\Users\basti\Documents\Mulligan_Coach\models\choice_v8

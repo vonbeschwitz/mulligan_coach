@@ -226,3 +226,97 @@ two are judged on identical, fair-to-both hands.
   vs v6's +2.36; held-out log-loss +0.014), consistent with TMT's training share
   shrinking once SOS (the largest set) joined. TMT is small and no longer the
   priority format, so this is an acceptable trade for the SOS gain.
+
+---
+
+# choice_v8 (TLA + TMT + SOS, fresh caches) — runs 2026-07-02
+
+`models/choice_v8` = the choice_v7 methodology (same 6-config sweep, seed=0
+grouped split, Premier-val selection; see
+`packages/model/scripts/tune_choice_v8.py`) re-run on **freshly
+re-materialised TLA/TMT choice caches**, so all three sets now share one
+simulator version (current simulator + the 2026-06-30 TLA/TMT
+alternative/additional casting-cost encoding fixes). This removes v7's
+mixed-simulator caveat (v7's TLA/TMT caches predated sim changes #57/#58).
+Settings match the v6/v7 runs (`n_sims=300`, mn=0, 7-card hands, 40–42-card
+decks). Replay snapshots: SOS 2026-06-27; TLA/TMT re-simulated 2026-06-30/07-01.
+
+**Simulator-version caveat for cross-model comparison.** These v8 elite runs
+use the CURRENT simulator for every set. The v6/v7 numbers above used the OLD
+simulator for TLA/TMT (their caches predated the re-materialisation), so the
+TLA/TMT rows mix two simulator versions and are only roughly comparable. SOS is
+directly comparable across v6/v7/v8 (its cache/sim were unchanged) — which is
+why the SOS row is the clean cross-version read.
+
+**Sample status:** TLA/TMT/SOS are all **in-sample** for v8. Same as v6 for
+TLA/TMT; unlike v6, SOS is in-sample (as for v7).
+
+## Full elite sets — v8 vs v6 vs v7
+
+| Set | Event | n | v6 agree | v7 agree | v8 agree | v8 actual mull % | v8 pred mull % | v8 lift | v8 not-complete-disagree |
+|-----|-------|---|----------|----------|----------|------------------|----------------|---------|--------------------------|
+| TLA | Premier | 4,392 | 95.09% | 94.93% | **95.08%** | 9.15%  | 6.56%  | +4.23  | 98.18% |
+| TLA | Trad    | 979   | 94.87% | 94.77% | **94.69%** | 21.25% | 20.63% | +15.94 | 97.96% |
+| TMT | Premier | 296   | 95.27% | 93.24% | **94.26%** | 7.09%  | 5.41%  | +1.35  | 97.64% |
+| TMT | Trad    | 253   | 92.28% | 92.28% | **92.89%** | 24.51% | 21.34% | +17.40 | 97.63% |
+| SOS | Premier | 1,546 | 92.50% *(out)* | 94.44% *(in)* | **94.37%** *(in)* | 10.74% | 7.57% | +5.11 | 97.74% |
+| SOS | Trad    | 777   | 91.25% *(out)* | 94.59% *(in)* | **94.21%** *(in)* | 15.83% | 16.73% | +10.04 | 97.81% |
+
+(n differs slightly from the v6/v7 rows: the re-materialised replay snapshot has
+a few more elite decisions — e.g. TLA Premier 4,392 vs 4,375.)
+
+## Mull recall / precision (v8)
+
+| Set | Event | Mull recall | Mull precision |
+|-----|-------|-------------|----------------|
+| TLA | Premier | 59% (237/402) | 82% (237/288) |
+| TLA | Trad    | 86% (179/208) | 89% (179/202) |
+| TMT | Premier | 48% (10/21)   | 63% (10/16)   |
+| TMT | Trad    | 79% (49/62)   | 91% (49/54)   |
+| SOS | Premier | 59% (98/166)  | 84% (98/117)  |
+| SOS | Trad    | 85% (104/123) | 80% (104/130) |
+
+## Held-out log-loss — v6 vs v7 vs v8 (and a split-reproducibility caveat)
+
+`packages/model/scripts/compare_choice_v6_v7_v8_heldout.py` scores all three
+boosters on v8's reproduced test split
+(`models/choice_v8/compare_v6_v7_v8_heldout.log`). **The cross-model table in
+that log is leakage-confounded and must NOT be read as a ranking.**
+`_grouped_split` is permutation-index based, so re-materialising TLA/TMT
+(changed row counts + non-deterministic `imap_unordered` order) produced a
+*different* split than v6/v7 used. Much of v8's test set was in v6's/v7's
+*training* set, and the old caches that defined their splits are overwritten
+(unreconstructable). The tell: v7 scores ll=0.1579 on v8's test set but 0.1733
+on its own held-out — a model can only beat its own held-out when it trained on
+the rows.
+
+**Honest comparison — each model on its OWN leakage-free held-out test
+(`metadata.json`):**
+
+| Model | held-out test log-loss | brier | acc | n |
+|-------|------------------------|-------|-----|---|
+| choice_v6 | 0.1702 | 0.0503 | 0.9324 | 76,501 *(no SOS; old caches)* |
+| choice_v7 | 0.1733 | 0.0518 | 0.9296 | 138,557 |
+| choice_v8 | 0.1736 | 0.0520 | 0.9286 | 139,458 |
+
+v7 and v8 are a **dead heat** (0.1736 vs 0.1733, within noise). v8 matches v7's
+quality while removing the mixed-simulator caveat. (Each row is that model's own
+held-out population, so not identical rows — but each is leakage-free, unlike
+the cross-scored table.)
+
+## Headline read (v8)
+
+- **No regression, and the mixed-simulator caveat is gone.** v8 ties v7 on
+  honest held-out log-loss and matches v6/v7 on elite agreement (92–95%
+  everywhere).
+- **SOS clearly beats v6** on the one clean cross-version elite comparison (SOS
+  sim unchanged): +1.9 pp Premier (94.37% vs 92.50%) and +3.0 pp Trad (94.21%
+  vs 91.25%), matching v7's SOS gain. Folding SOS into training is the win.
+- **TMT recovers slightly vs v7** (Premier 94.26% vs 93.24%; Trad 92.89% vs
+  92.28%), though n=296/253 keeps this directional.
+- **Still mildly mull-happy in Trad**, but v8's rate calibration is close (SOS
+  Trad 16.73% predicted vs 15.83% actual).
+- **Action item surfaced:** the split-reproducibility bug means cross-run
+  held-out comparisons silently leak. Fix = materialisation-invariant split
+  (hash `draft_id` -> bucket) + a retrain of both models under it. Related to
+  the invisible-consistency risk in `docs/design_review_2026-07-01.md`.

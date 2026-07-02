@@ -1,0 +1,31 @@
+2026-07-01 22:36:46,349 INFO === TLA -> C:\Users\basti\Documents\Mulligan_Coach\data\processed\choice_training\TLA\TradDraft ===
+2026-07-01 22:36:46,350 WARNING materialize_choice_feature_matrix(TLA): cached_features_dir=None; every kept-hand row will be re-simulated (slow path)
+2026-07-01 22:36:46,565 INFO materialize_choice_feature_matrix(TLA): 342 shrunk WRs, 342 z-score rows
+2026-07-01 22:36:48,817 INFO _classify_and_iter_rows: cache_hits=0, sim_required=71427
+2026-07-01 22:44:33,439 INFO materialize_choice_feature_matrix(TLA): wrote chunk 0 (cumulative=5000, via_cache=0, via_sim=5000)
+2026-07-01 22:51:56,791 INFO materialize_choice_feature_matrix(TLA): wrote chunk 1 (cumulative=10000, via_cache=0, via_sim=10000)
+2026-07-01 22:59:21,214 INFO materialize_choice_feature_matrix(TLA): wrote chunk 2 (cumulative=15000, via_cache=0, via_sim=15000)
+2026-07-01 23:06:58,107 INFO materialize_choice_feature_matrix(TLA): wrote chunk 3 (cumulative=20000, via_cache=0, via_sim=20000)
+2026-07-01 23:14:41,930 INFO materialize_choice_feature_matrix(TLA): wrote chunk 4 (cumulative=25000, via_cache=0, via_sim=25000)
+2026-07-01 23:22:26,070 INFO materialize_choice_feature_matrix(TLA): wrote chunk 5 (cumulative=30000, via_cache=0, via_sim=30000)
+2026-07-01 23:30:13,617 INFO materialize_choice_feature_matrix(TLA): wrote chunk 6 (cumulative=35000, via_cache=0, via_sim=35000)
+2026-07-01 23:38:02,838 INFO materialize_choice_feature_matrix(TLA): wrote chunk 7 (cumulative=40000, via_cache=0, via_sim=40000)
+2026-07-01 23:46:20,225 INFO materialize_choice_feature_matrix(TLA): wrote chunk 8 (cumulative=45000, via_cache=0, via_sim=45000)
+2026-07-01 23:55:56,785 INFO materialize_choice_feature_matrix(TLA): wrote chunk 9 (cumulative=50000, via_cache=0, via_sim=50000)
+2026-07-02 00:06:22,790 INFO materialize_choice_feature_matrix(TLA): wrote chunk 10 (cumulative=55000, via_cache=0, via_sim=55000)
+2026-07-02 00:16:25,799 INFO materialize_choice_feature_matrix(TLA): wrote chunk 11 (cumulative=60000, via_cache=0, via_sim=60000)
+2026-07-02 00:26:49,797 INFO materialize_choice_feature_matrix(TLA): wrote chunk 12 (cumulative=65000, via_cache=0, via_sim=65000)
+2026-07-02 00:36:11,016 INFO materialize_choice_feature_matrix(TLA): wrote chunk 13 (cumulative=70000, via_cache=0, via_sim=70000)
+2026-07-02 00:38:35,880 INFO materialize_choice_feature_matrix(TLA): wrote 71427 rows in 15 chunk(s) to C:\Users\basti\Documents\Mulligan_Coach\data\processed\choice_training\TLA\TradDraft (via_cache=0, via_sim=71427, skipped_resume=0, failed_sim=0, failed_build=0)
+2026-07-02 00:38:35,890 INFO TLA: 71427 rows written (via_cache=0, via_sim=71427, skipped_player_filter=3706, skipped_resume=0)
+2026-07-02 00:38:35,890 INFO === TMT -> C:\Users\basti\Documents\Mulligan_Coach\data\processed\choice_training\TMT\TradDraft ===
+2026-07-02 00:38:35,890 WARNING materialize_choice_feature_matrix(TMT): cached_features_dir=None; every kept-hand row will be re-simulated (slow path)
+2026-07-02 00:38:35,910 INFO materialize_choice_feature_matrix(TMT): 210 shrunk WRs, 210 z-score rows
+2026-07-02 00:38:36,723 INFO _classify_and_iter_rows: cache_hits=0, sim_required=25215
+2026-07-02 00:48:30,217 INFO materialize_choice_feature_matrix(TMT): wrote chunk 0 (cumulative=5000, via_cache=0, via_sim=5000)
+2026-07-02 00:58:05,025 INFO materialize_choice_feature_matrix(TMT): wrote chunk 1 (cumulative=10000, via_cache=0, via_sim=10000)
+2026-07-02 01:07:40,117 INFO materialize_choice_feature_matrix(TMT): wrote chunk 2 (cumulative=15000, via_cache=0, via_sim=15000)
+2026-07-02 01:17:19,308 INFO materialize_choice_feature_matrix(TMT): wrote chunk 3 (cumulative=20000, via_cache=0, via_sim=20000)
+2026-07-02 01:27:04,501 INFO materialize_choice_feature_matrix(TMT): wrote chunk 4 (cumulative=25000, via_cache=0, via_sim=25000)
+2026-07-02 01:27:21,168 INFO materialize_choice_feature_matrix(TMT): wrote 25215 rows in 6 chunk(s) to C:\Users\basti\Documents\Mulligan_Coach\data\processed\choice_training\TMT\TradDraft (via_cache=0, via_sim=25215, skipped_resume=0, failed_sim=0, failed_build=0)
+2026-07-02 01:27:21,168 INFO TMT: 25215 rows written (via_cache=0, via_sim=25215, skipped_player_filter=323, skipped_resume=0)
