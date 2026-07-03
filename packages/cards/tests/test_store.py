@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
+import pytest
 from mulligan_coach_cards.mana import parse_mana_cost
 from mulligan_coach_cards.models import (
     Cost,
@@ -20,6 +22,7 @@ from mulligan_coach_cards.store import (
     load_parsed_cards,
     merge_detector_run,
     parsed_cards_path,
+    parsed_cards_skip_count,
     save_parsed_cards,
     status_histogram,
     update_parsed_card,
@@ -450,3 +453,84 @@ def test_merge_does_not_modify_arena_id_when_unchanged(tmp_path: Path) -> None:
     merged, _, _ = merge_detector_run("TST", fresh, data_root=tmp_path)
     assert merged[0].arena_id == 12345
     assert merged[0].name == "Hand-encoded"
+
+
+# ---------------------------------------------------------------------------
+# Per-card-tolerant load (roadmap Step 8: safe data-only set pushes)
+# ---------------------------------------------------------------------------
+#
+# load_parsed_cards validates each entry independently: an entry an older
+# EXE can't understand (e.g. a data-push that used a newer enum value) is
+# skipped and logged rather than aborting the whole set. The skip count is
+# surfaced to the user as a recommendation degradation. These tests pin
+# that contract.
+
+
+def _corrupt_one_entry(path: Path) -> None:
+    """Append a card whose ``status`` is an enum value this app can't read.
+
+    Mirrors the real motivating case: a published ``parsed_cards`` file
+    (data-only push) that encodes a card using a value newer than the
+    running EXE's enums. Every other field is valid — only the unknown
+    enum trips ``ParsedCard.model_validate``.
+    """
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    future = dict(raw[0])
+    future["name"] = "Future Card"
+    future["oracle_id"] = "oracle-future"
+    future["collector_number"] = "999"
+    future["status"] = "some_future_status"  # not a member of ParseStatus
+    raw.append(future)
+    path.write_text(json.dumps(raw), encoding="utf-8")
+
+
+def test_load_skips_unparseable_entry_and_records_count(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """One bad entry among valid ones → N-1 loaded, logged, skip count 1."""
+    valid = [
+        _make_card(name="Alpha", collector_number="1", oracle_id="oracle-a"),
+        _make_card(name="Beta", collector_number="2", oracle_id="oracle-b"),
+    ]
+    save_parsed_cards("TST", valid, data_root=tmp_path)
+    _corrupt_one_entry(parsed_cards_path("TST", data_root=tmp_path))
+
+    with caplog.at_level(logging.WARNING, logger="mulligan_coach_cards.store"):
+        loaded = load_parsed_cards("TST", data_root=tmp_path)
+
+    # The two good cards still load; the unreadable one is dropped.
+    assert {c.name for c in loaded} == {"Alpha", "Beta"}
+    assert parsed_cards_skip_count("TST") == 1
+    # The skip was logged, naming the offending card.
+    assert any("Future Card" in rec.getMessage() for rec in caplog.records)
+
+
+def test_load_all_valid_has_zero_skip_count(tmp_path: Path) -> None:
+    """A clean file loads every card and reports 0 skips."""
+    valid = [
+        _make_card(name="Alpha", collector_number="1", oracle_id="oracle-a"),
+        _make_card(name="Beta", collector_number="2", oracle_id="oracle-b"),
+    ]
+    save_parsed_cards("TST", valid, data_root=tmp_path)
+    loaded = load_parsed_cards("TST", data_root=tmp_path)
+    assert len(loaded) == 2
+    assert parsed_cards_skip_count("TST") == 0
+
+
+def test_load_missing_file_has_zero_skip_count(tmp_path: Path) -> None:
+    """A missing file returns [] and reports 0 skips (the safe default)."""
+    assert load_parsed_cards("NOPE", data_root=tmp_path) == []
+    assert parsed_cards_skip_count("NOPE") == 0
+
+
+def test_load_non_list_top_level_still_raises(tmp_path: Path) -> None:
+    """A structurally-corrupt file (top level not a list) is NOT tolerated.
+
+    That's a broken file, not "one bad card" — silently returning [] would
+    hide a real problem, so we still raise.
+    """
+    path = parsed_cards_path("TST", data_root=tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"not": "a list"}), encoding="utf-8")
+    with pytest.raises(RuntimeError):
+        load_parsed_cards("TST", data_root=tmp_path)

@@ -509,6 +509,20 @@ def _mixed_deck() -> tuple[list[ParsedCard], list[ParsedCard]]:
 
 
 class TestDegradations:
+    @pytest.fixture(autouse=True)
+    def _pin_skip_count_to_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Default every degradation test to 'no cards skipped on load'.
+
+        Producer 5 reads the *process-global* skip registry populated by
+        ``cards.load_parsed_cards`` (via ``service_module.parsed_cards_skip_count``).
+        Because that registry persists across the whole test session, another
+        test module that loaded a set could otherwise leave it non-zero and
+        flip the exact-tuple assertions below. Pinning it to 0 here — and
+        letting the dedicated producer-5 test override it — keeps these tests
+        deterministic regardless of test order.
+        """
+        monkeypatch.setattr(service_module, "parsed_cards_skip_count", lambda set_code: 0)
+
     def test_no_stats_loaded_producer_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _install_stubs(monkeypatch, p_keep=0.6)
         svc = _service(stats_by_set={})  # no ratings for any set
@@ -586,6 +600,30 @@ class TestDegradations:
         )
         assert rec.degradations == (
             "Model was trained on an older feature pipeline — retrain pending.",
+        )
+
+    def test_cards_skipped_on_load_producer_5(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_stubs(monkeypatch, p_keep=0.6)
+        # Simulate a data-only push whose set encoded 2 cards using an enum
+        # value this app version can't read: load_parsed_cards skipped them,
+        # so the process-global registry reports 2 for TLA.
+        monkeypatch.setattr(service_module, "parsed_cards_skip_count", lambda set_code: 2)
+        svc = _service(stats_by_set={"TLA": _format_stats("Bear")})
+        hand, deck = _make_hand_and_deck()
+
+        rec = svc.recommend_choice(
+            hand=hand,
+            deck=deck,
+            on_the_play=True,
+            mulligan_number=0,
+            opp_mulligan_number=None,
+            n_sims=5,
+        )
+        # Producers 1-4 stay quiet (stats present + covering, set in-vocab,
+        # no version warning); only producer 5 fires.
+        assert rec.degradations == (
+            "2 card(s) in TLA couldn't be read by this app version — "
+            "update the app for full coverage of this set.",
         )
 
     def test_healthy_call_has_no_degradations(self, monkeypatch: pytest.MonkeyPatch) -> None:

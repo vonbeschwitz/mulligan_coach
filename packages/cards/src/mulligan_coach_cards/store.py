@@ -20,10 +20,26 @@ re-load on every command (~hundreds of cards per set, not millions).
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from .models import Cost, Mode, NoopEffect, ParsedCard, ParseStatus
+
+log = logging.getLogger(__name__)
+
+
+# Per-set count of entries that failed validation and were skipped by
+# the most recent :func:`load_parsed_cards` call, keyed by upper-cased
+# set code. Populated as a side effect of every load so downstream
+# degradation surfacing (the recommend service's ``_choice_degradations``)
+# can report "N cards in <SET> couldn't be read by this app version"
+# without threading a return value through the ~30 call sites of
+# ``load_parsed_cards``. A fresh load for a set overwrites its entry;
+# the overlay's auto-update reload re-runs the load and refreshes it.
+_SKIPPED_ON_LOAD: dict[str, int] = {}
 
 
 def _data_root() -> Path:
@@ -62,15 +78,89 @@ def _collector_sort_key(card: ParsedCard) -> tuple[int, str]:
 
 
 def load_parsed_cards(set_code: str, data_root: Path | None = None) -> list[ParsedCard]:
-    """Load the per-set parsed card list. Returns ``[]`` if the file is missing."""
+    """Load the per-set parsed card list. Returns ``[]`` if the file is missing.
+
+    **Per-card tolerant.** Each entry is validated independently; an
+    entry that fails ``ParsedCard.model_validate`` is *skipped and
+    logged* rather than aborting the whole load. This is load-bearing
+    for the "new set = data-only push" release strategy: a published
+    encoding that uses a new enum value (e.g. a new ``Mode.kind``, a new
+    ``Effect`` discriminant) would otherwise ``raise`` on an older EXE
+    and brick the entire set, taking every other card down with the one
+    the old client can't understand. Skipping the unparseable cards
+    lets the set still work with the N-1 cards the running version *can*
+    read; the recommend service surfaces the skip count as a
+    degradation so the user knows some cards are missing and can update.
+
+    The per-set skip count is recorded in the module-level
+    :data:`_SKIPPED_ON_LOAD` registry; read it via
+    :func:`parsed_cards_skip_count`. Structural failures that aren't
+    about an individual card (file isn't JSON, or top-level isn't a
+    list) still raise — those aren't "one bad card", they're a corrupt
+    file, and silently returning ``[]`` would hide a real problem.
+    """
+    upper = set_code.upper()
     path = parsed_cards_path(set_code, data_root)
     if not path.exists():
+        _SKIPPED_ON_LOAD[upper] = 0
         return []
     with path.open(encoding="utf-8") as f:
         raw = json.load(f)
     if not isinstance(raw, list):
         raise RuntimeError(f"Expected list at top of {path}, got {type(raw).__name__}")
-    return [ParsedCard.model_validate(entry) for entry in raw]
+
+    cards: list[ParsedCard] = []
+    skipped = 0
+    for index, entry in enumerate(raw):
+        try:
+            cards.append(ParsedCard.model_validate(entry))
+        except ValidationError as exc:
+            skipped += 1
+            # Try to name the offending card for the log line; the
+            # entry may be malformed enough that even ``name`` is
+            # missing, so fall back to its index.
+            label = entry.get("name") if isinstance(entry, dict) else None
+            log.warning(
+                "load_parsed_cards(%s): skipping card %s (entry %d) that failed "
+                "validation — likely an encoding newer than this app version. %s",
+                upper,
+                label or f"#{index}",
+                index,
+                _first_validation_error(exc),
+            )
+    _SKIPPED_ON_LOAD[upper] = skipped
+    if skipped:
+        log.warning(
+            "load_parsed_cards(%s): loaded %d card(s), skipped %d that failed validation; "
+            "update the app for full coverage of this set.",
+            upper,
+            len(cards),
+            skipped,
+        )
+    return cards
+
+
+def _first_validation_error(exc: ValidationError) -> str:
+    """Condense a Pydantic ``ValidationError`` to one short log-friendly line."""
+    errors = exc.errors()
+    if not errors:
+        return str(exc)
+    first = errors[0]
+    loc = ".".join(str(part) for part in first.get("loc", ()))
+    msg = first.get("msg", "invalid")
+    return f"{loc}: {msg}" if loc else str(msg)
+
+
+def parsed_cards_skip_count(set_code: str) -> int:
+    """Cards skipped by the most recent :func:`load_parsed_cards` for *set_code*.
+
+    Returns 0 for a set that loaded cleanly *or* that was never loaded
+    this session — both mean "no known skips to warn about", which is
+    the safe default for the degradation surfacing that reads this.
+    Keyed by upper-cased set code (matching how ``load_parsed_cards``
+    records it).
+    """
+    return _SKIPPED_ON_LOAD.get(set_code.upper(), 0)
 
 
 def save_parsed_cards(
