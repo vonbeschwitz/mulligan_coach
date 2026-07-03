@@ -144,7 +144,7 @@ def main() -> None:
     t0 = time.time()
     cards = list(load_parsed_cards("TLA"))
     stats_lookup = load_premier_draft_stats("TLA")
-    stats_list = list(stats_lookup.by_arena_id.values())
+    stats_list = list(stats_lookup.by_name.values())
     priors = compute_format_priors(stats_list)
     shrunk_dict = shrink_stats(stats_list, priors=priors)
     shrunk_list = list(shrunk_dict.values())

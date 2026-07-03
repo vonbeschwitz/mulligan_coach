@@ -34,6 +34,7 @@ from .seventeenlands_zscores import (
     compute_format_wr_distribution,
     zscore_stats,
 )
+from .stats_join import fold_card_name, stats_for_card
 
 # ---------------------------------------------------------------------------
 # Feature semantics version
@@ -59,7 +60,15 @@ from .seventeenlands_zscores import (
 #     Adds two ``set_code_*`` columns and changes SOS rows' one-hot values
 #     (SOS was previously the all-zero reference category), so it is a
 #     value/column-set change and must bump.
-FEATURES_SEMANTICS_VERSION: int = 2
+#   2 -> 3 (roadmap Step 5): 17Lands stats join re-keyed from arena_id
+#     (MTGJSON-dependent) to folded card name. Per-card WR / z-score
+#     features now populate for every card with a ratings row; under v2
+#     they were zero whenever MTGJSON lacked the printing's arena_id (all
+#     main-set cards of TMT/ECL/TLA/SOS at materialisation time). The
+#     column set is unchanged, but the *values* of the ``avg_*_wr_*`` /
+#     ``max_*_wr_*`` / Z-bucket / castability ``*_high_oh_*`` features
+#     shift, so it is a value change and must bump.
+FEATURES_SEMANTICS_VERSION: int = 3
 
 __all__ = [
     "DEFAULT_KNOWN_EVENT_TYPES",
@@ -80,6 +89,8 @@ __all__ = [
     "categories",
     "compute_format_priors",
     "compute_format_wr_distribution",
+    "fold_card_name",
     "shrink_stats",
+    "stats_for_card",
     "zscore_stats",
 ]

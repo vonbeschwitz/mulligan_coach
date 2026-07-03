@@ -139,7 +139,7 @@ _WORKER_SERVICE: RecommendationService | None = None
 def _init_worker(choice_model_dir_str: str, set_code: str) -> None:
     global _WORKER_SERVICE
     cb = ChoiceModelBundle.load(Path(choice_model_dir_str))
-    stats = FormatStats.build(load_premier_draft_stats(set_code).by_arena_id.values())
+    stats = FormatStats.build(load_premier_draft_stats(set_code).by_name.values())
     _WORKER_SERVICE = RecommendationService(
         bundle=None,
         choice_bundle=cb,

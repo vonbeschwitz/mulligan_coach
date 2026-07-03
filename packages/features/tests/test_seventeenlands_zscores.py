@@ -18,6 +18,7 @@ from mulligan_coach_features import (
     FormatWRDistribution,
     ShrunkWinRates,
     compute_format_wr_distribution,
+    fold_card_name,
     shrink_stats,
     zscore_stats,
 )
@@ -25,16 +26,21 @@ from mulligan_coach_features import (
 
 def _shrunk(
     mtga_id: int,
-    name: str = "Test",
+    name: str | None = None,
     oh: float | None = 0.55,
     gd: float | None = 0.55,
     gih: float | None = 0.55,
     weight: float = 0.8,
 ) -> ShrunkWinRates:
-    """Construct a ShrunkWinRates with default fields filled in."""
+    """Construct a ShrunkWinRates with default fields filled in.
+
+    ``name`` defaults to a unique ``"Card <mtga_id>"`` so callers that
+    build several rows don't accidentally collide on the folded-name
+    join key that :func:`zscore_stats` now uses.
+    """
     return ShrunkWinRates(
         mtga_id=mtga_id,
-        name=name,
+        name=name if name is not None else f"Card {mtga_id}",
         shrunk_opening_hand_win_rate=oh,
         shrunk_drawn_win_rate=gd,
         shrunk_ever_drawn_win_rate=gih,
@@ -154,9 +160,9 @@ def test_zscore_basic_three_card_distribution() -> None:
         _shrunk(mtga_id=3, name="High", oh=0.60),
     ]
     out = zscore_stats(rows)
-    assert out[1].z_opening_hand_win_rate == pytest.approx(-math.sqrt(1.5), abs=1e-7)
-    assert out[2].z_opening_hand_win_rate == pytest.approx(0.0, abs=1e-9)
-    assert out[3].z_opening_hand_win_rate == pytest.approx(math.sqrt(1.5), abs=1e-7)
+    assert out["Low"].z_opening_hand_win_rate == pytest.approx(-math.sqrt(1.5), abs=1e-7)
+    assert out["Mid"].z_opening_hand_win_rate == pytest.approx(0.0, abs=1e-9)
+    assert out["High"].z_opening_hand_win_rate == pytest.approx(math.sqrt(1.5), abs=1e-7)
 
 
 def test_zscore_none_when_card_value_is_none() -> None:
@@ -167,31 +173,31 @@ def test_zscore_none_when_card_value_is_none() -> None:
         # Vary every WR field so std > 0 across the format. Otherwise
         # std_X=0 would make z_X=None regardless of the per-card value,
         # masking the OH-specific None-handling we're testing.
-        _shrunk(mtga_id=1, oh=0.50, gd=0.51, gih=0.52),
-        _shrunk(mtga_id=2, oh=None, gd=0.55, gih=0.56),
-        _shrunk(mtga_id=3, oh=0.60, gd=0.59, gih=0.58),
+        _shrunk(mtga_id=1, name="A", oh=0.50, gd=0.51, gih=0.52),
+        _shrunk(mtga_id=2, name="B", oh=None, gd=0.55, gih=0.56),
+        _shrunk(mtga_id=3, name="C", oh=0.60, gd=0.59, gih=0.58),
     ]
     out = zscore_stats(rows)
-    assert out[1].z_opening_hand_win_rate is not None
-    assert out[2].z_opening_hand_win_rate is None
+    assert out["A"].z_opening_hand_win_rate is not None
+    assert out["B"].z_opening_hand_win_rate is None
     # The card with OH=None still has an entry — None doesn't drop the row.
-    assert out[2].mtga_id == 2
+    assert out["B"].mtga_id == 2
     # gd / gih are independently scored; the OH=None doesn't propagate.
-    assert out[2].z_drawn_win_rate is not None
-    assert out[2].z_ever_drawn_win_rate is not None
+    assert out["B"].z_drawn_win_rate is not None
+    assert out["B"].z_ever_drawn_win_rate is not None
 
 
 def test_zscore_none_when_format_has_no_signal() -> None:
     """If the entire format has shrunk_GIH=None, every card's
     z_ever_drawn_win_rate is None (no reference distribution)."""
     rows = [
-        _shrunk(mtga_id=1, oh=0.50, gih=None),
-        _shrunk(mtga_id=2, oh=0.60, gih=None),
+        _shrunk(mtga_id=1, name="A", oh=0.50, gih=None),
+        _shrunk(mtga_id=2, name="B", oh=0.60, gih=None),
     ]
     out = zscore_stats(rows)
-    assert all(out[m].z_ever_drawn_win_rate is None for m in (1, 2))
+    assert all(out[name].z_ever_drawn_win_rate is None for name in ("A", "B"))
     # OH still works.
-    assert out[1].z_opening_hand_win_rate is not None
+    assert out["A"].z_opening_hand_win_rate is not None
 
 
 def test_zscore_zero_std_returns_none() -> None:
@@ -201,7 +207,7 @@ def test_zscore_zero_std_returns_none() -> None:
     rows = [_shrunk(mtga_id=i, oh=0.55) for i in (1, 2, 3)]
     out = zscore_stats(rows)
     for i in (1, 2, 3):
-        assert out[i].z_opening_hand_win_rate is None
+        assert out[f"Card {i}"].z_opening_hand_win_rate is None
 
 
 def test_zscore_accepts_precomputed_distribution() -> None:
@@ -211,9 +217,9 @@ def test_zscore_accepts_precomputed_distribution() -> None:
     full = [_shrunk(mtga_id=i, oh=0.40 + 0.02 * i) for i in range(10)]
     distribution = compute_format_wr_distribution(full)
     # Z-score one specific card against that reference.
-    out = zscore_stats([_shrunk(mtga_id=999, oh=0.60)], distribution=distribution)
+    out = zscore_stats([_shrunk(mtga_id=999, name="Target", oh=0.60)], distribution=distribution)
     expected_z = (0.60 - distribution.mean_oh_wr) / distribution.std_oh_wr  # type: ignore[operator]
-    assert out[999].z_opening_hand_win_rate == pytest.approx(expected_z, abs=1e-9)
+    assert out["Target"].z_opening_hand_win_rate == pytest.approx(expected_z, abs=1e-9)
 
 
 def test_zscore_distribution_round_trip_mean_and_std() -> None:
@@ -222,7 +228,7 @@ def test_zscore_distribution_round_trip_mean_and_std() -> None:
     (when no None values are involved)."""
     rows = [_shrunk(mtga_id=i, oh=0.40 + 0.01 * i) for i in range(30)]
     out = zscore_stats(rows)
-    zs = [out[r.mtga_id].z_opening_hand_win_rate for r in rows]
+    zs = [out[fold_card_name(r.name)].z_opening_hand_win_rate for r in rows]
     assert all(z is not None for z in zs)
     arr = [z for z in zs if z is not None]  # narrow for type-checker
     mean = sum(arr) / len(arr)
@@ -231,12 +237,13 @@ def test_zscore_distribution_round_trip_mean_and_std() -> None:
     assert math.sqrt(var) == pytest.approx(1.0, abs=1e-9)
 
 
-def test_zscore_keys_match_mtga_id() -> None:
-    """zscore_stats returns dict keyed by mtga_id, matching shrink_stats."""
-    rows = [_shrunk(mtga_id=42, oh=0.55), _shrunk(mtga_id=7, oh=0.60)]
+def test_zscore_keys_match_folded_name() -> None:
+    """zscore_stats returns dict keyed by folded card name, matching
+    shrink_stats — the arena_id-independent join key."""
+    rows = [_shrunk(mtga_id=42, name="Alpha", oh=0.55), _shrunk(mtga_id=7, name="Beta", oh=0.60)]
     out = zscore_stats(rows)
-    assert set(out.keys()) == {42, 7}
-    assert isinstance(out[42], CardZScores)
+    assert set(out.keys()) == {"Alpha", "Beta"}
+    assert isinstance(out["Alpha"], CardZScores)
 
 
 # ---------------------------------------------------------------------------
@@ -269,16 +276,16 @@ def test_end_to_end_shrink_then_zscore() -> None:
     zscores = zscore_stats(shrunk.values(), distribution=distribution)
 
     # Every card has finite OH z-score (shrunk OH is populated for all).
-    for mtga_id in (100 + i for i in range(20)):
-        z = zscores[mtga_id].z_opening_hand_win_rate
+    for i in range(20):
+        z = zscores[f"Card {i}"].z_opening_hand_win_rate
         assert z is not None
         assert math.isfinite(z)
 
     # The lowest-WR card has the lowest z-score; the highest-WR card has
     # the highest. Tests both ordering and that z-scoring preserves the
     # underlying WR's monotonicity.
-    lows = zscores[100].z_opening_hand_win_rate
-    highs = zscores[100 + 19].z_opening_hand_win_rate
+    lows = zscores["Card 0"].z_opening_hand_win_rate
+    highs = zscores["Card 19"].z_opening_hand_win_rate
     assert lows is not None and highs is not None
     assert lows < 0 < highs
 

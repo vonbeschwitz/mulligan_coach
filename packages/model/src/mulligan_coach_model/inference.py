@@ -199,8 +199,8 @@ def predict_win_probability(
     opp_mulligan_number: int | None,
     event_type: str,
     set_code: str,
-    shrunk: dict[int, ShrunkWinRates],
-    zscores: dict[int, CardZScores],
+    shrunk: dict[str, ShrunkWinRates],
+    zscores: dict[str, CardZScores],
     n_sims: int = 1000,
     seed: int | None = None,
 ) -> float:
@@ -237,7 +237,7 @@ def predict_win_probability(
         one-hot context columns.
     shrunk, zscores:
         Per-format 17Lands shrunk WR / z-score dicts, keyed by
-        arena_id. Built once per format via
+        folded card name. Built once per format via
         :func:`mulligan_coach_features.shrink_stats` etc.
     n_sims:
         Monte Carlo replications inside the simulator. 1000 is the
@@ -297,8 +297,8 @@ def recommend(
     opp_mulligan_number: int | None,
     event_type: str,
     set_code: str,
-    shrunk: dict[int, ShrunkWinRates],
-    zscores: dict[int, CardZScores],
+    shrunk: dict[str, ShrunkWinRates],
+    zscores: dict[str, CardZScores],
     n_sims: int = 1000,
     n_mulligan_samples: int = 30,
     seed: int | None = None,

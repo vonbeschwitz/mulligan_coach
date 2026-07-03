@@ -21,14 +21,14 @@ from __future__ import annotations
 import sys
 
 from mulligan_coach_cards import load_premier_draft_stats
-from mulligan_coach_features import compute_format_priors, shrink_stats
+from mulligan_coach_features import compute_format_priors, fold_card_name, shrink_stats
 from mulligan_coach_features.seventeenlands_shrinkage import _resolve_prior
 
 
 def main() -> int:
     set_code = sys.argv[1] if len(sys.argv) > 1 else "TLA"
     lookup = load_premier_draft_stats(set_code)
-    stats = list(lookup.by_arena_id.values())
+    stats = list(lookup.by_name.values())
     priors = compute_format_priors(stats)
     shrunk = shrink_stats(stats, priors=priors)
 
@@ -57,7 +57,7 @@ def main() -> int:
     print(" ".join(c.ljust(w) for c, w in zip(cols, widths, strict=True)))
     print("-" * (sum(widths) + len(widths) - 1))
     for s in sample:
-        sw = shrunk[s.mtga_id]
+        sw = shrunk[fold_card_name(s.name)]
         prior = _resolve_prior(
             s.play_rate, priors.conditional_mean_gih_wr, priors.overall_mean_gih_wr
         )

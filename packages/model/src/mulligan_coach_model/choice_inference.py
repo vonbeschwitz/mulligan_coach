@@ -136,8 +136,8 @@ def predict_keep_probability(
     opp_mulligan_number: int | None,
     event_type: str,
     set_code: str,
-    shrunk: dict[int, ShrunkWinRates],
-    zscores: dict[int, CardZScores],
+    shrunk: dict[str, ShrunkWinRates],
+    zscores: dict[str, CardZScores],
     n_sims: int = 1000,
     seed: int | None = None,
 ) -> float:

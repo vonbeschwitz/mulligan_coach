@@ -175,11 +175,17 @@ def _format_output(output: CoordinatorOutput) -> str:
         }[rec.verdict]
         play_draw = "play" if output.on_the_play else "draw"
         names = ", ".join(c.name for c in output.hand)
-        return (
+        lines = [
             f"[verdict] {verdict_label:>18}  mull {rec.mulligan_percent:5.1f}%  "
-            f"(mull#{output.mulligan_count}, on the {play_draw})\n"
-            f"          hand: {names}"
-        )
+            f"(mull#{output.mulligan_count}, on the {play_draw})",
+            f"          hand: {names}",
+        ]
+        # One line per degradation (no ratings loaded / partial coverage /
+        # set unknown to model / pipeline-version mismatch) so the CLI
+        # user sees why a verdict might be running below full fidelity.
+        for d in rec.degradations:
+            lines.append(f"          ⚠ {d}")
+        return "\n".join(lines)
     if isinstance(output, MissingDataOutput):
         return f"[wait]    {output.reason}"
     if isinstance(output, MatchResetOutput):

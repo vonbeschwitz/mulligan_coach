@@ -236,7 +236,7 @@ the simulator and feature row are correct as of this change.
 
 The `high_oh` filter restricts a broad-bucket category to hand cards
 with shrunken OH WR z-score > 0.5, using the `zscores` map keyed on
-arena_id (mtga_id).
+folded card name (see "Stats join" below).
 
 Category predicates live in `categories.py` — `is_ramp`,
 `is_removal`, `is_pump_broad`, `is_card_manipulation`, `has_alt_mode`,
@@ -252,15 +252,36 @@ focused on the bookkeeping; new categories land there first.
 Builds a 200-column row on real TLA data and a hand-built 40-card
 deck. Useful for eyeballing feature values after pipeline changes.
 
+### Stats join — folded card name (not arena_id)
+
+`shrink_stats` / `zscore_stats` return dicts **keyed by folded card
+name** (`stats_join.fold_card_name` of the 17Lands display name), and
+the feature builder looks each card up via
+`stats_join.stats_for_card(card, table)` — a folded-name match with a
+DFC front-face fallback (`"Front // Back"` → `"Front"`). This is the
+Step-5 (roadmap) replacement for the old `arena_id` join.
+
+`fold_card_name` NFKD-normalises and drops combining marks, so a card
+whose name carries a diacritic ("Bespoke Bō") matches a diacritic-free
+ratings row. `ShrunkWinRates.name` / `CardZScores.name` is the join
+key; `mtga_id` is retained as an informational field only.
+
+Why: `arena_id` comes from MTGJSON, which lags a freshly-rotated
+format by weeks, so under the old join every main-set card of a new
+set looked up `None` and the `avg_*_wr_*` / Z-bucket / castability
+`*_high_oh_*` features fell to 0 — at *training* time (materialisation
+used the same join) and inconsistently at *serving* time (the overlay
+backfills `arena_id` from Arena's own DB; the website didn't). The
+name join is a pure function of `(card name, ratings parquet)`,
+identical across materialisation, website, and overlay. Coverage went
+from ~3–80% (arena_id) to 1514/1515 across the five current sets; the
+lone residual miss is TMT "Bespoke Bō", whose ratings row stores a
+literal `?` where the `ō` should be (a data artifact in the parquet,
+not something folding can recover). This change bumped
+`FEATURES_SEMANTICS_VERSION` 2 → 3 (values shift; column set unchanged).
+
 ### Known limitations
 
-* MTGJSON's `arena_id` lag affects the current shipping sets (TLA,
-  ECL, TMT all have `arena_id=None` on their `ParsedCard` JSON
-  today). The shrunk-WR / z-score dicts are keyed by `arena_id`, so
-  every hand card's lookup returns None and the
-  `avg_*_wr_of_*` / Z-bucket-count features fall to 0. Once MTGJSON
-  refreshes (or a name-based join lands), the values will populate
-  naturally — no code change needed.
 * The `is_other` castability bucket on T2–T4 reads
   `role_features.is_other` directly. Cards the parser couldn't fully
   classify and which left `is_other` False (typically those with a
@@ -281,11 +302,20 @@ deck. Useful for eyeballing feature values after pipeline changes.
 ## Feature semantics version — when to bump `FEATURES_SEMANTICS_VERSION`
 
 `FEATURES_SEMANTICS_VERSION` (an `int` in
-`src/mulligan_coach_features/__init__.py`, currently `1`) identifies the
+`src/mulligan_coach_features/__init__.py`, currently `3`) identifies the
 *meaning* of a `build_feature_row` output. Like the simulator's version,
 it's stamped into feature-cache `_meta.json` sidecars and model
 `metadata.json` so stale caches and train/serve skew are caught rather
 than silently corrupting predictions.
+
+Version history: `1 → 2` (Step 2) appended SOS + MSH to
+`DEFAULT_KNOWN_SETS` (two new `set_code_*` columns + SOS one-hot
+change). `2 → 3` (Step 5) re-keyed the 17Lands stats join from
+arena_id to folded card name — the column set is unchanged but the
+per-card WR / z-score / castability-`high_oh` *values* now populate
+for every card with a ratings row (they were zero under v2 whenever
+MTGJSON lacked the printing's arena_id), so it's a value change and
+must bump. Full history lives next to the constant in `__init__.py`.
 
 **Bump it — in the SAME PR as the change — on any change to the values
 or the column set `build_feature_row` emits for fixed inputs.** That

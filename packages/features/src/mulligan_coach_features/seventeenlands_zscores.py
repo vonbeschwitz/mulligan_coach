@@ -51,6 +51,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from .seventeenlands_shrinkage import ShrunkWinRates
+from .stats_join import fold_card_name
 
 # Field-name pairs: (ShrunkWinRates attribute, FormatWRDistribution mean/std stem).
 # Kept here so adding a new WR field is a single edit.
@@ -96,6 +97,10 @@ class CardZScores:
     reference distribution has no signal for the field (every card's
     shrunk value was ``None``, or every card landed on the same value
     so ``std == 0.0``).
+
+    ``name`` is the 17Lands display name and the join key (via
+    :func:`stats_join.fold_card_name`); ``mtga_id`` is retained as an
+    informational field only.
     """
 
     mtga_id: int
@@ -163,12 +168,12 @@ def zscore_stats(
     shrunk: Iterable[ShrunkWinRates],
     *,
     distribution: FormatWRDistribution | None = None,
-) -> dict[int, CardZScores]:
+) -> dict[str, CardZScores]:
     """Compute per-card z-scores of shrunk OH / GD / GIH win rates.
 
-    Returns a dict keyed by ``mtga_id`` so callers can join against
-    ``StatsLookup.by_arena_id`` or any other arena-id-indexed structure
-    — the same key the upstream :func:`shrink_stats` uses.
+    Returns a dict keyed by :func:`stats_join.fold_card_name` of the
+    card name — the same key the upstream :func:`shrink_stats` uses, so
+    the feature builder joins both tables consistently.
 
     Pass ``distribution=`` to reuse a pre-computed
     :class:`FormatWRDistribution` (e.g. when z-scoring a subset of the
@@ -179,9 +184,9 @@ def zscore_stats(
     if distribution is None:
         distribution = compute_format_wr_distribution(shrunk_list)
 
-    result: dict[int, CardZScores] = {}
+    result: dict[str, CardZScores] = {}
     for s in shrunk_list:
-        result[s.mtga_id] = CardZScores(
+        result[fold_card_name(s.name)] = CardZScores(
             mtga_id=s.mtga_id,
             name=s.name,
             z_opening_hand_win_rate=_zscore(

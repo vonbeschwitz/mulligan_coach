@@ -56,6 +56,8 @@ from dataclasses import dataclass
 import numpy as np
 from mulligan_coach_cards import SeventeenLandsStats
 
+from .stats_join import fold_card_name
+
 # Default prior strength. With pick_count typically in the thousands for
 # non-mythic cards in a Premier Draft format on 17Lands, k=500 gives
 # w ≈ 0.85+ for commons (mild shrinkage) and w ≈ 0.3-0.5 for mythics
@@ -147,6 +149,11 @@ class ShrunkWinRates:
     shared across all three WRs (because ``pick_count`` is per-card,
     not per-WR-field). Recorded for diagnostics — telling you how much
     of each shrunk value came from the raw stat vs. the prior.
+
+    ``name`` is the 17Lands display name; it is the join key (via
+    :func:`stats_join.fold_card_name`) the feature builder uses.
+    ``mtga_id`` is retained as an informational field only — the join
+    no longer keys on it (see :mod:`stats_join`).
     """
 
     mtga_id: int
@@ -296,12 +303,14 @@ def shrink_stats(
     *,
     k_base: float = DEFAULT_K_BASE,
     priors: FormatPriors | None = None,
-) -> dict[int, ShrunkWinRates]:
+) -> dict[str, ShrunkWinRates]:
     """Shrink per-card OH / GD / GIH win rates toward a play-rate-conditional prior.
 
-    Returns a dict keyed by ``mtga_id`` so callers can join directly
-    against ``StatsLookup.by_arena_id`` or any structure indexed on
-    Arena IDs.
+    Returns a dict keyed by :func:`stats_join.fold_card_name` of the
+    card name — the join key the feature builder uses (independent of
+    MTGJSON's arena_id lag). One entry per ratings row, no alias
+    entries: :func:`zscore_stats` iterates the values and must see each
+    card exactly once.
 
     Pass ``priors=`` to reuse a pre-computed :class:`FormatPriors` (e.g.
     when shrinking a subset of a format, or in tests). Otherwise priors
@@ -316,7 +325,7 @@ def shrink_stats(
     if priors is None:
         priors = compute_format_priors(stats_list)
 
-    result: dict[int, ShrunkWinRates] = {}
+    result: dict[str, ShrunkWinRates] = {}
     for s in stats_list:
         if s.expansion != priors.expansion or s.event_type != priors.event_type:
             raise ValueError(
@@ -340,7 +349,7 @@ def shrink_stats(
         pick = s.pick_count
         weight = pick / (pick + k_base) if (pick + k_base) > 0 else 0.0
 
-        result[s.mtga_id] = ShrunkWinRates(
+        result[fold_card_name(s.name)] = ShrunkWinRates(
             mtga_id=s.mtga_id,
             name=s.name,
             shrunk_opening_hand_win_rate=_shrink(s.opening_hand_win_rate, prior_oh, weight),

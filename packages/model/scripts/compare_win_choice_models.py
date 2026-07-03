@@ -122,7 +122,7 @@ def _init_worker(win_model_dir_str: str, choice_model_dir_str: str, sets: tuple[
     _WORKER_WIN = ModelBundle.load(Path(win_model_dir_str))
     _WORKER_CHOICE = ChoiceModelBundle.load(Path(choice_model_dir_str))
     _WORKER_STATS = {
-        s: FormatStats.build(load_premier_draft_stats(s).by_arena_id.values()) for s in sets
+        s: FormatStats.build(load_premier_draft_stats(s).by_name.values()) for s in sets
     }
 
 

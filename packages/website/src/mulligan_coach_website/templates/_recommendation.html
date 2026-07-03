@@ -138,12 +138,19 @@
 
     <p class="muted small">
       Format: <strong>{{ primary_set or "unknown" }}</strong>
-      {% if not set_stats_present %}
-        <span class="warn">(no 17Lands stats loaded — per-card features fall to zero)</span>
+      {% if rec.stats_coverage is not none %}
+        &middot; 17Lands data: {{ rec.stats_coverage[0] }}/{{ rec.stats_coverage[1] }} spells
       {% endif %}
       &middot; on the {% if on_the_play %}play{% else %}draw{% endif %}
       &middot; came from mulligan number {{ mulligan_number }}.
     </p>
+    {% if rec.degradations %}
+      <div class="rec-degradations">
+        {% for d in rec.degradations %}
+          <p class="warn small">{{ d }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
     <p class="muted small">
       Choice model: {{ rec.n_sims }} sims (single pass — no separate mulligan arm).
     </p>

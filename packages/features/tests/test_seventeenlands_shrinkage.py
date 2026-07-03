@@ -16,6 +16,7 @@ from mulligan_coach_features import (
     PlayRateBins,
     ShrunkWinRates,
     compute_format_priors,
+    fold_card_name,
     shrink_stats,
 )
 
@@ -102,7 +103,7 @@ def test_high_pick_count_gives_almost_no_shrinkage() -> None:
         ever_drawn_win_rate=0.60,
     )
     shrunk = shrink_stats([*others, target])
-    out = shrunk[99999]
+    out = shrunk["Popular"]
     expected_weight = 10_000 / (10_000 + DEFAULT_K_BASE)
     assert out.weight == pytest.approx(expected_weight, abs=1e-9)
     assert out.weight > 0.95
@@ -129,7 +130,7 @@ def test_low_pick_count_normal_play_rate_pulls_to_conditional_mean() -> None:
     )
     priors = compute_format_priors(others)
     shrunk = shrink_stats([target], priors=priors)
-    out = shrunk[99999]
+    out = shrunk["Just Released"]
     expected_prior = priors.conditional_mean_gih_wr.lookup(0.5)
     assert expected_prior is not None
     assert out.weight < 0.05
@@ -157,7 +158,7 @@ def test_high_pick_count_low_play_rate_keeps_raw_low_wr() -> None:
         ever_drawn_win_rate=0.40,
     )
     shrunk = shrink_stats([*others, target])
-    out = shrunk[99999]
+    out = shrunk["Bad Sideboard"]
 
     # Overall mean of the synthetic format ≈ 0.55 (midpoint of 0.40-0.70).
     overall_mean = 0.55
@@ -183,7 +184,7 @@ def test_no_stats_card_uses_play_rate_conditional_mean() -> None:
         ever_drawn_win_rate=None,
     )
     shrunk = shrink_stats([*others, target])
-    out = shrunk[99999]
+    out = shrunk["No Stats Yet"]
     # Conditional mean for play_rate≈0.30 in the synthetic format: ~0.49.
     assert out.shrunk_ever_drawn_win_rate is not None
     assert 0.46 < out.shrunk_ever_drawn_win_rate < 0.52
@@ -203,7 +204,7 @@ def test_no_stats_no_play_rate_falls_back_to_overall_mean() -> None:
     )
     priors = compute_format_priors([*others, target])
     shrunk = shrink_stats([*others, target], priors=priors)
-    out = shrunk[99999]
+    out = shrunk["Total Mystery"]
     assert priors.overall_mean_gih_wr is not None
     assert out.shrunk_ever_drawn_win_rate == pytest.approx(priors.overall_mean_gih_wr)
 
@@ -220,7 +221,7 @@ def test_pick_count_zero_returns_prior() -> None:
     )
     priors = compute_format_priors(others)
     shrunk = shrink_stats([target], priors=priors)
-    out = shrunk[99999]
+    out = shrunk["Never Picked"]
     expected_prior = priors.conditional_mean_gih_wr.lookup(0.5)
     assert expected_prior is not None
     assert out.weight == 0.0
@@ -381,13 +382,17 @@ def test_all_none_field_warns_and_falls_back() -> None:
         assert sw.shrunk_ever_drawn_win_rate is not None
 
 
-def test_shrink_stats_returns_dict_keyed_by_mtga_id() -> None:
+def test_shrink_stats_returns_dict_keyed_by_folded_name() -> None:
     cards = _format_with_spread(n=12)
     shrunk = shrink_stats(cards)
-    assert set(shrunk.keys()) == {c.mtga_id for c in cards}
+    # Keyed by folded card name (the join key), not mtga_id — so a card
+    # whose printing MTGJSON hasn't ingested still joins.
+    assert set(shrunk.keys()) == {fold_card_name(c.name) for c in cards}
     for k, v in shrunk.items():
         assert isinstance(v, ShrunkWinRates)
-        assert v.mtga_id == k
+        assert fold_card_name(v.name) == k
+        # mtga_id is retained as an informational field.
+        assert isinstance(v.mtga_id, int)
 
 
 def test_priors_dataclass_holds_expected_metadata() -> None:

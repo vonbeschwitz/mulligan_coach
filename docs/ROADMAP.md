@@ -137,16 +137,44 @@ ratings automation.
   tests (41 → no warning, 43 → out-of-range warning).
 * **Opus.**
 
-### Step 5 — train/serve consistency (review #2b) + degradation surfacing
-* Name-keyed `FormatStats` (reuse `StatsLookup.match` three-tier fallback);
-  per-recommendation stats-coverage logging; `degradations: list[str]` on
-  `ChoiceRecommendation` rendered in overlay footer + website.
-* ~~Fold in the Step 4 follow-up: align `website/app.py`
-  `_REQUIRED_DECK_SIZE` to 40–42.~~ DONE standalone after Step 4 (see
-  Step 4's follow-up note).
-* **Fable: consistency design (must reason about what TRAINING keyed on —
-  fixing inference alone manufactures new skew). Opus: implementation.
-  Fable: review.**
+### Step 5 — train/serve consistency (review #2b) + degradation surfacing — DONE
+* Re-keyed the 17Lands stats join from `arena_id` (MTGJSON-dependent) to
+  **folded card name** — a pure function of `(card name, ratings parquet)`,
+  identical across training materialisation, website, and overlay. New
+  `packages/features/stats_join.py` (`fold_card_name` + generic
+  `stats_for_card` with folded-name match + DFC front-face fallback);
+  `shrink_stats` / `zscore_stats` now return `dict[str, …]` keyed by folded
+  name (the `dict[int, …]` change rippled through features, model, recommend,
+  scripts, and tests). Bumped `FEATURES_SEMANTICS_VERSION` 2 → 3 (values shift;
+  column set unchanged). This removes both the training-time zeroing (caches
+  materialised with mostly-`None` arena_ids) and the website↔overlay serving
+  skew (the overlay backfilled arena_id from Arena's DB; the website didn't).
+* Added `degradations: tuple[str, …]` + `stats_coverage: tuple[int,int] | None`
+  to `ChoiceRecommendation`, built in `recommend_choice` by `_choice_degradations`
+  (four producers: no ratings / partial coverage / set-unknown-to-model /
+  pipeline-version-mismatch) with one `log.info` per recommendation (review
+  #2c). Rendered as warn-lines + a "17Lands data: k/n spells" summary on the
+  website, an amber word-wrapped footer + compact-pill `⚠` on the overlay, and
+  one-per-line under the verdict in headless.
+* Tests: `fold_card_name` / `stats_for_card` unit tests; folded-name-keyed
+  shrink/zscore dicts; a `build_feature_row` regression proving `arena_id=None`
+  cards now populate stats features; parametrised degradation tests in
+  `recommend`; website `/recommend` render tests. Full suite + ruff + mypy green.
+* **Validation:** name-join coverage 1514/1515 (99.93%) across TMT/ECL/TLA/SOS/MSH
+  (was ~3–80% via arena_id); the lone miss is TMT "Bespoke Bō", whose ratings row
+  stores a literal `?` where the `ō` should be — a parquet data artifact, not a
+  fold-fixable case (the spec's 1515/1515 assumed a macron-stripped "o"). Interim
+  skew A/B (empty vs name-keyed stats through `choice_prod`): median |Δp_keep| =
+  0.09 pp (TLA) / 0.46 pp (SOS), mean 1.0 / 1.5 pp, max ~11–12 pp — well under the
+  5 pp flag threshold, so no urgent action beyond the planned retrain. Logs at
+  `logs/step5_name_join_coverage.log` + `logs/step5_interim_skew_ab.log`.
+* **OWNER ACTION after merge:** re-materialise the win + choice feature caches
+  with `--overwrite` (v2 caches refuse resume under v3), retrain both models,
+  and promote the new choice model to `models/choice_prod`. Until promotion,
+  both surfaces show the pipeline-version-mismatch degradation (`choice_prod`
+  is pre-Step-1 unstamped, so it always warned; the new join makes the caveat
+  visible rather than silent).
+* **Fable: consistency design. Opus: implementation. Fable: review.**
 
 ### Step 6 — simulator performance (review #3)
 * cProfile one `simulate()` call (hotspot expected: castability snapshot);
