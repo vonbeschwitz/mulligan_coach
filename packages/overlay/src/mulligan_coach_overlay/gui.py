@@ -113,6 +113,7 @@ from .stats_html import (
     _TEXT_PRIMARY,
 )
 from .stats_html import build_stats_html as _build_stats_html
+from .tray import create_tray
 
 log = logging.getLogger(__name__)
 
@@ -1151,8 +1152,18 @@ def main(argv: list[str] | None = None) -> int:
     # registry alone so a deliberate un-tick from the gear menu
     # sticks. No-op from source (autostart.supported() is False).
     autostart.enable_default_if_first_run(user_data.user_state_root())
+    # Entries written by older builds lack the --autostart flag (their
+    # login launches would show the manual-launch tray balloon every
+    # boot); rewrite ours to the current format if needed.
+    autostart.ensure_entry_current()
 
-    app = QApplication(argv if argv is not None else sys.argv)
+    # Strip our private --autostart flag (baked into the registry Run
+    # entry) before Qt parses the arguments. Whether it was present
+    # drives the tray launch-balloon decision below.
+    raw_argv = list(argv) if argv is not None else list(sys.argv)
+    qt_argv, autostart_launch = autostart.pop_autostart_flag(raw_argv)
+
+    app = QApplication(qt_argv)
     # Tooltip styling MUST live at the QApplication stylesheet level —
     # QToolTip is its own top-level window, not a child of the
     # OverlayWindow, so a widget-scoped stylesheet doesn't reach it.
@@ -1168,6 +1179,14 @@ def main(argv: list[str] | None = None) -> int:
         " font-size: 11px;"
         "}"
     )
+
+    # Tray icon first — before the slow model load — so a manual
+    # launch shows *some* sign of life within a second even though
+    # the overlay window won't appear until Arena does. Also the only
+    # Quit / Start-with-Windows surface while the window is hidden.
+    tray = create_tray(app)
+    if tray is not None:
+        tray.show()
 
     log.info("loading card index + recommendation service…")
     card_index = ArenaCardIndex.build()
@@ -1238,6 +1257,10 @@ def main(argv: list[str] | None = None) -> int:
         # QThread's own event loop, where it does run.
         if update_timer is not None:
             update_timer.stop()
+        # Hide the tray icon explicitly — Windows otherwise leaves a
+        # ghost icon in the tray until the user mouses over it.
+        if tray is not None:
+            tray.hide()
         watcher.stop()
         hotkey_hook.uninstall()
         worker.request_stop()
@@ -1279,6 +1302,14 @@ def main(argv: list[str] | None = None) -> int:
             )
 
     watcher.start()
+
+    # Manual launch with Arena closed: the watcher's initial poll just
+    # hid the window, so without feedback the launch looks like it
+    # failed — show the tray balloon. Autostart launches stay silent
+    # (a balloon at every login reads as nagging), and launches with
+    # Arena already running don't need one (the panel is visible).
+    if tray is not None and not autostart_launch and watcher.last_state() == "absent":
+        tray.show_started_message()
 
     # We still call apply_output for the seeded deck so any future
     # non-DeckLoadedOutput shapes coming back from _seed_from_disk
