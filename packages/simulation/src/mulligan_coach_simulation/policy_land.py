@@ -37,6 +37,7 @@ from mulligan_coach_cards import FetchLandEffect
 
 from .castability import is_castable
 from .effects import enters_tapped
+from .mana import available_mana_abilities
 from .runtime import Card, GameState
 
 LandRule = str  # one of "L1" / "L2" / "L3" / "L4" / "L5" / "tiebreak" / "no-land"
@@ -78,11 +79,25 @@ def choose_land(state: GameState) -> tuple[Card | None, LandRule]:
 
 def filter_l1(candidates: list[Card], state: GameState) -> list[Card]:
     """Pick the candidate(s) that make the most spells in hand castable
-    next turn. Ties on count are broken by best-spell quality."""
+    next turn. Ties on count are broken by best-spell quality.
+
+    Duplicate lands share one lookahead: two copies of the same
+    ``ParsedCard`` (e.g. two Forests in hand) provably score the same —
+    the hypothetical battlefield gains the same land either way, and
+    the residual hand holds the same multiset of spells (only lands
+    differ, and the lookahead skips lands) — so we evaluate each
+    distinct ``parsed`` once. Opening hands are full of duplicate
+    basics, making this one of the cheaper big wins in the simulator.
+    """
     scored: list[tuple[Card, int, tuple[int, int]]] = []
+    score_by_parsed: dict[int, tuple[int, tuple[int, int]]] = {}
     for cand in candidates:
-        spells = _castable_spells_next_turn(cand, state)
-        scored.append((cand, len(spells), _best_spell_quality(spells)))
+        cached = score_by_parsed.get(id(cand.parsed))
+        if cached is None:
+            spells = _castable_spells_next_turn(cand, state)
+            cached = (len(spells), _best_spell_quality(spells))
+            score_by_parsed[id(cand.parsed)] = cached
+        scored.append((cand, cached[0], cached[1]))
 
     max_count = max(c for _, c, _ in scored)
     by_count = [(card, q) for card, c, q in scored if c == max_count]
@@ -121,11 +136,14 @@ def _castable_spells_next_turn(cand: Card, state: GameState) -> list[Card]:
     state.untap_all()
     state.summoning_sick.clear()
     try:
+        # One battlefield, many cards: enumerate the mana sources once
+        # and share them across every ``is_castable`` check.
+        abilities = available_mana_abilities(state)
         out: list[Card] = []
         for card in state.hand:
             if card.is_land:
                 continue
-            if is_castable(card, state).castable:
+            if is_castable(card, state, abilities).castable:
                 out.append(card)
         return out
     finally:

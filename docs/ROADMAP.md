@@ -176,12 +176,26 @@ ratings automation.
   visible rather than silent).
 * **Fable: consistency design. Opus: implementation. Fable: review.**
 
-### Step 6 — simulator performance (review #3)
-* cProfile one `simulate()` call (hotspot expected: castability snapshot);
-  memoize castability per (mana-signature, mode-cost) within game; skip
-  re-eval of already-castable cards; numba on mana solver only if needed.
-  Use equivalence harness before/after; remember it only covers replayed
-  cases — cache-key design needs real scrutiny.
+### Step 6 — simulator performance (review #3) — DONE
+* ~2.0× on the pure `simulate()` workload (2.25 → 1.15 ms/game on real
+  TLA rows), bit-identical: all three equivalence baselines (TLA 50×20,
+  TLA 100×40, SOS 50×20 for Prepare) `--check` clean, so
+  `SIMULATION_SEMANTICS_VERSION` stays 1 and existing caches remain
+  valid. Profile showed the mana CSP at 56%, not the snapshot per se.
+  Landed: (1) CSP cache re-keyed from instance-ids to the *ability
+  identity sequence* with payments stored as positions and rebound to
+  live AbilityRefs on hit — hit rate 62% → 93% and the cache now
+  survives across the games of a run (id-reuse ruled out by pinning
+  the keyed objects in the value); (2) requirement lists pre-sorted
+  once per cost (kills the per-DFS-node sort); (3)
+  `available_mana_abilities` hoisted out of the snapshot/L1/picker
+  inner loops; (4) duplicate lands share one L1 lookahead; (5) raw
+  int-list pools in the DFS. Numba NOT needed. "Skip re-eval of
+  already-castable cards" deliberately dropped: it changes traces
+  (witness_land_choice) → semantics bump → cache invalidation, a bad
+  trade right before the Step-5 retrain. Spec + correctness argument +
+  measurements: `docs/specs/step6_simulator_performance.md`; new
+  profiling companion `packages/simulation/scripts/profile_hotspots.py`.
 * **Fable** (design + the caching-correctness reasoning + review; Opus can
   do mechanical parts under a tight spec).
 
