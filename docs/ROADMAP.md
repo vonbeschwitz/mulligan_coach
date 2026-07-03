@@ -129,20 +129,21 @@ ratings automation.
   `40 <= len(deck) <= 42`. Added coordinator tests that a 41-card deck
   now reaches the service and a 43-card deck is still rejected
   (`deck_unresolved`, service never called).
-* **Follow-up (not in this step's scope):** `website/app.py` has its own
-  `_REQUIRED_DECK_SIZE = 40` with the same over-rejection of legal 41/42
-  decks and a now-stale "model expects exactly 40" comment. Worth
-  aligning too — fold into Step 5 (which already touches the website).
+* **Follow-up — DONE (standalone, after Step 4):** aligned `website/app.py`
+  too. `_REQUIRED_DECK_SIZE = 40` → `_MIN_DECK_SIZE 40` / `_MAX_DECK_SIZE 42`
+  (range check + updated error message), stale "expects exactly 40" comment
+  fixed, `_validation.html` + `index.html` now show "40-42" via
+  `min_deck_size`/`max_deck_size` template vars. Added `/validate` boundary
+  tests (41 → no warning, 43 → out-of-range warning).
 * **Opus.**
 
 ### Step 5 — train/serve consistency (review #2b) + degradation surfacing
 * Name-keyed `FormatStats` (reuse `StatsLookup.match` three-tier fallback);
   per-recommendation stats-coverage logging; `degradations: list[str]` on
   `ChoiceRecommendation` rendered in overlay footer + website.
-* Also fold in the Step 4 follow-up: align `website/app.py`
-  `_REQUIRED_DECK_SIZE` to 40–42 (+ fix its stale "expects exactly 40"
-  comment) so the website stops rejecting legal 41/42-card decks the
-  service accepts.
+* ~~Fold in the Step 4 follow-up: align `website/app.py`
+  `_REQUIRED_DECK_SIZE` to 40–42.~~ DONE standalone after Step 4 (see
+  Step 4's follow-up note).
 * **Fable: consistency design (must reason about what TRAINING keyed on —
   fixing inference alone manufactures new skew). Opus: implementation.
   Fable: review.**

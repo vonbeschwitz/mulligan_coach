@@ -111,6 +111,30 @@ def test_validate_returns_validation_partial(client: TestClient) -> None:
     # Datalist for the autocomplete should be present with deck names.
     assert "deck-cards" in resp.text
     assert "Test Goblin" in resp.text
+    # A legal 40-card deck sits inside the 40-42 window → no size warning.
+    assert "Heads up" not in resp.text
+
+
+def test_validate_41_card_deck_has_no_size_warning(client: TestClient) -> None:
+    """A 41-card deck is legal (service accepts 40-42) → no size warning.
+
+    Regression: the website used to warn (and the recommend route used
+    to reject) any deck that wasn't exactly 40.
+    """
+    deck = "Deck\n17 Mountain (TST) 270\n24 Test Goblin (TST) 001\n"  # 41 cards
+    resp = client.post("/validate", data={"decklist": deck})
+    assert resp.status_code == 200
+    assert "Deck parsed" in resp.text
+    assert "Heads up" not in resp.text
+
+
+def test_validate_43_card_deck_warns_out_of_range(client: TestClient) -> None:
+    """43 cards is above the 40-42 window → the size warning shows."""
+    deck = "Deck\n17 Mountain (TST) 270\n26 Test Goblin (TST) 001\n"  # 43 cards
+    resp = client.post("/validate", data={"decklist": deck})
+    assert resp.status_code == 200
+    assert "Heads up" in resp.text
+    assert "40-42" in resp.text
 
 
 def test_hand_random_action_returns_hand_partial(client: TestClient) -> None:
