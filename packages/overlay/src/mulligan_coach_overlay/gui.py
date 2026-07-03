@@ -87,10 +87,17 @@ from PyQt6.QtWidgets import (
 )
 
 from . import arena_window, autostart, user_data
-from ._frozen import configure_bundle_paths, configure_frozen_logging
+from ._frozen import configure_bundle_paths, configure_frozen_logging, running_bundle_version
 from .arena_paths import default_log_path
 from .arena_window import ArenaWindowWatcher
 from .auto_update import UpdateRunner
+from .auto_update.exe_update import (
+    DEFAULT_EXE_VERSION_URL,
+    ExeUpdateChecker,
+    ExeUpdateResult,
+    manual_check_message,
+    update_available_message,
+)
 from .card_index import ArenaCardIndex
 from .coordinator import (
     ComputingOutput,
@@ -113,7 +120,7 @@ from .stats_html import (
     _TEXT_PRIMARY,
 )
 from .stats_html import build_stats_html as _build_stats_html
-from .tray import create_tray
+from .tray import OverlayTray, create_tray
 
 log = logging.getLogger(__name__)
 
@@ -1247,6 +1254,12 @@ def main(argv: list[str] | None = None) -> int:
     # Returns ``None`` (and logs) when no manifest URL is configured.
     update_timer = _install_auto_update(service, coordinator)
 
+    # EXE update *notification* (notify-only): poll the exe_version.json
+    # sidecar and, when a newer build is published, show a tray balloon
+    # + "Download update" entry that open the release page. Needs the
+    # tray as its UI surface, so skipped on desktops without one.
+    exe_update = _install_exe_update_check(tray) if tray is not None else None
+
     def _on_app_quit() -> None:
         # IMPORTANT: don't rely on a queued ``worker.stopped → thread.quit``
         # connection here — the slot would be dispatched to the main
@@ -1257,6 +1270,8 @@ def main(argv: list[str] | None = None) -> int:
         # QThread's own event loop, where it does run.
         if update_timer is not None:
             update_timer.stop()
+        if exe_update is not None:
+            exe_update[1].stop()
         # Hide the tray icon explicitly — Windows otherwise leaves a
         # ghost icon in the tray until the user mouses over it.
         if tray is not None:
@@ -1439,6 +1454,121 @@ def _install_auto_update(service: Any, coordinator: OverlayCoordinator) -> QTime
     timer.start()
     log.info("auto-update: scheduled every 6h against %s", manifest_url)
     return timer
+
+
+# Default sidecar URL used when ``MULLIGAN_COACH_EXE_VERSION_URL`` is
+# not set. Points at the ``exe_version.json`` that
+# ``packages/overlay/packaging/publish_exe_release.py`` uploads to the
+# floating ``exe-latest`` release on the public ``mulligan_coach_data``
+# repo. Set the env var empty to disable the EXE update check entirely
+# (mirrors ``MULLIGAN_COACH_MANIFEST_URL`` for the data channel).
+_DEFAULT_EXE_VERSION_URL = DEFAULT_EXE_VERSION_URL
+
+_EXE_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000  # 6 hours
+
+
+class _ExeUpdateController(QObject):
+    """Runs EXE update checks off-thread and surfaces results on the tray.
+
+    Notify-only (owner decision 2026-07-03): a check never downloads or
+    replaces the running executable — it only fetches the tiny
+    ``exe_version.json`` sidecar and, when a newer build is published,
+    shows a tray balloon + "Download update" menu entry that open the
+    release page.
+
+    ``ExeUpdateChecker.check`` does a blocking network fetch, so it runs
+    on a short-lived daemon thread; the result comes back to the GUI
+    thread through ``_result_ready`` (a queued signal) where
+    :meth:`_on_result` decides what — if anything — to show. A failed
+    check is folded into an ``unknown`` result upstream and never
+    disturbs the overlay.
+    """
+
+    # (ExeUpdateResult, manual). ``object`` because ExeUpdateResult is a
+    # plain dataclass, not a QObject — Qt marshals it as an opaque
+    # Python object across the thread boundary.
+    _result_ready = pyqtSignal(object, bool)
+
+    def __init__(
+        self,
+        checker: ExeUpdateChecker,
+        tray: OverlayTray,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._checker = checker
+        self._tray = tray
+        # Version we've already shown an *automatic* balloon for this
+        # session, so the 6 h auto-check doesn't re-nag every tick.
+        # Manual checks always give feedback regardless.
+        self._notified_version: str | None = None
+        self._result_ready.connect(self._on_result)
+
+    def check_async(self, *, manual: bool) -> None:
+        """Kick a check on a daemon thread; result arrives via the signal."""
+
+        def _run() -> None:
+            try:
+                result = self._checker.check()
+            except Exception:
+                # ``check`` is contractually no-raise, but a daemon
+                # thread dying silently would be worse than a log line.
+                log.exception("exe-update: checker raised unexpectedly")
+                return
+            self._result_ready.emit(result, manual)
+
+        threading.Thread(target=_run, name="exe-update-check", daemon=True).start()
+
+    @pyqtSlot(object, bool)
+    def _on_result(self, result: ExeUpdateResult, manual: bool) -> None:
+        log.info("exe-update: status=%s manual=%s (%s)", result.status, manual, result.message)
+        if result.status == "update_available" and result.latest is not None:
+            version = result.latest.bundle_version
+            # Automatic checks notify once per new version per session;
+            # a manual check always shows the balloon.
+            if not manual and version == self._notified_version:
+                return
+            self._notified_version = version
+            title, body = update_available_message(result)
+            self._tray.show_update_available(title, body, result.latest.release_page)
+            return
+        # up_to_date / unknown: silent on automatic checks, but a manual
+        # check told the user we'd look, so give an answer.
+        if manual:
+            title, body = manual_check_message(result)
+            self._tray.notify(title, body)
+
+
+def _install_exe_update_check(
+    tray: OverlayTray,
+) -> tuple[_ExeUpdateController, QTimer] | None:
+    """Wire the notify-only EXE update check to the tray + a background timer.
+
+    Returns ``(controller, timer)`` so the caller can stop the timer at
+    shutdown, or ``None`` when the check is disabled (the version URL
+    env var is set empty). The controller is returned (not just the
+    timer) so the caller keeps a strong reference — a garbage-collected
+    QObject would drop the queued-signal wiring.
+    """
+    version_url = os.environ.get("MULLIGAN_COACH_EXE_VERSION_URL", _DEFAULT_EXE_VERSION_URL).strip()
+    if not version_url:
+        log.info("exe-update check disabled (MULLIGAN_COACH_EXE_VERSION_URL is empty)")
+        return None
+
+    checker = ExeUpdateChecker(version_url=version_url, running_version=running_bundle_version())
+    controller = _ExeUpdateController(checker, tray)
+    # Manual "Check for updates" from the tray menu.
+    tray.enable_update_check(lambda: controller.check_async(manual=True))
+
+    # First automatic check a little after the data updater's 4 s kick
+    # so the two background fetches don't stack up during launch.
+    QTimer.singleShot(8_000, lambda: controller.check_async(manual=False))
+    timer = QTimer()
+    timer.setInterval(_EXE_UPDATE_INTERVAL_MS)
+    timer.timeout.connect(lambda: controller.check_async(manual=False))
+    timer.start()
+    log.info("exe-update: scheduled every 6h against %s", version_url)
+    return controller, timer
 
 
 def _seed_from_disk(

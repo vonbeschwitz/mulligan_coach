@@ -31,9 +31,19 @@ keep-green ``#7be57b``.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
-from PyQt6.QtCore import QObject, Qt, pyqtSlot
-from PyQt6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPen, QPixmap
+from PyQt6.QtCore import QObject, Qt, QUrl, pyqtSlot
+from PyQt6.QtGui import (
+    QAction,
+    QColor,
+    QDesktopServices,
+    QFont,
+    QIcon,
+    QPainter,
+    QPen,
+    QPixmap,
+)
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from . import autostart
@@ -55,10 +65,36 @@ class OverlayTray(QSystemTrayIcon):
         self.setIcon(_draw_tray_icon())
         self.setToolTip("Mulligan Coach")
 
+        # URL opened when the user clicks the last-shown "update
+        # available" balloon or the "Download update" menu entry.
+        # ``None`` = no pending update, so a balloon click is a no-op.
+        self._update_url: str | None = None
+
         # Keep a Python reference to the menu: setContextMenu() does
         # not take ownership, and a garbage-collected QMenu means a
         # tray icon whose right-click silently does nothing.
         self._menu = QMenu()
+
+        # Update-notification entries live at the top of the menu but
+        # start hidden. ``enable_update_check`` reveals + wires "Check
+        # for updates" (only when the GUI has an update checker to
+        # drive it), and ``show_update_available`` reveals "Download
+        # update". Building them up-front keeps the menu order stable.
+        check_action = self._menu.addAction("Check for updates")
+        assert check_action is not None
+        check_action.setVisible(False)
+        self._check_action = check_action
+
+        download_action = self._menu.addAction("Download update…")
+        assert download_action is not None
+        download_action.setVisible(False)
+        download_action.triggered.connect(self._open_update_url)
+        self._download_action = download_action
+        update_separator = self._menu.addSeparator()
+        assert update_separator is not None
+        update_separator.setVisible(False)
+        self._update_separator = update_separator
+
         self._autostart_action: QAction | None = None
         if autostart.supported():
             action = self._menu.addAction("Start with Windows")
@@ -78,6 +114,54 @@ class OverlayTray(QSystemTrayIcon):
         # is reflected without restarting the overlay.
         self._menu.aboutToShow.connect(self._sync_autostart_state)
         self.setContextMenu(self._menu)
+
+        # A click on the most recent balloon opens the pending update
+        # URL (if any). Wired once here; the URL is swapped per notice.
+        self.messageClicked.connect(self._open_update_url)
+
+    def enable_update_check(self, on_check: Callable[[], None]) -> None:
+        """Reveal + wire the "Check for updates" menu entry.
+
+        Called by the GUI only when an :class:`ExeUpdateChecker` is
+        configured (i.e. the version URL isn't disabled). *on_check* is
+        invoked on the GUI thread when the user clicks the entry; it
+        should kick the actual (network) check onto a worker thread so
+        the menu doesn't block.
+        """
+        self._check_action.triggered.connect(lambda _checked=False: on_check())
+        self._check_action.setVisible(True)
+
+    def show_update_available(self, title: str, body: str, url: str) -> None:
+        """Surface an available EXE update: balloon + "Download update" entry.
+
+        *title* / *body* come from
+        :func:`auto_update.exe_update.update_available_message` so the
+        wording lives in one tested place. *url* is opened when the
+        user clicks the balloon or the menu entry — the GUI passes the
+        release page so the user lands on the download + install
+        instructions rather than triggering a raw ZIP download.
+        Notify-only: nothing is downloaded here.
+        """
+        self._update_url = url
+        self._download_action.setVisible(True)
+        self._update_separator.setVisible(True)
+        self.showMessage(title, body, QSystemTrayIcon.MessageIcon.Information, 10_000)
+
+    def notify(self, title: str, body: str, *, open_url: str | None = None) -> None:
+        """Show a plain informational balloon.
+
+        Used for manual-check feedback ("up to date", "couldn't
+        check"). *open_url* sets what a click on this balloon opens
+        (``None`` clears any pending URL so the click is a no-op).
+        """
+        self._update_url = open_url
+        self.showMessage(title, body, QSystemTrayIcon.MessageIcon.Information, 8_000)
+
+    @pyqtSlot()
+    def _open_update_url(self) -> None:
+        """Open the pending update URL in the default browser, if set."""
+        if self._update_url:
+            QDesktopServices.openUrl(QUrl(self._update_url))
 
     def show_started_message(self) -> None:
         """Balloon: the app is alive and will appear with Arena.

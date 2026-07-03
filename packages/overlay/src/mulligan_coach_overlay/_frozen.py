@@ -62,6 +62,33 @@ def bundle_root() -> Path | None:
     return Path(meipass) if meipass else None
 
 
+def running_bundle_version() -> str | None:
+    """Return the running EXE's build stamp, or ``None`` from source.
+
+    Reads ``_bundle_version.txt`` from the frozen bundle root (the
+    ``_internal`` dir ``sys._MEIPASS`` points at), the same file
+    ``build_distribution._stamp_bundle_version`` writes at build time.
+    The stamp (``"<UTC-timestamp>+<git-hash>"``) is what the EXE
+    update-notification channel compares against the published
+    ``exe_version.json`` sidecar.
+
+    Returns ``None`` when running from source (no frozen bundle) or
+    when the stamp file is missing/unreadable — the update checker
+    treats ``None`` as "running version unknown" and stays silent on
+    automatic checks.
+    """
+    root = bundle_root()
+    if root is None:
+        return None
+    stamp_file = root / "_bundle_version.txt"
+    try:
+        text = stamp_file.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        logging.getLogger(__name__).info("could not read bundle version stamp: %s", exc)
+        return None
+    return text or None
+
+
 def configure_bundle_paths() -> None:
     """Point the upstream path resolvers at the user data + model dirs.
 

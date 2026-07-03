@@ -208,6 +208,25 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   every login. `autostart.ensure_entry_current()` migrates pre-flag
   Run entries on launch. The icon itself is drawn programmatically
   (no binary assets in the wheel).
+* **EXE update notification — notify-only** (`auto_update/exe_update.py`
+  + tray). Separate from the data auto-updater: it never downloads or
+  replaces the running executable (owner decision 2026-07-03 — unsigned
+  self-update is an AV magnet; full self-update is deferred to Phase 2,
+  gated on signing). `ExeUpdateChecker.check` fetches the
+  `exe_version.json` sidecar `publish_exe_release.py` uploads to the
+  `exe-latest` release and compares its `bundle_version` to the running
+  EXE's stamp (`_frozen.running_bundle_version()` reads
+  `_internal/_bundle_version.txt`). Comparison is by the timestamp
+  prefix (`is_newer_bundle_version`), with a notify-safe "any
+  difference ⇒ update" fallback when a stamp can't be parsed. When a
+  newer build is published the tray shows a balloon + a "Download
+  update…" menu entry that open the **release page** (not a raw ZIP
+  download). The tray also gains a manual **"Check for updates"** entry.
+  Checks run on a daemon thread (`gui._ExeUpdateController`), ~8 s after
+  launch and every 6 h; any failure folds into an `unknown` result and
+  never disturbs the overlay (silent on auto-checks, gentle "couldn't
+  check" only on a manual one). Disable via
+  `MULLIGAN_COACH_EXE_VERSION_URL=""`.
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as
