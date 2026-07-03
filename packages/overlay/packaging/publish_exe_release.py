@@ -240,6 +240,31 @@ def _invoke_build() -> None:
     subprocess.run([str(python), str(script)], check=True, cwd=REPO_ROOT)
 
 
+def stage_artifacts(dist_dir: Path, out_dir: Path, *, repo: str, tag: str) -> tuple[Path, Path]:
+    """Zip the bundle + write ``exe_version.json`` into *out_dir*.
+
+    The "produce the release artifacts" half of the publish flow, with
+    the "upload to GitHub" half omitted. Shared by :func:`main`'s upload
+    path (staging into a temp dir before ``gh release upload``) and by
+    the CI build workflow, which calls this via ``--stage-dir`` to grab
+    the same zip + sidecar as build outputs *without* touching any
+    release. Reusing one function keeps the zip layout and the sidecar
+    schema identical between a local publish and a CI build.
+
+    Returns ``(zip_path, version_json_path)``.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    bundle_version = _read_bundle_version(dist_dir)
+    zip_path = out_dir / _ZIP_NAME
+    _zip_bundle(dist_dir, zip_path)
+    version_payload = _build_version_sidecar(
+        bundle_version=bundle_version, zip_path=zip_path, repo=repo, tag=tag
+    )
+    version_json = out_dir / _VERSION_JSON_NAME
+    version_json.write_text(json.dumps(version_payload, indent=2), encoding="utf-8")
+    return zip_path, version_json
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=_DEFAULT_REPO, help="Public release host.")
@@ -254,6 +279,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Build the zip + version JSON locally but skip every gh call.",
     )
+    parser.add_argument(
+        "--stage-dir",
+        default=None,
+        help=(
+            "Write MulliganCoach.zip + exe_version.json into this directory and "
+            "stop — no gh calls, no release touched. Used by the CI build workflow "
+            "to collect the same artifacts a publish would, without publishing."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if not args.skip_build:
@@ -264,25 +298,29 @@ def main(argv: list[str] | None = None) -> int:
             "build_distribution.py failed (check its output)."
         )
 
+    # Non-publishing path: stage the artifacts to a durable directory and
+    # return. Everything below this branch is GitHub-release plumbing the
+    # CI build deliberately avoids (it uploads via actions/upload-artifact
+    # and never creates a release).
+    if args.stage_dir is not None:
+        zip_path, version_json = stage_artifacts(
+            DIST_DIR, Path(args.stage_dir), repo=args.repo, tag=args.tag
+        )
+        print(
+            f"staged {zip_path.name} ({zip_path.stat().st_size / 1e6:.1f} MB) + "
+            f"{version_json.name} to {args.stage_dir} (no upload)."
+        )
+        return 0
+
     bundle_version = _read_bundle_version(DIST_DIR)
     print(f"bundle_version = {bundle_version}")
 
     with tempfile.TemporaryDirectory(prefix="mulligan-coach-exe-publish-") as tmp:
         staging = Path(tmp)
-        zip_path = staging / _ZIP_NAME
 
-        print(f"zipping {DIST_DIR} -> {zip_path}")
-        _zip_bundle(DIST_DIR, zip_path)
+        print(f"zipping {DIST_DIR} -> {staging / _ZIP_NAME}")
+        zip_path, version_json = stage_artifacts(DIST_DIR, staging, repo=args.repo, tag=args.tag)
         print(f"zip size: {zip_path.stat().st_size / 1e6:.1f} MB")
-
-        version_payload = _build_version_sidecar(
-            bundle_version=bundle_version,
-            zip_path=zip_path,
-            repo=args.repo,
-            tag=args.tag,
-        )
-        version_json = staging / _VERSION_JSON_NAME
-        version_json.write_text(json.dumps(version_payload, indent=2), encoding="utf-8")
 
         if args.dry_run:
             print("\n----- exe_version.json (dry-run) -----")

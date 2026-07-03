@@ -145,3 +145,31 @@ def test_version_sidecar_is_json_serialisable(publisher_module: object, tmp_path
     )
     encoded = json.dumps(payload)
     assert json.loads(encoded) == payload
+
+
+def test_stage_artifacts_writes_zip_and_sidecar_without_gh(
+    publisher_module: object, tmp_path: Path
+) -> None:
+    """The CI ``--stage-dir`` path produces the same zip + sidecar the
+    publisher would upload, into a durable dir, with no gh interaction."""
+    dist = _make_fake_dist(tmp_path / "dist")
+    out_dir = tmp_path / "artifacts"
+
+    zip_path, version_json = publisher_module.stage_artifacts(  # type: ignore[attr-defined]
+        dist, out_dir, repo="vonbeschwitz/mulligan_coach_data", tag="exe-latest"
+    )
+
+    # Both artifacts land in out_dir under the canonical names.
+    assert zip_path == out_dir / "MulliganCoach.zip"
+    assert version_json == out_dir / "exe_version.json"
+    assert zip_path.is_file() and version_json.is_file()
+
+    # The zip has the same "extract → MulliganCoach/..." layout as a publish.
+    with zipfile.ZipFile(zip_path) as archive:
+        names = set(archive.namelist())
+    assert "MulliganCoach/MulliganCoach.exe" in names
+
+    # The sidecar carries the bundle stamp read from the fake dist.
+    payload = json.loads(version_json.read_text(encoding="utf-8"))
+    assert payload["bundle_version"] == "20260524T024048Z+c13b9a5"
+    assert payload["schema_version"] == 1
