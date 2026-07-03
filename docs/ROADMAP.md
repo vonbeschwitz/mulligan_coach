@@ -31,6 +31,13 @@ both.
   `vonbeschwitz/mulligan_coach_data` hosts auto-update artifacts
   (tag `data-current`). EXE = unsigned PyInstaller folder (~325 MB), built
   locally, shared as manual zip. Data auto-updates; EXE has no update channel.
+* 2026-07-03: owner decisions recorded in the going-public plan ("Owner
+  decisions 2026-07-03" section): no signing at launch (EXE updates
+  notify-only until signed), new sets must ship data-only (needs the
+  per-card-tolerant `load_parsed_cards` fix), feedback = Google Form +
+  Issues on the data repo, usage counting = download-count snapshots
+  before `--clobber`. Tray icon + manual-launch balloon shipped
+  (`overlay/tray.py`, `--autostart` flag in the Run entry).
 * MSH live on Arena since 2026-06-26; MSH decks currently get all-zero set
   one-hots at inference (indistinguishable from SOS to the model).
 
@@ -203,18 +210,37 @@ ratings automation.
 * Compliance note: read current MTGA ToS/CoC + Fan Content Policy + 17Lands
   usage guidelines + Scryfall guidelines; write one-page position
   (tool stays free; read-only line; takedown compliance). **Fable.**
-* Decide: open-source main repo? (recommended yes). Pick signing route
-  (Azure Trusted Signing ~$10/mo vs Certum OSS cert ~€69/yr — verify terms).
-  **Owner decision, Fable/Opus assist research.**
+* Decide: open-source main repo? (recommended yes). **Owner decision,
+  Fable/Opus assist research.**
+* ~~Pick signing route~~ — DECIDED 2026-07-03: skip signing at launch,
+  revisit if the tool gets traction. Consequence: EXE update channel is
+  notify-only until signed (unsigned self-update is an AV magnet).
 
 ### Step 8 — going-public Phase 1 (make it shippable, ~2–4 wks part-time)
-* EXE update channel: `app_version` + download URL in auto-update manifest
-  (additive, no schema bump) + "new version available" UI. **Opus.**
+* EXE update channel (notify-only): overlay polls the `exe_version.json`
+  sidecar `publish_exe_release.py` already uploads to `exe-latest`;
+  "new version available" UI + button opening the download/installer.
+  No silent self-replacement until signed. **Opus.**
+* Per-card-tolerant `load_parsed_cards` (cards/store.py): skip + log
+  cards that fail validation, surface the skip count as a degradation —
+  makes "new set = data-only push" safe when encodings use new enum
+  values on old EXEs. Small but load-bearing for the data channel.
+  **Opus implementation; Fable spec'd it (2026-07-03 discussion).**
 * CI build pipeline (GH Actions windows runner: sync → build_distribution →
-  sign → Inno Setup installer → release + manifest). **Opus.**
+  Inno Setup installer → release + manifest; unsigned for now, signing
+  slots in here later). **Opus.**
 * First-run wizard (Detailed Logs detection + guide; Arena-missing handling;
   Epic Games Store install path for Raw_CardDatabase; DPI/multi-monitor
-  pass). **Opus.**
+  pass). *Tray icon + manual-launch balloon DONE 2026-07-03
+  (`overlay/tray.py`; autostart launches stay silent via `--autostart`
+  Run-entry flag; tray menu = future home for Check-for-updates /
+  Send-feedback / diagnostics / About).* **Opus.**
+* Feedback channel: in-app "Send feedback" → pre-filled Google Form
+  (versions in URL params); Issues + templates on the public data repo.
+  **Opus.**
+* Download-count snapshotting in both publish scripts (`gh api` asset
+  counts → append-only log, BEFORE `--clobber` which resets them);
+  GoatCounter on the landing page. **Opus.**
 * Repo hygiene for open-sourcing: full-history secrets scan, anonymize log
   fixtures (screen names/clientMetadata), personal paths. **Opus does the
   sweep with tools; Fable does the final pre-flip review (one-way door).**
@@ -229,9 +255,12 @@ ratings automation.
   parsed for N min while Arena foreground"); AV false-positive submissions;
   winget manifest; scheduled ratings-refresh + publish Action; event-type
   detection + caveat (model is Premier-trained; users will run Sealed/
-  Quick/Bo3); Sealed support decision. **Opus.**
-* Full EXE self-update (swap-on-restart, file locking). **Fable** when
-  it happens.
+  Quick/Bo3); Sealed support decision; Discord if a community forms.
+  **Opus.**
+* Code signing (if the tool gets traction — Azure Trusted Signing vs
+  Certum OSS cert), THEN full EXE self-update (swap-on-restart, file
+  locking) — self-update is gated on signing per the 2026-07-03
+  decision. **Fable** when it happens.
 
 ### Recurring (every ~2 months per new set) — the real ongoing commitment
 * Encode new set (LLM sessions + audit) → **Fable** (top recurring
@@ -243,6 +272,6 @@ ratings automation.
 
 ## Top 3 release gates (from going-public plan)
 1. Written policy/compliance position.
-2. Code signing + CI release pipeline.
-3. EXE update channel (incl. slot rename) so problems are fixable
-   after strangers install.
+2. CI release pipeline (signing deferred per 2026-07-03 decision).
+3. EXE update channel — notify-only — (incl. slot rename, done) so
+   problems are fixable after strangers install.

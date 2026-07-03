@@ -124,3 +124,127 @@ def test_enable_default_skips_when_marker_present(
 
     assert autostart.enable_default_if_first_run(state) is False
     assert enable_calls == []
+
+
+# ---------------------------------------------------------------------------
+# --autostart launch flag
+# ---------------------------------------------------------------------------
+
+
+def test_pop_autostart_flag_removes_flag_and_reports_it() -> None:
+    """The flag is stripped (so Qt never sees it) and reported present.
+
+    The input list must not be mutated — ``main()`` hands in
+    ``sys.argv`` and other consumers may still read it.
+    """
+    argv = ["MulliganCoach.exe", "--autostart"]
+    cleaned, was_autostart = autostart.pop_autostart_flag(argv)
+    assert cleaned == ["MulliganCoach.exe"]
+    assert was_autostart is True
+    assert argv == ["MulliganCoach.exe", "--autostart"]
+
+
+def test_pop_autostart_flag_absent_is_manual_launch() -> None:
+    """No flag → manual launch; argv passes through unchanged."""
+    cleaned, was_autostart = autostart.pop_autostart_flag(["MulliganCoach.exe"])
+    assert cleaned == ["MulliganCoach.exe"]
+    assert was_autostart is False
+
+
+# ---------------------------------------------------------------------------
+# Stored Run-key command-line parsing
+# ---------------------------------------------------------------------------
+
+_FAKE_EXE = "C:\\fake dir\\MulliganCoach.exe"
+
+
+def test_parse_stored_command_current_format() -> None:
+    """Quoted path + --autostart flag (what ``enable()`` writes now)."""
+    value = f'"{_FAKE_EXE}" --autostart'
+    assert autostart._parse_stored_command(value) == Path(_FAKE_EXE).resolve()
+
+
+def test_parse_stored_command_legacy_quoted_format() -> None:
+    """Quoted path with no flag — written by pre-flag builds. Must
+    still parse so those installs read as enabled after an update."""
+    assert autostart._parse_stored_command(f'"{_FAKE_EXE}"') == Path(_FAKE_EXE).resolve()
+
+
+def test_parse_stored_command_unquoted_with_flag() -> None:
+    """Hand-edited unquoted entry: path up to the flag token."""
+    value = "C:\\fake\\MulliganCoach.exe --autostart"
+    assert autostart._parse_stored_command(value) == Path("C:\\fake\\MulliganCoach.exe").resolve()
+
+
+def test_parse_stored_command_rejects_garbage() -> None:
+    """Unclosed quote / empty values parse to None, not a bogus path."""
+    assert autostart._parse_stored_command('"unclosed') is None
+    assert autostart._parse_stored_command("") is None
+    assert autostart._parse_stored_command('""') is None
+
+
+# ---------------------------------------------------------------------------
+# ensure_entry_current (format migration)
+# ---------------------------------------------------------------------------
+
+
+def _make_supported(monkeypatch: pytest.MonkeyPatch, exe: Path) -> list[None]:
+    """Fake a frozen Windows build whose EXE is *exe*; stub ``enable``.
+
+    Returns the list that records ``enable()`` calls so tests can
+    assert whether a rewrite happened. ``_read_stored_value`` is left
+    for each test to stub — that's the input under test.
+    """
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(autostart, "_executable_path", lambda: exe.resolve())
+    enable_calls: list[None] = []
+    monkeypatch.setattr(autostart, "enable", lambda: enable_calls.append(None))
+    return enable_calls
+
+
+def test_ensure_entry_current_rewrites_legacy_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pre-flag entry pointing at this EXE gets rewritten once."""
+    exe = Path(_FAKE_EXE)
+    enable_calls = _make_supported(monkeypatch, exe)
+    monkeypatch.setattr(autostart, "_read_stored_value", lambda: f'"{exe}"')
+
+    autostart.ensure_entry_current()
+    assert len(enable_calls) == 1
+
+
+def test_ensure_entry_current_noop_when_already_current(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An entry already in canonical format is left untouched — no
+    registry write on every launch."""
+    exe = Path(_FAKE_EXE)
+    enable_calls = _make_supported(monkeypatch, exe)
+    monkeypatch.setattr(autostart, "_read_stored_value", autostart._entry_value)
+
+    autostart.ensure_entry_current()
+    assert enable_calls == []
+
+
+def test_ensure_entry_current_leaves_foreign_entry_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An entry pointing at a *different* EXE (older copy elsewhere)
+    belongs to that copy — migrating it would hijack the launch."""
+    enable_calls = _make_supported(monkeypatch, Path(_FAKE_EXE))
+    monkeypatch.setattr(
+        autostart, "_read_stored_value", lambda: '"C:\\elsewhere\\MulliganCoach.exe"'
+    )
+
+    autostart.ensure_entry_current()
+    assert enable_calls == []
+
+
+def test_ensure_entry_current_noop_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No Run entry at all (user un-ticked the toggle) → nothing to
+    migrate, and definitely no re-enabling behind their back."""
+    enable_calls = _make_supported(monkeypatch, Path(_FAKE_EXE))
+    monkeypatch.setattr(autostart, "_read_stored_value", lambda: None)
+
+    autostart.ensure_entry_current()
+    assert enable_calls == []

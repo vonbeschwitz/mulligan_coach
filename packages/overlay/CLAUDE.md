@@ -33,6 +33,7 @@ src/mulligan_coach_overlay/
 ├── card_index.py        # arena_id -> ParsedCard (MTGJSON + Arena DB merged)
 ├── coordinator.py       # State machine: events -> CoordinatorOutput
 ├── headless.py          # CLI: tail + recommend + print verdicts
+├── tray.py              # System tray icon + menu + manual-launch balloon
 └── gui.py               # PyQt6 overlay widget + Arena-follow + collapse hotkey
 tests/
 ├── fixtures/                  # Captured / synthesized Player.log snippets
@@ -193,6 +194,20 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   ``card_index.py`` arena_id backfill (still needed to resolve grpIds
   from the log) no longer influences feature values — the overlay and
   website now feed the model an identical stats distribution.
+* **System tray icon** (`tray.py`). The overlay window hides whenever
+  Arena isn't running, and Start-with-Windows is on by default — so
+  without a tray icon the app would frequently be running with zero
+  visible presence and no way to quit it. The tray icon is permanent
+  for the app's lifetime; its right-click menu holds Start-with-
+  Windows (mirrors the gear menu) and Quit. On a *manual* launch with
+  Arena closed it shows a one-shot balloon ("Mulligan Coach is
+  running — the overlay will appear when you open MTG Arena") so the
+  user knows the launch worked. Autostart launches are identified by
+  the `--autostart` flag baked into the registry Run entry
+  (`autostart.AUTOSTART_LAUNCH_FLAG`) and stay silent — no balloon at
+  every login. `autostart.ensure_entry_current()` migrates pre-flag
+  Run entries on launch. The icon itself is drawn programmatically
+  (no binary assets in the wheel).
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as

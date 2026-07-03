@@ -126,6 +126,16 @@ class ArenaWindowWatcher(QObject):
         """Stop polling. Idempotent."""
         self._timer.stop()
 
+    def last_state(self) -> WindowState | None:
+        """Most recently emitted state; ``None`` before the first poll.
+
+        :meth:`start` polls (and emits) synchronously, so callers that
+        need the initial state can read this right after calling it —
+        no need to subscribe to :data:`state_changed` just to learn
+        whether Arena was running at launch.
+        """
+        return self._last_state
+
     def set_overlay_hwnd(self, hwnd: int | None) -> None:
         """Tell the watcher which HWND is our own overlay.
 
