@@ -40,6 +40,17 @@ Qt-free and testable in isolation.
 from __future__ import annotations
 
 from .downloader import DownloadError, download_to_file, sha256_file
+from .exe_update import (
+    DEFAULT_EXE_VERSION_URL,
+    ExeUpdateChecker,
+    ExeUpdateResult,
+    ExeVersionInfo,
+    ExeVersionParseError,
+    is_newer_bundle_version,
+    manual_check_message,
+    parse_exe_version,
+    update_available_message,
+)
 from .manifest import (
     AUTO_UPDATE_SCHEMA_VERSION,
     Manifest,
@@ -51,13 +62,22 @@ from .runner import UpdateReport, UpdateRunner
 
 __all__ = [
     "AUTO_UPDATE_SCHEMA_VERSION",
+    "DEFAULT_EXE_VERSION_URL",
     "DownloadError",
+    "ExeUpdateChecker",
+    "ExeUpdateResult",
+    "ExeVersionInfo",
+    "ExeVersionParseError",
     "Manifest",
     "ManifestArtifact",
     "ManifestParseError",
     "UpdateReport",
     "UpdateRunner",
     "download_to_file",
+    "is_newer_bundle_version",
+    "manual_check_message",
+    "parse_exe_version",
     "parse_manifest",
     "sha256_file",
+    "update_available_message",
 ]
