@@ -63,7 +63,15 @@ populates without depending on the overlay's Arena-DB id backfill.
   ratings row, (3) set unknown to the loaded model (checked against the
   bundle's `feature_names`, not `DEFAULT_KNOWN_SETS`, so it catches both
   an out-of-vocab set and an old model), (4) pipeline-version mismatch
-  (`bundle.version_warning is not None`).
+  (`bundle.version_warning is not None`), (5) cards skipped on load —
+  the set's `parsed_cards` file held entries this app version couldn't
+  validate (a data-only push that used an enum value newer than the
+  running EXE), read from `cards.store`'s process-global skip registry
+  via `parsed_cards_skip_count(set_code)`. Producer 5 is the
+  roadmap Step 8 gate that makes "new set = data-only push" safe: an
+  unreadable encoding degrades one card, not the whole set. All five
+  render generically — the website/overlay/headless surfaces iterate
+  the tuple, so a new producer needs no rendering changes.
 * `stats_coverage: tuple[int, int] | None` — `(matched, total)` over
   deck *spell* instances (lands never feed WR features), matched via
   the folded-name join; `(0, n)` when no stats are loaded.

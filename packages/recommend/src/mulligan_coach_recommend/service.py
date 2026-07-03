@@ -54,6 +54,7 @@ from mulligan_coach_cards import (
     ParsedCard,
     SeventeenLandsStats,
     load_premier_draft_stats,
+    parsed_cards_skip_count,
     ratings_parquet_path,
 )
 from mulligan_coach_features import (
@@ -526,8 +527,9 @@ class ChoiceRecommendation:
 
     ``degradations`` holds short, user-readable strings describing any
     way the recommendation is running below full fidelity (no ratings
-    loaded, partial ratings coverage, set unknown to the model, or a
-    pipeline-version mismatch). Empty when everything is healthy;
+    loaded, partial ratings coverage, set unknown to the model, a
+    pipeline-version mismatch, or cards this app version couldn't read
+    when the set was loaded). Empty when everything is healthy;
     rendered in the website's verdict panel and the overlay footer so
     the mismatch is visible rather than silent. ``stats_coverage`` is
     ``(matched, total)`` over the deck's spell instances (lands
@@ -1235,7 +1237,8 @@ class RecommendationService:
     ) -> tuple[tuple[str, ...], tuple[int, int]]:
         """Build the degradation strings + stats-coverage for a recommendation.
 
-        Four producers, in this order (see roadmap Step 5 spec):
+        Five producers, in this order (producers 1-4 are the roadmap
+        Step 5 spec; producer 5 is the roadmap Step 8 data-channel gate):
 
         1. **No format stats loaded** — no ratings parquet for the set,
            so every per-card WR / z-score feature is zeroed.
@@ -1247,6 +1250,17 @@ class RecommendationService:
            old model that predates the vocabulary bump).
         4. **Pipeline version mismatch** — the loaded bundle was trained
            on an older simulator / feature pipeline (retrain pending).
+        5. **Cards skipped on load** — the set's ``parsed_cards`` file
+           held one or more entries this app version couldn't validate
+           (typically a data-only push that encodes cards with an enum
+           value newer than the running EXE). Those cards were skipped
+           by :func:`mulligan_coach_cards.load_parsed_cards`; updating
+           the app restores them. Read from the process-global skip
+           registry via :func:`parsed_cards_skip_count` — the same
+           process that loaded the cards runs this service, so the count
+           is already populated. This is what makes "new set = data-only
+           push" safe: an encoding the old EXE can't read degrades one
+           card, not the whole set, and the user is told to update.
 
         Coverage counts deck card *instances* that are spells (lands
         never feed WR features), matched via the folded-name join.
@@ -1285,6 +1299,17 @@ class RecommendationService:
             # Keep the full version_warning text in the log line (it's
             # already logged at bundle-load time); the UI string is short.
             degradations.append("Model was trained on an older feature pipeline — retrain pending.")
+
+        # Producer 5: cards this app version couldn't read when the set's
+        # parsed_cards file was loaded. Populated as a side effect of
+        # load_parsed_cards in the same process; 0 for a clean load (or a
+        # set never loaded this session — the safe default).
+        n_skipped = parsed_cards_skip_count(set_code)
+        if n_skipped > 0:
+            degradations.append(
+                f"{n_skipped} card(s) in {set_code} couldn't be read by this app "
+                "version — update the app for full coverage of this set."
+            )
 
         return tuple(degradations), stats_coverage
 
