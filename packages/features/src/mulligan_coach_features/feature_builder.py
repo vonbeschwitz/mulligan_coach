@@ -45,8 +45,11 @@ Inputs the builder needs:
 * ``hand`` and ``deck`` as lists of ``ParsedCard`` — the deck includes
   the hand (so deck-level features are over the full deck).
 * ``aggregate_stats`` — output of ``simulate(hand, library, ...)``.
-* ``shrunk`` and ``zscores`` — dicts keyed by ``arena_id`` (== mtga_id),
-  the shape ``shrink_stats`` / ``zscore_stats`` return.
+* ``shrunk`` and ``zscores`` — dicts keyed by folded card name
+  (``stats_join.fold_card_name``), the shape ``shrink_stats`` /
+  ``zscore_stats`` return. Looked up per card via
+  ``stats_join.stats_for_card`` (folded-name match + DFC front-face
+  fallback), so a card without an ``arena_id`` still joins.
 * ``on_the_play``, ``mulligan_number``, ``event_type``, ``set_code``
   — context. ``known_event_types`` / ``known_sets`` parameterise the
   one-hot columns so new sets at inference time get all-zero columns
@@ -64,6 +67,7 @@ from mulligan_coach_simulation import AggregateStats
 from . import categories as cat
 from .seventeenlands_shrinkage import ShrunkWinRates
 from .seventeenlands_zscores import CardZScores
+from .stats_join import stats_for_card
 
 # Z-bucket boundaries from features_list.md. Each card lands in exactly
 # one bucket per WR field (non-overlapping); cards with z=None drop out
@@ -106,29 +110,21 @@ def _safe_div(num: float, denom: float) -> float:
     return num / denom if denom else 0.0
 
 
-def _arena_id(card: ParsedCard) -> int | None:
-    """Convenience for the WR / z-score lookups, which key on arena_id."""
-    return card.arena_id
+def _shrunk_for(card: ParsedCard, shrunk: dict[str, ShrunkWinRates]) -> ShrunkWinRates | None:
+    """Lookup helper: folded-name join with DFC front-face fallback.
+
+    Returns ``None`` when the card has no ratings row. Independent of
+    ``arena_id`` — a freshly-rotated set whose printings MTGJSON hasn't
+    ingested still joins by name."""
+    return stats_for_card(card, shrunk)
 
 
-def _shrunk_for(card: ParsedCard, shrunk: dict[int, ShrunkWinRates]) -> ShrunkWinRates | None:
-    """Lookup helper: tolerates a card without an arena_id (returns
-    None) and a card whose arena_id isn't in ``shrunk`` (also None)."""
-    aid = _arena_id(card)
-    if aid is None:
-        return None
-    return shrunk.get(aid)
-
-
-def _zscores_for(card: ParsedCard, zscores: dict[int, CardZScores]) -> CardZScores | None:
+def _zscores_for(card: ParsedCard, zscores: dict[str, CardZScores]) -> CardZScores | None:
     """Same shape as :func:`_shrunk_for`, for z-scores."""
-    aid = _arena_id(card)
-    if aid is None:
-        return None
-    return zscores.get(aid)
+    return stats_for_card(card, zscores)
 
 
-def _z_oh(card: ParsedCard, zscores: dict[int, CardZScores]) -> float | None:
+def _z_oh(card: ParsedCard, zscores: dict[str, CardZScores]) -> float | None:
     """OH WR z-score for the card, or None if unknown."""
     cz = _zscores_for(card, zscores)
     if cz is None:
@@ -136,7 +132,7 @@ def _z_oh(card: ParsedCard, zscores: dict[int, CardZScores]) -> float | None:
     return cz.z_opening_hand_win_rate
 
 
-def _z_gd(card: ParsedCard, zscores: dict[int, CardZScores]) -> float | None:
+def _z_gd(card: ParsedCard, zscores: dict[str, CardZScores]) -> float | None:
     """GD WR z-score for the card, or None if unknown."""
     cz = _zscores_for(card, zscores)
     if cz is None:
@@ -144,10 +140,10 @@ def _z_gd(card: ParsedCard, zscores: dict[int, CardZScores]) -> float | None:
     return cz.z_drawn_win_rate
 
 
-def _is_high_oh(card: ParsedCard, zscores: dict[int, CardZScores]) -> bool:
+def _is_high_oh(card: ParsedCard, zscores: dict[str, CardZScores]) -> bool:
     """``z_OH > 0.5`` for the per-turn castability high-WR split.
 
-    Cards without a published z-score (no arena_id, or the format's
+    Cards without a published z-score (no ratings row, or the format's
     z-distribution had no signal) fall to False, conservatively — they
     aren't counted as high-WR.
     """
@@ -163,7 +159,7 @@ def _is_high_oh(card: ParsedCard, zscores: dict[int, CardZScores]) -> bool:
 def build_deck_features(
     deck: Sequence[ParsedCard],
     *,
-    shrunk: dict[int, ShrunkWinRates],
+    shrunk: dict[str, ShrunkWinRates],
 ) -> dict[str, float]:
     """Compute the 16 deck-level features per features_list.md.
 
@@ -223,17 +219,17 @@ def build_deck_features(
     return out
 
 
-def _shrunk_oh(c: ParsedCard, shrunk: dict[int, ShrunkWinRates]) -> float | None:
+def _shrunk_oh(c: ParsedCard, shrunk: dict[str, ShrunkWinRates]) -> float | None:
     s = _shrunk_for(c, shrunk)
     return None if s is None else s.shrunk_opening_hand_win_rate
 
 
-def _shrunk_gd(c: ParsedCard, shrunk: dict[int, ShrunkWinRates]) -> float | None:
+def _shrunk_gd(c: ParsedCard, shrunk: dict[str, ShrunkWinRates]) -> float | None:
     s = _shrunk_for(c, shrunk)
     return None if s is None else s.shrunk_drawn_win_rate
 
 
-def _shrunk_gih(c: ParsedCard, shrunk: dict[int, ShrunkWinRates]) -> float | None:
+def _shrunk_gih(c: ParsedCard, shrunk: dict[str, ShrunkWinRates]) -> float | None:
     s = _shrunk_for(c, shrunk)
     return None if s is None else s.shrunk_ever_drawn_win_rate
 
@@ -259,8 +255,8 @@ def build_hand_features(
     hand: Sequence[ParsedCard],
     deck: Sequence[ParsedCard],
     *,
-    shrunk: dict[int, ShrunkWinRates],
-    zscores: dict[int, CardZScores],
+    shrunk: dict[str, ShrunkWinRates],
+    zscores: dict[str, CardZScores],
     mulligan_number: int,
 ) -> dict[str, float]:
     """Compute the 72 hand-level features (excluding mana-availability,
@@ -426,7 +422,7 @@ def _sum_over(cards: Iterable[ParsedCard], extract: Callable[[ParsedCard], float
     return sum((v for c in cards if (v := extract(c)) is not None), 0.0)
 
 
-def _earliness_for(c: ParsedCard, shrunk: dict[int, ShrunkWinRates]) -> float | None:
+def _earliness_for(c: ParsedCard, shrunk: dict[str, ShrunkWinRates]) -> float | None:
     """Per-card earliness score = shrunk OH WR - shrunk GD WR.
 
     Front-loaded cards (early, situational, fade in the late game)
@@ -441,7 +437,7 @@ def _earliness_for(c: ParsedCard, shrunk: dict[int, ShrunkWinRates]) -> float | 
     return s.shrunk_opening_hand_win_rate - s.shrunk_drawn_win_rate
 
 
-def _shrinkage_weight_for(c: ParsedCard, shrunk: dict[int, ShrunkWinRates]) -> float | None:
+def _shrinkage_weight_for(c: ParsedCard, shrunk: dict[str, ShrunkWinRates]) -> float | None:
     """The single ``w`` from ShrunkWinRates — tells the model how much
     raw data is behind this card's WRs. None if the card has no entry."""
     s = _shrunk_for(c, shrunk)
@@ -479,7 +475,7 @@ def build_simulation_features(
     deck: Sequence[ParsedCard],
     *,
     aggregate_stats: AggregateStats,
-    zscores: dict[int, CardZScores],
+    zscores: dict[str, CardZScores],
 ) -> dict[str, float]:
     """Compute the 105 simulation-sourced features.
 
@@ -631,7 +627,7 @@ def _build_castability_features(
     hand: Sequence[ParsedCard],
     deck: Sequence[ParsedCard],
     stats: AggregateStats,
-    zscores: dict[int, CardZScores],
+    zscores: dict[str, CardZScores],
 ) -> dict[str, float]:
     """Build all 96 per-turn castability features.
 
@@ -826,8 +822,8 @@ def build_feature_row(
     hand: Sequence[ParsedCard],
     deck: Sequence[ParsedCard],
     aggregate_stats: AggregateStats,
-    shrunk: dict[int, ShrunkWinRates],
-    zscores: dict[int, CardZScores],
+    shrunk: dict[str, ShrunkWinRates],
+    zscores: dict[str, CardZScores],
     on_the_play: bool,
     mulligan_number: int,
     event_type: str,

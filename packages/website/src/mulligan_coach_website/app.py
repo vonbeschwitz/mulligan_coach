@@ -338,7 +338,10 @@ def recommend_route(
     # asked about (useful when the user's deck is, e.g., Sealed with
     # cards from two sets).
     primary_set = RecommendationService.primary_set_of(deck_cards)
-    set_stats_present = primary_set in service.stats_by_set if primary_set else False
+    # Degradation surfacing (no stats loaded / partial coverage / set
+    # unknown to the model / pipeline-version mismatch) rides on the
+    # recommendation itself (`rec.degradations` + `rec.stats_coverage`),
+    # so the route no longer needs a separate `set_stats_present` flag.
     return templates.TemplateResponse(
         request,
         "_recommendation.html",
@@ -346,7 +349,6 @@ def recommend_route(
             "recommendation": recommendation,
             "error": None,
             "primary_set": primary_set,
-            "set_stats_present": set_stats_present,
             "on_the_play": on_the_play,
             "mulligan_number": mulligan_number,
         },
@@ -438,7 +440,6 @@ def _render_recommendation_error(request: Request, error: str) -> HTMLResponse:
             "recommendation": None,
             "error": error,
             "primary_set": None,
-            "set_stats_present": False,
             "on_the_play": True,
             "mulligan_number": 0,
         },

@@ -37,12 +37,12 @@ from mulligan_coach_simulation.stats import AggregateStats, CardStats
 # ---------------------------------------------------------------------------
 
 
-def _empty_shrunk() -> dict[int, ShrunkWinRates]:
+def _empty_shrunk() -> dict[str, ShrunkWinRates]:
     """Empty stats — exercises the "no 17Lands data" path."""
     return {}
 
 
-def _empty_zscores() -> dict[int, CardZScores]:
+def _empty_zscores() -> dict[str, CardZScores]:
     return {}
 
 
@@ -196,19 +196,20 @@ def test_deck_avg_wr_zero_when_no_stats() -> None:
     assert out["avg_gih_wr_of_spells"] == 0.0
 
 
-def test_deck_avg_wr_uses_arena_id_join() -> None:
-    """When two cards have arena_ids that match shrunk entries, the
-    avg WR is over those values."""
+def test_deck_avg_wr_uses_name_join() -> None:
+    """When two cards' names match shrunk entries, the avg WR is over
+    those values. The join is by name (arena_id-independent), so a card
+    with no ratings entry is skipped even if it has an arena_id."""
     deck = [
         f.forest(),
         f.vanilla_creature("A", "{G}", arena_id=1),
         f.vanilla_creature("B", "{1}{G}", arena_id=2),
-        # No arena_id → never joins; skipped in avg.
+        # No ratings entry for "C" → never joins; skipped in avg.
         f.vanilla_creature("C", "{2}{G}"),
     ]
     shrunk = {
-        1: f.make_shrunk(arena_id=1, oh=0.60, gd=0.55, gih=0.58),
-        2: f.make_shrunk(arena_id=2, oh=0.50, gd=0.45, gih=0.48),
+        "A": f.make_shrunk("A", oh=0.60, gd=0.55, gih=0.58),
+        "B": f.make_shrunk("B", oh=0.50, gd=0.45, gih=0.48),
     }
     out = build_deck_features(deck, shrunk=shrunk)
     assert out["avg_oh_wr_of_spells"] == pytest.approx(0.55)
@@ -352,10 +353,10 @@ def test_hand_z_buckets_partition() -> None:
         f.vanilla_creature("D", "{G}", arena_id=4),  # z = -1.0 → bottom
     ]
     zscores = {
-        1: f.make_zscores(arena_id=1, z_oh=2.0),
-        2: f.make_zscores(arena_id=2, z_oh=0.6),
-        3: f.make_zscores(arena_id=3, z_oh=-0.3),
-        4: f.make_zscores(arena_id=4, z_oh=-1.0),
+        "A": f.make_zscores("A", z_oh=2.0),
+        "B": f.make_zscores("B", z_oh=0.6),
+        "C": f.make_zscores("C", z_oh=-0.3),
+        "D": f.make_zscores("D", z_oh=-1.0),
     }
     out = build_hand_features(
         hand,
@@ -388,9 +389,9 @@ def test_hand_z_bucket_boundaries() -> None:
         f.vanilla_creature("C", "{G}", arena_id=12),  # z = -0.7 → mid_low (≥ -0.7)
     ]
     zscores = {
-        10: f.make_zscores(arena_id=10, z_oh=1.3),
-        11: f.make_zscores(arena_id=11, z_oh=0.4),
-        12: f.make_zscores(arena_id=12, z_oh=-0.7),
+        "A": f.make_zscores("A", z_oh=1.3),
+        "B": f.make_zscores("B", z_oh=0.4),
+        "C": f.make_zscores("C", z_oh=-0.7),
     }
     out = build_hand_features(
         hand,
@@ -405,10 +406,10 @@ def test_hand_z_bucket_boundaries() -> None:
 
 
 def test_hand_z_bucket_skips_none() -> None:
-    """Card without z-score (no arena_id / no entry in zscores) drops
-    out of all buckets — doesn't contribute to any count."""
+    """Card without z-score (no ratings entry) drops out of all
+    buckets — doesn't contribute to any count."""
     hand = [
-        f.vanilla_creature("A", "{G}"),  # no arena_id
+        f.vanilla_creature("A", "{G}"),  # no ratings entry
         f.vanilla_creature("B", "{G}", arena_id=1),  # no zscores entry
     ]
     out = build_hand_features(
@@ -429,8 +430,8 @@ def test_hand_wr_summaries_max_sum_avg_earliness() -> None:
         f.vanilla_creature("B", "{1}{G}", arena_id=2),
     ]
     shrunk = {
-        1: f.make_shrunk(arena_id=1, oh=0.60, gd=0.50, gih=0.55, weight=0.8),
-        2: f.make_shrunk(arena_id=2, oh=0.50, gd=0.55, gih=0.52, weight=0.6),
+        "A": f.make_shrunk("A", oh=0.60, gd=0.50, gih=0.55, weight=0.8),
+        "B": f.make_shrunk("B", oh=0.50, gd=0.55, gih=0.52, weight=0.6),
     }
     out = build_hand_features(
         hand,
@@ -616,8 +617,8 @@ def test_simulation_high_oh_split_filters_correctly() -> None:
         },
     )
     zscores = {
-        1: f.make_zscores(arena_id=1, z_oh=1.5),
-        2: f.make_zscores(arena_id=2, z_oh=0.2),
+        "Bomb": f.make_zscores("Bomb", z_oh=1.5),
+        "Filler": f.make_zscores("Filler", z_oh=0.2),
     }
     out = build_simulation_features(hand=[], deck=deck, aggregate_stats=aggregate, zscores=zscores)
     # high_oh: only the bomb counts. avg_count = 0.5, p_any = 0.5.
@@ -701,14 +702,57 @@ def test_build_feature_row_total_column_count() -> None:
         hand=hand,
         deck=deck,
         aggregate_stats=aggregate,
-        shrunk={42: f.make_shrunk(arena_id=42)},
-        zscores={42: f.make_zscores(arena_id=42)},
+        shrunk={"Bear": f.make_shrunk("Bear")},
+        zscores={"Bear": f.make_zscores("Bear")},
         on_the_play=True,
         mulligan_number=0,
         event_type="PremierDraft",
         set_code="TLA",
     )
     assert len(row) == 202
+
+
+def test_build_feature_row_name_join_populates_stats_without_arena_id() -> None:
+    """The whole point of Step 5: cards with ``arena_id=None`` still get
+    populated per-card WR / z-score features when the name-keyed stats
+    table has their rows. Under the old arena_id join every stats
+    feature here would have fallen to zero.
+    """
+    bear = f.vanilla_creature("Bear", "{1}{G}")
+    wolf = f.vanilla_creature("Wolf", "{2}{G}")
+    # Both have no arena_id — the v2 join would have zeroed every stats
+    # feature; the name join must still populate them.
+    assert bear.arena_id is None and wolf.arena_id is None
+    hand = [f.forest(), f.forest(), f.forest(), bear, bear, wolf, wolf]
+    deck = list(hand) + [f.forest()] * 11 + [bear] * 12 + [wolf] * 10
+    assert len(deck) == 40
+    aggregate = simulate(hand, deck[len(hand) :], n_runs=20, seed=0)
+    shrunk = {
+        "Bear": f.make_shrunk("Bear", oh=0.60, gd=0.55, gih=0.58),
+        "Wolf": f.make_shrunk("Wolf", oh=0.50, gd=0.48, gih=0.49),
+    }
+    zscores = {
+        "Bear": f.make_zscores("Bear", z_oh=1.5),  # > 1.3 bucket
+        "Wolf": f.make_zscores("Wolf", z_oh=0.6),  # 0.4..1.3 bucket
+    }
+    row = build_feature_row(
+        hand=hand,
+        deck=deck,
+        aggregate_stats=aggregate,
+        shrunk=shrunk,
+        zscores=zscores,
+        on_the_play=True,
+        mulligan_number=0,
+        event_type="PremierDraft",
+        set_code="TLA",
+    )
+    # Deck-level avg WR features are nonzero (the name join succeeded
+    # despite arena_id=None on every card).
+    assert row["avg_oh_wr_of_spells"] > 0.0
+    assert row["avg_gih_wr_of_spells"] > 0.0
+    # Hand z-bucket counts populate: 2 Bear copies at z=1.5, 2 Wolf at z=0.6.
+    assert row["n_spells_oh_z_gt_1_3"] == 2.0
+    assert row["n_spells_oh_z_0_4_to_1_3"] == 2.0
 
 
 def test_build_feature_row_no_key_collisions() -> None:

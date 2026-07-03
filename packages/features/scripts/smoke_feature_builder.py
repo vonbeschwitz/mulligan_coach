@@ -43,7 +43,7 @@ def main() -> None:
 
     # 2. Load 17Lands ratings + run the shrinkage / z-score chain.
     stats_lookup = load_premier_draft_stats(SET_CODE)
-    all_stats = list(stats_lookup.by_arena_id.values())
+    all_stats = list(stats_lookup.by_name.values())
     priors = compute_format_priors(all_stats)
     shrunk = shrink_stats(all_stats, priors=priors)
     distribution = compute_format_wr_distribution(shrunk.values())

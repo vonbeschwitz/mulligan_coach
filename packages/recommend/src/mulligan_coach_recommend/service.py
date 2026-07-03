@@ -61,10 +61,12 @@ from mulligan_coach_features import (
     ShrunkWinRates,
     build_feature_row,
     shrink_stats,
+    stats_for_card,
     zscore_stats,
 )
 from mulligan_coach_features.categories import cmc as _card_cmc
 from mulligan_coach_features.categories import is_land as _card_is_land
+from mulligan_coach_features.categories import is_spell as _card_is_spell
 from mulligan_coach_model import (
     ChoiceModelBundle,
     ModelBundle,
@@ -168,15 +170,16 @@ _MAX_MULLIGAN_NUMBER = 6
 class FormatStats:
     """Shrunk WR + z-score dicts for one (set, event_type) format.
 
-    Both dicts are keyed by 17Lands' ``mtga_id`` — the same id
-    ``ParsedCard.arena_id`` carries (when MTGJSON has caught up).
-    Cards whose arena_id is missing from these dicts produce zero
-    contribution to the per-card-stat features at inference time;
-    that's expected and the model is robust to it.
+    Both dicts are keyed by folded card name
+    (``mulligan_coach_features.fold_card_name``) — a pure function of
+    the 17Lands display name, independent of MTGJSON's arena_id lag.
+    Cards without a ratings row produce zero contribution to the
+    per-card-stat features at inference time (the same as at training),
+    which is what makes training and serving consistent.
     """
 
-    shrunk: dict[int, ShrunkWinRates]
-    zscores: dict[int, CardZScores]
+    shrunk: dict[str, ShrunkWinRates]
+    zscores: dict[str, CardZScores]
 
     @classmethod
     def build(cls, stats: Iterable[SeventeenLandsStats]) -> FormatStats:
@@ -197,7 +200,7 @@ def _try_load_format_stats(set_code: str) -> FormatStats | None:
     except Exception:
         log.exception("failed to load ratings parquet for %s at %s", set_code, path)
         return None
-    return FormatStats.build(lookup.by_arena_id.values())
+    return FormatStats.build(lookup.by_name.values())
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +270,7 @@ class HandCardPlayability:
     ``opening_hand_win_rate`` is the *shrunk* 17Lands OH WR for the
     card (pulled from the same shrunk table the choice model reads).
     ``None`` when the card has no 17Lands stats for the current format
-    (new printing, or arena_id not yet in the parquet).
+    (a card with no ratings row).
     """
 
     name: str
@@ -333,7 +336,7 @@ def _build_explanation(
     hand: list[ParsedCard],
     aggregate: AggregateStats,
     feature_row: dict[str, float],
-    shrunk: dict[int, ShrunkWinRates] | None = None,
+    shrunk: dict[str, ShrunkWinRates] | None = None,
 ) -> RecommendationExplanation:
     """Pull the explanatory subset out of the per-card stats + feature row.
 
@@ -345,11 +348,11 @@ def _build_explanation(
     and loses the per-card breakdown.
 
     ``shrunk`` (when provided) is the same ``ShrunkWinRates`` dict the
-    choice/win model reads — keyed by ``mtga_id`` (a.k.a. arena_id).
-    We pull the shrunk OH WR per hand card so the overlay's per-card
-    table can colour-code it the same way the model weights it.
-    Passing ``None`` (or a card whose arena_id isn't in the table)
-    just leaves the per-card OH WR field as ``None``.
+    choice/win model reads — keyed by folded card name. We pull the
+    shrunk OH WR per hand card so the overlay's per-card table can
+    colour-code it the same way the model weights it. Passing ``None``
+    (or a card with no ratings row) just leaves the per-card OH WR
+    field as ``None``.
     """
     shrunk = shrunk or {}
     per_card: list[HandCardPlayability] = []
@@ -365,15 +368,13 @@ def _build_explanation(
                 float(cs.p_castable_by_turn[3]),
             )
         is_land = _card_is_land(card)
-        # Per-card OH WR lookup. Arena_id is the canonical join key
-        # the shrunk table uses; cards without an arena_id (e.g. a
-        # printing MTGJSON hasn't ingested yet) just get None and
-        # the renderer shows a dash.
+        # Per-card OH WR lookup via the folded-name join (with DFC
+        # front-face fallback). Cards without a ratings row just get
+        # None and the renderer shows a dash.
         oh_wr: float | None = None
-        if card.arena_id is not None:
-            entry = shrunk.get(card.arena_id)
-            if entry is not None:
-                oh_wr = entry.shrunk_opening_hand_win_rate
+        entry = stats_for_card(card, shrunk)
+        if entry is not None:
+            oh_wr = entry.shrunk_opening_hand_win_rate
         mana_cost_raw = card.mana_cost.raw if card.mana_cost is not None else None
         per_card.append(
             HandCardPlayability(
@@ -522,6 +523,16 @@ class ChoiceRecommendation:
     surfaces a single "should-mulligan" percentage in 0..100 rather
     than two separate arms, since the choice model already collapses
     the decision into one signal.
+
+    ``degradations`` holds short, user-readable strings describing any
+    way the recommendation is running below full fidelity (no ratings
+    loaded, partial ratings coverage, set unknown to the model, or a
+    pipeline-version mismatch). Empty when everything is healthy;
+    rendered in the website's verdict panel and the overlay footer so
+    the mismatch is visible rather than silent. ``stats_coverage`` is
+    ``(matched, total)`` over the deck's spell instances (lands
+    excluded — they never feed WR features); ``None`` only on the
+    legacy paths that don't compute it.
     """
 
     verdict: Literal["clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan"]
@@ -530,6 +541,10 @@ class ChoiceRecommendation:
     mulligan_number_to: int
     n_sims: int
     explanation: RecommendationExplanation
+    # Immutable defaults so existing constructions (tests, legacy
+    # callers) keep working without passing the new fields.
+    degradations: tuple[str, ...] = ()
+    stats_coverage: tuple[int, int] | None = None
 
     @property
     def mulligan_percent(self) -> float:
@@ -1080,7 +1095,7 @@ class RecommendationService:
         # Look up shrunk OH WRs for the explanation's per-card panel.
         # The keep arm's feature build used the same dict, so this is
         # just a re-read — no extra computation.
-        keep_shrunk: dict[int, ShrunkWinRates] = {}
+        keep_shrunk: dict[str, ShrunkWinRates] = {}
         stats_keep = self.stats_by_set.get(set_code)
         if stats_keep is not None:
             keep_shrunk = stats_keep.shrunk
@@ -1179,7 +1194,7 @@ class RecommendationService:
             seed=seed,
         )
         verdict = _classify_choice_verdict(p_keep)
-        choice_shrunk: dict[int, ShrunkWinRates] = {}
+        choice_shrunk: dict[str, ShrunkWinRates] = {}
         stats_choice = self.stats_by_set.get(set_code)
         if stats_choice is not None:
             choice_shrunk = stats_choice.shrunk
@@ -1189,6 +1204,17 @@ class RecommendationService:
             feature_row=feature_row,
             shrunk=choice_shrunk,
         )
+        degradations, stats_coverage = self._choice_degradations(
+            set_code=set_code, deck=deck, stats=stats_choice
+        )
+        matched, total = stats_coverage
+        log.info(
+            "recommend_choice: set=%s coverage=%d/%d degradations=%s",
+            set_code,
+            matched,
+            total,
+            list(degradations),
+        )
         return ChoiceRecommendation(
             verdict=verdict,
             p_keep=p_keep,
@@ -1196,7 +1222,71 @@ class RecommendationService:
             mulligan_number_to=mulligan_number + 1,
             n_sims=n_sims,
             explanation=explanation,
+            degradations=degradations,
+            stats_coverage=stats_coverage,
         )
+
+    def _choice_degradations(
+        self,
+        *,
+        set_code: str,
+        deck: list[ParsedCard],
+        stats: FormatStats | None,
+    ) -> tuple[tuple[str, ...], tuple[int, int]]:
+        """Build the degradation strings + stats-coverage for a recommendation.
+
+        Four producers, in this order (see roadmap Step 5 spec):
+
+        1. **No format stats loaded** — no ratings parquet for the set,
+           so every per-card WR / z-score feature is zeroed.
+        2. **Partial stats coverage** — ratings present but some deck
+           spells have no ratings row (their WR signal is missing).
+        3. **Set unknown to the loaded model** — the model's feature
+           vocabulary has no ``set_code_<set>`` column, so it can't
+           apply format-specific adjustments (out-of-vocab set OR an
+           old model that predates the vocabulary bump).
+        4. **Pipeline version mismatch** — the loaded bundle was trained
+           on an older simulator / feature pipeline (retrain pending).
+
+        Coverage counts deck card *instances* that are spells (lands
+        never feed WR features), matched via the folded-name join.
+        Returns ``(degradations, (matched, total))``; ``(0, n)`` when no
+        stats are loaded.
+        """
+        assert self.choice_bundle is not None  # checked by caller
+        degradations: list[str] = []
+
+        deck_spells = [c for c in deck if _card_is_spell(c)]
+        n = len(deck_spells)
+
+        if stats is None:
+            degradations.append(
+                f"No 17Lands ratings loaded for {set_code} — per-card win-rate features are zeroed."
+            )
+            stats_coverage = (0, n)
+        else:
+            k = sum(1 for c in deck_spells if stats_for_card(c, stats.shrunk) is None)
+            stats_coverage = (n - k, n)
+            if k > 0:
+                degradations.append(
+                    f"{k} of {n} deck spells have no 17Lands ratings row — "
+                    "their win-rate signal is missing."
+                )
+
+        # Checked against the MODEL's columns (not DEFAULT_KNOWN_SETS):
+        # catches both an out-of-vocabulary set and an old model that
+        # predates the vocabulary bump.
+        if f"set_code_{set_code}" not in self.choice_bundle.feature_names:
+            degradations.append(
+                f"Model was trained before {set_code} — format-specific adjustments unavailable."
+            )
+
+        if self.choice_bundle.version_warning is not None:
+            # Keep the full version_warning text in the log line (it's
+            # already logged at bundle-load time); the UI string is short.
+            degradations.append("Model was trained on an older feature pipeline — retrain pending.")
+
+        return tuple(degradations), stats_coverage
 
     def _compute_choice_arm(
         self,
@@ -1447,8 +1537,8 @@ def _predict_levels_for_hand(
     on_the_play: bool,
     opp_mulligan_number: int | None,
     set_code: str,
-    shrunk: dict[int, ShrunkWinRates],
-    zscores: dict[int, CardZScores],
+    shrunk: dict[str, ShrunkWinRates],
+    zscores: dict[str, CardZScores],
     mulligan_levels: tuple[int, ...],
     n_sims: int,
     seed: int,

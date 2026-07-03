@@ -41,6 +41,7 @@ from mulligan_coach_features import (
     compute_format_priors,
     compute_format_wr_distribution,
     shrink_stats,
+    stats_for_card,
     zscore_stats,
 )
 from mulligan_coach_model import ModelBundle
@@ -86,7 +87,7 @@ def main() -> None:
     t0 = time.time()
     cards = list(load_parsed_cards("TLA"))
     stats_lookup = load_premier_draft_stats("TLA")
-    stats_list = list(stats_lookup.by_arena_id.values())
+    stats_list = list(stats_lookup.by_name.values())
     priors = compute_format_priors(stats_list)
     shrunk_dict = shrink_stats(stats_list, priors=priors)
     shrunk_list = list(shrunk_dict.values())
@@ -101,12 +102,11 @@ def main() -> None:
     log.info(f"Setup wall: {time.time() - t0:.1f}s")
 
     # Build a shrunk-OH-WR lookup keyed by `Card` for the bottoming
-    # heuristic's rule S4. We resolve by `parsed.arena_id` (== mtga_id).
+    # heuristic's rule S4. The stats dict is name-keyed (folded), so we
+    # resolve via the shared folded-name join with DFC front-face
+    # fallback.
     def oh_wr(c: Card) -> float | None:
-        aid = c.parsed.arena_id
-        if aid is None:
-            return None
-        s = shrunk_dict.get(aid)
+        s = stats_for_card(c.parsed, shrunk_dict)
         return None if s is None else s.shrunk_opening_hand_win_rate
 
     log.info(f"Sampling {N_HANDS_TO_VALIDATE} hands from TLA PremierDraft...")

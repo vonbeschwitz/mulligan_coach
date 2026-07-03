@@ -182,6 +182,17 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   call) so the panel can flash a "Running simulation…" amber
   state. Lets the user tell the difference between Arena-log
   delivery delay and sim time.
+* **Degradation footer.** The choice recommendation's ``degradations``
+  (no ratings loaded / partial coverage / set unknown to the model /
+  pipeline-version mismatch — see ``packages/recommend/CLAUDE.md``) are
+  shown in the expanded panel as a small amber word-wrapped label under
+  the context footer (strings joined with ``"  ·  "``; hidden when
+  empty). The compact pill has no room for prose, so it appends a
+  single ``" ⚠"`` to the verdict text when any degradation is present.
+  The stats join is keyed by folded card name, so the overlay's
+  ``card_index.py`` arena_id backfill (still needed to resolve grpIds
+  from the log) no longer influences feature values — the overlay and
+  website now feed the model an identical stats distribution.
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as

@@ -739,9 +739,13 @@ parametrised directly.
   these 7 were actually playable." This is the best we can do
   with the 17Lands data shape; 17Lands doesn't record which
   cards were bottomed.
-* MTGJSON's arena_id lag affects all three current sets (TLA, ECL,
-  TMT have ``arena_id=None`` on every ParsedCard). The downstream
-  feature builder's `avg_*_wr_of_*` / Z-bucket-count features fall
-  to 0 as a result. The model still trains (per-card features are
-  a small fraction of the 200) but per-card signal is weak until
-  MTGJSON catches up.
+* ~~MTGJSON's arena_id lag zeroes the feature builder's per-card WR /
+  Z-bucket features.~~ **Superseded by roadmap Step 5:** the 17Lands
+  stats join is now keyed by folded card name, not arena_id, so
+  per-card WR / z-score features populate for every card with a
+  ratings row regardless of MTGJSON coverage (see
+  `packages/features/CLAUDE.md` § "Stats join"). This bumped
+  `FEATURES_SEMANTICS_VERSION` 2 → 3; caches built under v2 must be
+  re-materialised (`--overwrite`) and the models retrained before the
+  next promotion — until then a trained model loaded against v3 code
+  surfaces the pipeline-version degradation.

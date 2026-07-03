@@ -44,6 +44,35 @@ mulligan-arm floor, model loading) live next to each other and
 reading them in order tells one coherent story. If the file grows
 past ~1500 lines or a piece develops its own tests, split then.
 
+## FormatStats keying + degradation surfacing (Step 5)
+
+`FormatStats.shrunk` / `.zscores` are keyed by **folded card name**
+(`mulligan_coach_features.fold_card_name`), not arena_id — a pure
+function of `(card name, ratings parquet)` that's identical across
+training materialisation, website, and overlay. `_try_load_format_stats`
+builds them from `StatsLookup.by_name.values()`; `_build_explanation`
+resolves per-card OH WR via `stats_for_card(card, shrunk)` (folded-name
+match + DFC front-face fallback), so the website's per-card WR column
+populates without depending on the overlay's Arena-DB id backfill.
+
+`recommend_choice` attaches two fields to `ChoiceRecommendation`:
+
+* `degradations: tuple[str, ...]` — short user-readable strings, built
+  by `_choice_degradations` in a fixed order: (1) no ratings loaded for
+  the set, (2) partial coverage — *k* of *n* deck spells have no
+  ratings row, (3) set unknown to the loaded model (checked against the
+  bundle's `feature_names`, not `DEFAULT_KNOWN_SETS`, so it catches both
+  an out-of-vocab set and an old model), (4) pipeline-version mismatch
+  (`bundle.version_warning is not None`).
+* `stats_coverage: tuple[int, int] | None` — `(matched, total)` over
+  deck *spell* instances (lands never feed WR features), matched via
+  the folded-name join; `(0, n)` when no stats are loaded.
+
+Both have immutable defaults (`()` / `None`) so legacy constructions
+keep working. `recommend_choice` also emits one `log.info` per call:
+`recommend_choice: set=%s coverage=%d/%d degradations=%s` (review item
+#2c). The legacy `recommend_asymmetric` path gets none of this.
+
 ## Design rationale
 
 See `packages/website/CLAUDE.md` § "Recommendation pipeline" — the

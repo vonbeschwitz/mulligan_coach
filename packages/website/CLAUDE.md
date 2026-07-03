@@ -288,10 +288,21 @@ instead of just `p_win`, and `recommend_asymmetric` packs a
 `RecommendationExplanation` onto the recommendation. The template
 renders it under the verdict + delta paragraph.
 
+### Degradation surfacing
+
+`_recommendation.html` renders the choice recommendation's
+`degradations` (each as a small `warn` line) and `stats_coverage`
+(inline, e.g. `17Lands data: 21/23 spells`) under the "Format: …"
+paragraph. The `/recommend` route no longer computes a separate
+`set_stats_present` flag — the coverage/degradation signal rides on the
+`ChoiceRecommendation` itself (see `packages/recommend/CLAUDE.md`
+§ FormatStats keying). `_validation.html` / `/validate` are untouched.
+
 ### Model loading
 
 The trained ModelBundle and per-format shrunk WR / z-score dicts
-are built once at app startup inside the FastAPI lifespan handler
+(keyed by folded card name, not arena_id) are built once at app
+startup inside the FastAPI lifespan handler
 and stashed on `app.state.service`. Loading is conditional: if
 `MULLIGAN_COACH_MODEL_DIR` doesn't exist, the app boots in
 "sim-only" mode — every `/recommend` call returns a clear error

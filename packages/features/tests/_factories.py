@@ -334,17 +334,23 @@ def token_maker(
 
 
 def make_shrunk(
-    arena_id: int,
-    *,
     name: str = "Test",
+    *,
+    mtga_id: int = 0,
     oh: float | None = 0.55,
     gd: float | None = 0.54,
     gih: float | None = 0.545,
     weight: float = 0.8,
 ) -> ShrunkWinRates:
-    """Construct a ShrunkWinRates row for the given arena_id."""
+    """Construct a ShrunkWinRates row for the given card name.
+
+    The stats tables are keyed by folded card name (the arena_id-
+    independent join key), so ``name`` is what the feature builder
+    looks up — pass the card's name and key the dict by it. ``mtga_id``
+    is retained only as an informational field.
+    """
     return ShrunkWinRates(
-        mtga_id=arena_id,
+        mtga_id=mtga_id,
         name=name,
         shrunk_opening_hand_win_rate=oh,
         shrunk_drawn_win_rate=gd,
@@ -354,16 +360,20 @@ def make_shrunk(
 
 
 def make_zscores(
-    arena_id: int,
-    *,
     name: str = "Test",
+    *,
+    mtga_id: int = 0,
     z_oh: float | None = 0.0,
     z_gd: float | None = 0.0,
     z_gih: float | None = 0.0,
 ) -> CardZScores:
-    """Construct a CardZScores row for the given arena_id."""
+    """Construct a CardZScores row for the given card name.
+
+    Keyed by folded card name like :func:`make_shrunk`; ``mtga_id`` is
+    informational only.
+    """
     return CardZScores(
-        mtga_id=arena_id,
+        mtga_id=mtga_id,
         name=name,
         z_opening_hand_win_rate=z_oh,
         z_drawn_win_rate=z_gd,

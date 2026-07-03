@@ -401,7 +401,7 @@ def _init_worker(model_dir_str: str, sets: tuple[str, ...]) -> None:
     global _WORKER_SERVICE
     bundle = ModelBundle.load(Path(model_dir_str))
     stats_by_set = {
-        s: FormatStats.build(load_premier_draft_stats(s).by_arena_id.values()) for s in sets
+        s: FormatStats.build(load_premier_draft_stats(s).by_name.values()) for s in sets
     }
     _WORKER_SERVICE = RecommendationService(bundle=bundle, stats_by_set=stats_by_set)
 

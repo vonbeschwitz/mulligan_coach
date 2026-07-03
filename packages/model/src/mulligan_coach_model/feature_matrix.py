@@ -176,11 +176,12 @@ class _FormatStats:
     """Pre-computed shrunk / zscore lookups for one ``(set, event_type)``.
 
     Same shape :func:`build_feature_row` consumes; we compute it
-    once per format rather than once per row.
+    once per format rather than once per row. Both dicts are keyed by
+    folded card name (``mulligan_coach_features.fold_card_name``).
     """
 
-    shrunk: dict[int, ShrunkWinRates]
-    zscores: dict[int, CardZScores]
+    shrunk: dict[str, ShrunkWinRates]
+    zscores: dict[str, CardZScores]
 
 
 def _build_format_stats(set_code: str, data_root: Path | None = None) -> _FormatStats:
@@ -191,7 +192,7 @@ def _build_format_stats(set_code: str, data_root: Path | None = None) -> _Format
     used to eyeball the feature builder during development.
     """
     stats_lookup = load_premier_draft_stats(set_code, data_root=data_root)
-    all_stats = list(stats_lookup.by_arena_id.values())
+    all_stats = list(stats_lookup.by_name.values())
     priors = compute_format_priors(all_stats)
     shrunk = shrink_stats(all_stats, priors=priors)
     distribution = compute_format_wr_distribution(shrunk.values())

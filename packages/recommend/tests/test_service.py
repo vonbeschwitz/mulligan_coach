@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import math
 import random
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -40,6 +41,7 @@ from mulligan_coach_cards import (
     RoleFeatures,
     parse_mana_cost,
 )
+from mulligan_coach_features import CardZScores, ShrunkWinRates
 from mulligan_coach_model import ChoiceModelBundle
 from mulligan_coach_recommend import service as service_module
 from mulligan_coach_recommend.service import (
@@ -47,6 +49,7 @@ from mulligan_coach_recommend.service import (
     CHOICE_MARGINAL_KEEP_THRESHOLD,
     CHOICE_MARGINAL_MULL_THRESHOLD,
     ChoiceRecommendation,
+    FormatStats,
     RecommendationService,
     ServiceStatus,
     _classify_choice_verdict,
@@ -55,6 +58,12 @@ from mulligan_coach_recommend.service import (
     _stable_seed,
 )
 from mulligan_coach_simulation import AggregateStats, simulate
+
+# Default choice-model feature vocabulary the stub bundle advertises.
+# Includes ``set_code_TLA`` so the synthetic mono-G deck (bears are
+# ``set_code="TLA"``) is in-vocabulary and doesn't trip producer 3
+# unless a test deliberately drops it.
+_STUB_FEATURE_NAMES: tuple[str, ...] = ("set_code_TLA", "on_the_play", "mulligan_number")
 
 # ---------------------------------------------------------------------------
 # Synthetic card factories (mono-G forest + bear — enough for the
@@ -123,23 +132,52 @@ def _make_hand_and_deck(deck_size: int = 40) -> tuple[list[ParsedCard], list[Par
 # ---------------------------------------------------------------------------
 
 
-def _service(*, model_loaded: bool = True) -> RecommendationService:
-    """A service whose choice model is a stand-in sentinel.
+def _stub_bundle(
+    *,
+    feature_names: tuple[str, ...] = _STUB_FEATURE_NAMES,
+    version_warning: str | None = None,
+) -> ChoiceModelBundle:
+    """A stand-in choice bundle.
 
-    ``recommend_choice`` only passes ``choice_bundle`` to the predictor,
-    which the tests replace, so a bare sentinel is enough. When
-    ``model_loaded`` is False the bundle is ``None`` (the "model not
-    loaded" guard path).
+    ``recommend_choice`` passes ``choice_bundle`` to the (stubbed)
+    predictor and reads ``feature_names`` / ``version_warning`` for the
+    degradation checks — so a light ``SimpleNamespace`` carrying just
+    those two attributes is enough; the real booster is never touched.
     """
-    bundle = cast(ChoiceModelBundle, object()) if model_loaded else None
+    return cast(
+        ChoiceModelBundle,
+        SimpleNamespace(feature_names=feature_names, version_warning=version_warning),
+    )
+
+
+def _service(
+    *,
+    model_loaded: bool = True,
+    feature_names: tuple[str, ...] = _STUB_FEATURE_NAMES,
+    version_warning: str | None = None,
+    stats_by_set: dict[str, FormatStats] | None = None,
+) -> RecommendationService:
+    """A service whose choice model is a light stand-in bundle.
+
+    ``recommend_choice`` only passes ``choice_bundle`` to the predictor
+    (which the tests replace) plus reads its ``feature_names`` /
+    ``version_warning`` for degradation surfacing, so the stub bundle is
+    enough. When ``model_loaded`` is False the bundle is ``None`` (the
+    "model not loaded" guard path).
+    """
+    bundle = (
+        _stub_bundle(feature_names=feature_names, version_warning=version_warning)
+        if model_loaded
+        else None
+    )
     return RecommendationService(
         bundle=None,
         choice_bundle=bundle,
-        stats_by_set={},
+        stats_by_set=stats_by_set or {},
         status=ServiceStatus(
             model_loaded=model_loaded,
             model_dir=None,
-            formats_with_stats=[],
+            formats_with_stats=sorted(stats_by_set or {}),
             formats_missing_stats=[],
         ),
     )
@@ -426,3 +464,168 @@ class TestRecommendChoiceGuards:
                 opp_mulligan_number=None,
                 n_sims=5,
             )
+
+
+# ---------------------------------------------------------------------------
+# Degradation surfacing + stats coverage (roadmap Step 5)
+# ---------------------------------------------------------------------------
+
+
+def _shrunk_row(name: str) -> ShrunkWinRates:
+    """A minimal ShrunkWinRates row for the given card name."""
+    return ShrunkWinRates(
+        mtga_id=0,
+        name=name,
+        shrunk_opening_hand_win_rate=0.55,
+        shrunk_drawn_win_rate=0.54,
+        shrunk_ever_drawn_win_rate=0.545,
+        weight=0.8,
+    )
+
+
+def _format_stats(*names: str) -> FormatStats:
+    """A FormatStats whose shrunk table has an entry per given card name.
+
+    Keys are the (ASCII, already-folded) names; ``zscores`` is left
+    empty — the degradation coverage count only reads ``shrunk``.
+    """
+    shrunk: dict[str, ShrunkWinRates] = {name: _shrunk_row(name) for name in names}
+    zscores: dict[str, CardZScores] = {}
+    return FormatStats(shrunk=shrunk, zscores=zscores)
+
+
+def _mixed_deck() -> tuple[list[ParsedCard], list[ParsedCard]]:
+    """7-card hand + 40-card deck with two distinct spell names.
+
+    17 Forest + 20 Bear + 3 Wolf → 23 deck spells across two names, so a
+    ratings table holding only "Bear" leaves exactly 3 spells uncovered.
+    """
+    forest = _forest()
+    bear = _bear(name="Bear")
+    wolf = _bear(name="Wolf")
+    hand = [forest] * 3 + [bear] * 4
+    deck = [forest] * 17 + [bear] * 20 + [wolf] * 3
+    return hand, deck
+
+
+class TestDegradations:
+    def test_no_stats_loaded_producer_1(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_stubs(monkeypatch, p_keep=0.6)
+        svc = _service(stats_by_set={})  # no ratings for any set
+        hand, deck = _make_hand_and_deck()  # 17 lands + 23 Bear spells
+
+        rec = svc.recommend_choice(
+            hand=hand,
+            deck=deck,
+            on_the_play=True,
+            mulligan_number=0,
+            opp_mulligan_number=None,
+            n_sims=5,
+        )
+        # Producer 1: no ratings loaded; coverage is (0, n_spells).
+        assert rec.stats_coverage == (0, 23)
+        assert len(rec.degradations) == 1
+        assert "No 17Lands ratings loaded for TLA" in rec.degradations[0]
+
+    def test_partial_coverage_producer_2(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_stubs(monkeypatch, p_keep=0.6)
+        # Table covers "Bear" but not "Wolf" → 3 of 23 spells uncovered.
+        svc = _service(stats_by_set={"TLA": _format_stats("Bear")})
+        hand, deck = _mixed_deck()
+
+        rec = svc.recommend_choice(
+            hand=hand,
+            deck=deck,
+            on_the_play=True,
+            mulligan_number=0,
+            opp_mulligan_number=None,
+            n_sims=5,
+        )
+        assert rec.stats_coverage == (20, 23)
+        assert len(rec.degradations) == 1
+        assert "3 of 23 deck spells have no 17Lands ratings row" in rec.degradations[0]
+
+    def test_set_unknown_to_model_producer_3(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_stubs(monkeypatch, p_keep=0.6)
+        # Model vocabulary lacks set_code_TLA → producer 3. Stats present
+        # and fully covering, so producers 1 and 2 stay quiet.
+        svc = _service(
+            feature_names=("on_the_play", "mulligan_number"),
+            stats_by_set={"TLA": _format_stats("Bear")},
+        )
+        hand, deck = _make_hand_and_deck()
+
+        rec = svc.recommend_choice(
+            hand=hand,
+            deck=deck,
+            on_the_play=True,
+            mulligan_number=0,
+            opp_mulligan_number=None,
+            n_sims=5,
+        )
+        assert rec.stats_coverage == (23, 23)
+        assert rec.degradations == (
+            "Model was trained before TLA — format-specific adjustments unavailable.",
+        )
+
+    def test_version_mismatch_producer_4(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_stubs(monkeypatch, p_keep=0.6)
+        svc = _service(
+            version_warning="model versions {sim:0} differ from live {sim:1}",
+            stats_by_set={"TLA": _format_stats("Bear")},
+        )
+        hand, deck = _make_hand_and_deck()
+
+        rec = svc.recommend_choice(
+            hand=hand,
+            deck=deck,
+            on_the_play=True,
+            mulligan_number=0,
+            opp_mulligan_number=None,
+            n_sims=5,
+        )
+        assert rec.degradations == (
+            "Model was trained on an older feature pipeline — retrain pending.",
+        )
+
+    def test_healthy_call_has_no_degradations(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_stubs(monkeypatch, p_keep=0.6)
+        svc = _service(stats_by_set={"TLA": _format_stats("Bear")})
+        hand, deck = _make_hand_and_deck()
+
+        rec = svc.recommend_choice(
+            hand=hand,
+            deck=deck,
+            on_the_play=True,
+            mulligan_number=0,
+            opp_mulligan_number=None,
+            n_sims=5,
+        )
+        assert rec.degradations == ()
+        assert rec.stats_coverage == (23, 23)
+
+    def test_construct_without_new_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Constructing ChoiceRecommendation without the new fields still
+        works (immutable defaults) — legacy call sites keep compiling."""
+        _install_stubs(monkeypatch, p_keep=0.6)
+        svc = _service(stats_by_set={"TLA": _format_stats("Bear")})
+        hand, deck = _make_hand_and_deck()
+        rec = svc.recommend_choice(
+            hand=hand,
+            deck=deck,
+            on_the_play=True,
+            mulligan_number=0,
+            opp_mulligan_number=None,
+            n_sims=5,
+        )
+        # Reuse the real explanation but omit degradations / stats_coverage.
+        bare = ChoiceRecommendation(
+            verdict=rec.verdict,
+            p_keep=rec.p_keep,
+            mulligan_number_from=0,
+            mulligan_number_to=1,
+            n_sims=5,
+            explanation=rec.explanation,
+        )
+        assert bare.degradations == ()
+        assert bare.stats_coverage is None

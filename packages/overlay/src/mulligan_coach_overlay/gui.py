@@ -143,6 +143,10 @@ _QT_WIDGETSIZE_MAX = 16_777_215
 _PANEL_BG = QColor(20, 20, 24, 235)
 _PANEL_BORDER = QColor(60, 60, 70, 255)
 
+# Amber for the degradation footer — same warning register as the
+# website's `.warn` lines, distinct from the verdict colours.
+_DEGRADATION_COLOR = "#d9a648"
+
 # Alt+E is the collapse / expand toggle (see the
 # :class:`_KeyboardHook` block below for the binding). Picked over
 # the previous Ctrl+Shift+M because Arena binds Ctrl combos
@@ -570,6 +574,16 @@ class OverlayWindow(QWidget):
         self._context_label.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 10px;")
         outer.addWidget(self._context_label)
 
+        # Degradation footer (expanded layout only). Amber, word-wrapped,
+        # hidden when there's nothing to warn about. Surfaces the choice
+        # recommendation's `degradations` (no ratings loaded / partial
+        # coverage / set unknown to the model / pipeline-version
+        # mismatch) so a below-full-fidelity verdict isn't silent.
+        self._degradations_label = QLabel("")
+        self._degradations_label.setStyleSheet(f"color: {_DEGRADATION_COLOR}; font-size: 10px;")
+        self._degradations_label.setWordWrap(True)
+        outer.addWidget(self._degradations_label)
+
     def _position_top_right(self) -> None:
         """Flush top-right of the primary screen.
 
@@ -679,6 +693,7 @@ class OverlayWindow(QWidget):
             self._mull_label.setVisible(False)
             self._stats_label.setVisible(False)
             self._context_label.setVisible(False)
+            self._degradations_label.setVisible(False)
             self._verdict_label.setStyleSheet(
                 f"color: {_TEXT_PRIMARY}; font-size: 12px; font-weight: 700;"
             )
@@ -713,6 +728,7 @@ class OverlayWindow(QWidget):
             self._mull_label.setVisible(True)
             self._stats_label.setVisible(True)
             self._context_label.setVisible(True)
+            self._degradations_label.setVisible(True)
             if outer is not None:
                 outer.setContentsMargins(10, 4, 10, 6)
             # Undo the compact-mode constraints (which had no fixed
@@ -894,11 +910,14 @@ class OverlayWindow(QWidget):
         # is 100 - that, rounded to a single percent so the user reads
         # one stable digit count rather than 47.3% vs 51.8%.
         mull_pct = rec.mulligan_percent
+        degradations = tuple(rec.degradations)
         if self._compact:
             # Compact pill: "Clear keep · mull 12%". One signed number
             # is enough once the user knows the model is reporting a
-            # mulligan tendency, not two arms.
-            text = f"{short_verdict} · mull {mull_pct:.0f}%"
+            # mulligan tendency, not two arms. A trailing " ⚠" flags a
+            # degraded recommendation — no room for prose in the pill.
+            warn = " ⚠" if degradations else ""
+            text = f"{short_verdict} · mull {mull_pct:.0f}%{warn}"
             self._verdict_label.setText(text)
             self._verdict_label.setStyleSheet(
                 f"color: {verdict_color}; font-size: 12px; font-weight: 700;"
@@ -924,6 +943,9 @@ class OverlayWindow(QWidget):
                 f"mull #{output.mulligan_count} · on the {play_draw} · "
                 f"set {output.primary_set or '?'} · based on 17Lands data"
             )
+            # Degradation footer: joined with "  ·  " so several fit on
+            # a few wrapped lines. Empty string collapses the label.
+            self._degradations_label.setText("  ·  ".join(degradations))
         # Re-size to fit the new content. In expanded mode the per-card
         # row count varies by hand, so a fixed height would either
         # truncate or leave dead space; in compact mode the verdict
@@ -955,6 +977,7 @@ class OverlayWindow(QWidget):
             self._context_label.setText(
                 f"mull #{output.mulligan_count} · on the {play_draw} · computing…"
             )
+            self._degradations_label.setText("")
         self.adjustSize()
 
     def _render_missing(self, output: MissingDataOutput) -> None:
@@ -970,6 +993,7 @@ class OverlayWindow(QWidget):
         self._mull_label.setText("Mull —")
         self._stats_label.setText(output.reason)
         self._context_label.setText(f"({output.what})")
+        self._degradations_label.setText("")
         self.adjustSize()
 
     def _render_reset(self) -> None:
@@ -986,6 +1010,7 @@ class OverlayWindow(QWidget):
         self._mull_label.setText("")
         self._stats_label.setText("")
         self._context_label.setText("")
+        self._degradations_label.setText("")
         self.adjustSize()
 
     def _close_clicked(self) -> None:
