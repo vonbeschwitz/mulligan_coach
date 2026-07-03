@@ -16,9 +16,9 @@
       <p class="validation-ok">
         ✓ Deck parsed: <strong>{{ result.total_cards }}</strong> cards,
         <strong>{{ result.unique_cards }}</strong> unique.
-        {% if result.total_cards != required_deck_size %}
+        {% if result.total_cards < min_deck_size or result.total_cards > max_deck_size %}
           <span class="warn">
-            (Heads up: the trained model expects exactly {{ required_deck_size }} —
+            (Heads up: the trained model expects {{ min_deck_size }}-{{ max_deck_size }} —
             recommendation will fail until you adjust.)
           </span>
         {% endif %}

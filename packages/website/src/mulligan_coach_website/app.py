@@ -59,10 +59,14 @@ log = logging.getLogger(__name__)
 _TEMPLATES_DIR = str(files("mulligan_coach_website") / "templates")
 _STATIC_DIR = str(files("mulligan_coach_website") / "static")
 
-# Default deck size for a Limited deck. Sealed pools may build 41s
-# (Yorion-style), but the trained model expects exactly 40. We accept
-# 40 at the recommend boundary and surface a clear error otherwise.
-_REQUIRED_DECK_SIZE = 40
+# Legal Limited deck-size window. The training pipeline (and therefore
+# the choice service's `recommend_choice`) accepts 40-42 cards — a
+# minimum-40 deck plus up to two extras (e.g. a Sealed pool that runs
+# 41/42). We mirror that window here and surface a clear error outside
+# it, rather than rejecting legal 41/42-card decks the service would
+# happily score.
+_MIN_DECK_SIZE = 40
+_MAX_DECK_SIZE = 42
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +148,8 @@ def index(request: Request) -> HTMLResponse:
             "loaded_sets": store.loaded_sets,
             "n_cards": len(store.entries),
             "hand_size": HAND_SIZE,
-            "required_deck_size": _REQUIRED_DECK_SIZE,
+            "min_deck_size": _MIN_DECK_SIZE,
+            "max_deck_size": _MAX_DECK_SIZE,
             "service_status": service.status,
         },
     )
@@ -182,7 +187,8 @@ def validate(
         {
             "result": result,
             "datalist_names": unique_card_names(result),
-            "required_deck_size": _REQUIRED_DECK_SIZE,
+            "min_deck_size": _MIN_DECK_SIZE,
+            "max_deck_size": _MAX_DECK_SIZE,
         },
     )
 
@@ -277,11 +283,11 @@ def recommend_route(
             request,
             f"Decklist has {len(parsed.unknown_lines)} issue(s); fix the validation panel above.",
         )
-    if parsed.total_cards != _REQUIRED_DECK_SIZE:
+    if not (_MIN_DECK_SIZE <= parsed.total_cards <= _MAX_DECK_SIZE):
         return _render_recommendation_error(
             request,
             f"Deck has {parsed.total_cards} cards; the trained model expects "
-            f"exactly {_REQUIRED_DECK_SIZE}.",
+            f"{_MIN_DECK_SIZE}-{_MAX_DECK_SIZE}.",
         )
     if len(current_hand) != HAND_SIZE:
         return _render_recommendation_error(
@@ -295,7 +301,7 @@ def recommend_route(
         return _render_recommendation_error(request, " ".join(hand_errors))
 
     hand_cards = [e.card for e in entries if e.card is not None]
-    deck_cards = hand_cards + library  # full 40-card deck for the model.
+    deck_cards = hand_cards + library  # full 40-42-card deck for the model.
 
     # Form sends "" for the "unknown" option; coerce to None. Anything
     # numeric goes through int(). On the play we don't care about the
