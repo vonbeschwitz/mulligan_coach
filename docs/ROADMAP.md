@@ -207,9 +207,12 @@ ratings automation.
   do mechanical parts under a tight spec).
 
 ### Step 7 — going-public Phase 0 (decisions; parallel with steps 1–6)
-* Compliance note: read current MTGA ToS/CoC + Fan Content Policy + 17Lands
-  usage guidelines + Scryfall guidelines; write one-page position
-  (tool stays free; read-only line; takedown compliance). **Fable.**
+* Compliance note — DONE 2026-07-03: read current MTGA ToS/CoC + Fan
+  Content Policy + 17Lands usage guidelines + Scryfall guidelines; position
+  written at `docs/compliance_position.md` (tolerated-class argument, red
+  lines, per-source obligations incl. 17Lands day-12 new-set ratings
+  embargo, takedown protocol, pre-launch checklist that feeds Step 8).
+  **Fable.**
 * Decide: open-source main repo? (recommended yes). **Owner decision,
   Fable/Opus assist research.**
 * ~~Pick signing route~~ — DECIDED 2026-07-03: skip signing at launch,
