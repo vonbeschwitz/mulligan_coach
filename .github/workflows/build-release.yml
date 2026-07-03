@@ -1,0 +1,179 @@
+# Build the Windows distribution: PyInstaller bundle -> Inno Setup
+# installer, plus the same zip + version sidecar the local publisher
+# produces. Uploads everything as *workflow build artifacts*.
+#
+# What this workflow does NOT do (by design):
+#   * It never creates or modifies a GitHub Release, and never uploads
+#     to the public `mulligan_coach_data` repo. Producing the installer
+#     and actually publishing it are kept separate so a build can be
+#     inspected before anything ships. Download the artifacts from the
+#     run, sanity-check them, then publish with the local
+#     `publish_exe_release.py` when ready.
+#   * It does NOT run on every push. The build is ~325 MB and Windows
+#     minutes on a private repo are billed at 2x — so the only triggers
+#     are a manual dispatch and (optionally) pushing a version tag.
+#
+# HOW TO RUN THE FIRST TEST BUILD (owner):
+#   1. Actions tab -> "Build Windows release" -> "Run workflow" ->
+#      pick the branch, optionally set a version (e.g. 1.0.0), Run.
+#   2. When it finishes, open the run and download the
+#      "mulligan-coach-windows-build" artifact. It contains
+#      MulliganCoachSetup.exe, MulliganCoach.zip, exe_version.json,
+#      and SHA256SUMS.txt.
+#   3. Install from MulliganCoachSetup.exe on a Windows box and confirm
+#      the overlay launches. Only then publish via the local scripts.
+#
+# UNSIGNED: the installer and the EXE inside it are not code-signed yet
+# (roadmap Step 7 decision). See the signing slot in
+# packages/overlay/packaging/mulligan_coach.iss for where signing plugs
+# in later.
+
+name: Build Windows release
+
+on:
+  # Primary trigger: run it by hand from the Actions tab.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Installer version, e.g. 1.0.0 (default 0.0.0-dev)."
+        required: false
+        default: "0.0.0-dev"
+  # Optional trigger: pushing a version tag (v1.2.3) builds that tag.
+  # This fires only on tag creation, never on ordinary branch pushes,
+  # so it doesn't burn minutes on day-to-day commits.
+  push:
+    tags:
+      - "v*"
+
+# Only the current repo's contents are read (checkout). The workflow
+# never writes releases, so no `contents: write`. Reading the PUBLIC
+# data repo below works with this repo-scoped token because public-repo
+# reads are allowed for any valid token.
+permissions:
+  contents: read
+
+# Don't let two expensive builds of the same ref run at once, but never
+# cancel an in-flight build out from under someone.
+concurrency:
+  group: build-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build installer (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    env:
+      # gh CLI auth for the cross-repo asset download below. The default
+      # repo-scoped token can read public repos.
+      GH_TOKEN: ${{ github.token }}
+      # Public repo hosting the published data + model artifacts.
+      DATA_REPO: vonbeschwitz/mulligan_coach_data
+      DATA_TAG: data-current
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python (3.12)
+        run: uv python install 3.12
+
+      # Installs every workspace package plus the default `dev` group,
+      # which is where PyInstaller lives (see root pyproject.toml).
+      - name: Sync workspace
+        run: uv sync --all-packages
+
+      # ---------------------------------------------------------------
+      # Reconstruct the gitignored build inputs.
+      #
+      # mulligan_coach.spec bundles models/choice_prod + the parsed-cards
+      # JSON + the 17Lands ratings parquets. All of that is under
+      # models/ and data/, which are GITIGNORED — so a fresh checkout
+      # can't build. We pull the currently-published copies from the
+      # data-current release (the inverse of publish_data_release.py)
+      # and lay them out where the spec expects.
+      #
+      # NOTE: this bundles whatever data + model `data-current` serves
+      # right now. Make sure the intended model/data have been published
+      # there before building an installer for distribution.
+      # ---------------------------------------------------------------
+      - name: Fetch data + model inputs from data-current
+        run: >
+          uv run python packages/overlay/packaging/fetch_release_inputs.py
+          --repo ${{ env.DATA_REPO }} --tag ${{ env.DATA_TAG }}
+
+      # PyInstaller freeze. build_distribution.py swaps xgboost -> the
+      # small xgboost-cpu wheel for the build, runs the spec, and stamps
+      # _bundle_version.txt. Output: dist/MulliganCoach/.
+      - name: Build PyInstaller bundle
+        run: uv run python packages/overlay/packaging/build_distribution.py
+
+      # Inno Setup isn't guaranteed on the runner image; install it
+      # deterministically. (choco is preinstalled on windows-latest.)
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            # Tag push: strip a leading "v" (v1.2.3 -> 1.2.3).
+            $v = $env:GITHUB_REF_NAME -replace '^v', ''
+          } elseif ($env:INPUT_VERSION) {
+            $v = $env:INPUT_VERSION
+          } else {
+            $v = '0.0.0-dev'
+          }
+          Write-Host "Installer version: $v"
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & "$iscc" "/DMyAppVersion=${{ steps.version.outputs.version }}" `
+            packages\overlay\packaging\mulligan_coach.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+
+      # Produce MulliganCoach.zip + exe_version.json via the SAME code
+      # the publisher uses (stage-only mode: no gh, no release). Keeps
+      # the CI artifacts byte-for-byte shaped like a real publish.
+      - name: Stage zip + version sidecar
+        run: >
+          uv run python packages/overlay/packaging/publish_exe_release.py
+          --skip-build --stage-dir artifacts
+
+      - name: Compute SHA256 checksums
+        shell: pwsh
+        run: |
+          $targets = @(
+            "dist/installer/MulliganCoachSetup.exe",
+            "artifacts/MulliganCoach.zip"
+          )
+          $lines = foreach ($t in $targets) {
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $t).Hash.ToLower()
+            "$hash  $(Split-Path $t -Leaf)"
+          }
+          $lines | Out-File -FilePath artifacts/SHA256SUMS.txt -Encoding ascii
+          Get-Content artifacts/SHA256SUMS.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mulligan-coach-windows-build
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/installer/MulliganCoachSetup.exe
+            artifacts/MulliganCoach.zip
+            artifacts/exe_version.json
+            artifacts/SHA256SUMS.txt

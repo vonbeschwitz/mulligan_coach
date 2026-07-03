@@ -114,20 +114,58 @@ read functions doesn't exist in pure-Python form, so a meaningful
 trim there means writing a one-shot loader using `fastparquet` or
 similar. Not worth it for friends-and-family.
 
+## Installer (Inno Setup)
+
+`mulligan_coach.iss` wraps `dist/MulliganCoach/` into a single
+`MulliganCoachSetup.exe` — a per-user install (no admin prompt) with a
+Start-menu shortcut, optional desktop icon, and a real
+Programs-and-Features uninstall entry. Build it after
+`build_distribution.py` has produced the bundle:
+
+```
+ISCC.exe /DMyAppVersion=1.0.0 packages\overlay\packaging\mulligan_coach.iss
+# ISCC.exe lives at "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" if not on PATH.
+# Output: dist/installer/MulliganCoachSetup.exe
+```
+
+Signing is deferred (unsigned for now); the `.iss` has a clearly
+marked, commented `SignTool=` slot where a certificate plugs in later.
+
+## CI build (`.github/workflows/build-release.yml`)
+
+A Windows GitHub Actions job does the whole pipeline — `uv sync` →
+fetch inputs → `build_distribution.py` → Inno Setup → upload artifacts
+(installer, ZIP, `exe_version.json`, `SHA256SUMS.txt`). It runs only on
+**manual dispatch** or a **version tag** (never on ordinary pushes —
+the ~325 MB build is expensive on private-repo Windows minutes), and it
+**never touches a GitHub Release**: it uploads *workflow artifacts* for
+you to inspect, then you publish with `publish_exe_release.py` when
+ready.
+
+Because `models/` and `data/` are gitignored, a bare checkout can't
+build. `fetch_release_inputs.py` reconstructs those inputs by
+downloading the current `data-current` release assets (the inverse of
+`publish_data_release.py`) and laying them out where the spec expects.
+Run it locally too if you've freshly cloned the repo and want to build
+without re-materialising the data pipeline:
+
+```
+uv run python packages/overlay/packaging/fetch_release_inputs.py
+```
+
 ## Known limitations
 
 * **Single-platform (Windows).** PyInstaller builds for the host
   OS. Cross-compilation is not supported by PyInstaller itself;
   a macOS / Linux build would need to run on that platform.
-* **No code signing.** The EXE trips Windows SmartScreen on a
-  fresh download. Adding a signing certificate would silence the
+* **No code signing.** The EXE + installer trip Windows SmartScreen on
+  a fresh download. Adding a signing certificate would silence the
   warning but isn't a priority for casual distribution.
 
 ## Updating
 
 When any of the bundled inputs change — overlay code, the choice
-model, parsed cards, ratings — rebuild and re-share the ZIP.
-There's no automatic update mechanism. Future work: an Inno Setup
-installer wrapping the directory would give the user a real
-Programs-and-Features entry plus a Start-menu shortcut, but the
-plain ZIP is fine for one or two recipients.
+model, parsed cards, ratings — rebuild (or dispatch the CI workflow)
+and re-share. The overlay's data auto-updater already refreshes
+model/data in place; a full rebuild is only needed for overlay *code*
+changes.
