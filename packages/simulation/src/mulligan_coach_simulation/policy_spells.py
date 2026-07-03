@@ -133,7 +133,15 @@ def cast_main_phase(state: GameState) -> list[CastResult]:
 
 def pick_next_action(state: GameState) -> CastAction | None:
     """Return the next action the policy wants to take, or ``None`` if
-    nothing matches the priority chain."""
+    nothing matches the priority chain.
+
+    The available mana abilities are enumerated once here and shared
+    by every picker — no picker mutates the battlefield, so the list
+    stays valid for the whole chain. (``cast_main_phase`` re-invokes
+    this function after each executed action, so post-cast state
+    changes are picked up naturally.)
+    """
+    abilities = available_mana_abilities(state)
     for picker in (
         _pick_s1a_cast_fetch_battlefield_untapped,
         _pick_s1b_cast_mana_permanent,
@@ -144,7 +152,7 @@ def pick_next_action(state: GameState) -> CastAction | None:
         _pick_s4_hand_fetch,
         _pick_s5_cast_prepared_enabler,
     ):
-        action = picker(state)
+        action = picker(state, abilities)
         if action is not None:
             return action
     return None
@@ -161,8 +169,10 @@ _HAND_MODE_KINDS = frozenset({"cast", "cycle", "land_cycle", "channel"})
 def _hand_castable_options(
     state: GameState,
     predicate: Callable[[Mode], bool],
+    abilities: list[AbilityRef] | None = None,
 ) -> Iterator[tuple[Card, int, Mode, ManaPayment]]:
-    abilities = available_mana_abilities(state)
+    if abilities is None:
+        abilities = available_mana_abilities(state)
     for card in state.hand:
         if card.is_land:
             continue
@@ -179,6 +189,7 @@ def _hand_castable_options(
 def _battlefield_activated_options(
     state: GameState,
     predicate: Callable[[Mode], bool],
+    full_abilities: list[AbilityRef] | None = None,
 ) -> Iterator[tuple[Card, int, Mode, ManaPayment]]:
     """Walk every untapped (and non-summoning-sick, for creatures)
     permanent and yield any activated mode whose cost we can pay.
@@ -188,7 +199,8 @@ def _battlefield_activated_options(
     it as part of the cost, so the source can't also tap to produce
     mana for that same cost.
     """
-    full_abilities = available_mana_abilities(state)
+    if full_abilities is None:
+        full_abilities = available_mana_abilities(state)
     sources = (
         list(state.battlefield_lands)
         + list(state.battlefield_mana_perms)
@@ -213,6 +225,7 @@ def _battlefield_activated_options(
 def _battlefield_prepared_options(
     state: GameState,
     predicate: Callable[[Mode], bool],
+    abilities: list[AbilityRef] | None = None,
 ) -> Iterator[tuple[Card, int, Mode, ManaPayment]]:
     """Walk prepared permanents and yield any prepared mode whose cost
     we can pay.
@@ -225,7 +238,8 @@ def _battlefield_prepared_options(
     """
     if not state.prepared:
         return
-    abilities = available_mana_abilities(state)
+    if abilities is None:
+        abilities = available_mana_abilities(state)
     # Build a quick lookup: instance_id -> Card across battlefield zones.
     by_id: dict[int, Card] = {}
     for zone in (state.battlefield_mana_perms, state.battlefield_other):
@@ -310,23 +324,29 @@ def _chain(
         yield from it
 
 
-def _pick_s1a_cast_fetch_battlefield_untapped(state: GameState) -> CastAction | None:
+def _pick_s1a_cast_fetch_battlefield_untapped(
+    state: GameState, abilities: list[AbilityRef]
+) -> CastAction | None:
     return _first_or_none(
         _chain(
             _hand_castable_options(
                 state,
                 lambda m: m.kind == "cast" and _has_fetch_to(m, "battlefield_untapped"),
+                abilities,
             ),
             _battlefield_prepared_options(
                 state,
                 lambda m: _has_fetch_to(m, "battlefield_untapped"),
+                abilities,
             ),
         ),
         "S1a",
     )
 
 
-def _pick_s1b_cast_mana_permanent(state: GameState) -> CastAction | None:
+def _pick_s1b_cast_mana_permanent(
+    state: GameState, abilities: list[AbilityRef]
+) -> CastAction | None:
     """Cast a non-land hand card whose ``parsed.mana_abilities`` is
     non-empty (mana dorks, mana rocks). The cast mode of these cards
     typically just has an ``EntersBattlefieldEffect``; the value is in
@@ -340,7 +360,7 @@ def _pick_s1b_cast_mana_permanent(state: GameState) -> CastAction | None:
         (
             (card, idx, mode, payment)
             for card, idx, mode, payment in _hand_castable_options(
-                state, lambda m: m.kind == "cast"
+                state, lambda m: m.kind == "cast", abilities
             )
             if card.has_mana_ability
         ),
@@ -352,23 +372,29 @@ def _pick_s1b_cast_mana_permanent(state: GameState) -> CastAction | None:
     return CastAction(card=card, mode_idx=mode_idx, payment=payment, priority="S1b")
 
 
-def _pick_s1c_cast_fetch_battlefield_tapped(state: GameState) -> CastAction | None:
+def _pick_s1c_cast_fetch_battlefield_tapped(
+    state: GameState, abilities: list[AbilityRef]
+) -> CastAction | None:
     return _first_or_none(
         _chain(
             _hand_castable_options(
                 state,
                 lambda m: m.kind == "cast" and _has_fetch_to(m, "battlefield_tapped"),
+                abilities,
             ),
             _battlefield_prepared_options(
                 state,
                 lambda m: _has_fetch_to(m, "battlefield_tapped"),
+                abilities,
             ),
         ),
         "S1c",
     )
 
 
-def _pick_s1d_activate_battlefield_fetch(state: GameState) -> CastAction | None:
+def _pick_s1d_activate_battlefield_fetch(
+    state: GameState, abilities: list[AbilityRef]
+) -> CastAction | None:
     """Activate any in-play ability that fetches a land to battlefield
     (Evolving Wilds is the canonical example: tap, sac, fetch tapped)."""
     return _first_or_none(
@@ -377,6 +403,7 @@ def _pick_s1d_activate_battlefield_fetch(state: GameState) -> CastAction | None:
             lambda m: (
                 _has_fetch_to(m, "battlefield_tapped") or _has_fetch_to(m, "battlefield_untapped")
             ),
+            abilities,
         ),
         "S1d",
     )
@@ -391,7 +418,9 @@ def _hand_has_land(state: GameState) -> bool:
     return any(c.is_land for c in state.hand)
 
 
-def _pick_s2_hand_fetch_when_no_land(state: GameState) -> CastAction | None:
+def _pick_s2_hand_fetch_when_no_land(
+    state: GameState, abilities: list[AbilityRef]
+) -> CastAction | None:
     """Cast or activate a hand-fetch ONLY when hand has zero lands.
     Otherwise fall through to S3 / S4."""
     if _hand_has_land(state):
@@ -402,7 +431,7 @@ def _pick_s2_hand_fetch_when_no_land(state: GameState) -> CastAction | None:
     # too — it only finds a land probabilistically, but the shape is
     # the same from the policy's perspective.
     hand_action = _first_or_none(
-        _hand_castable_options(state, _has_land_to_hand),
+        _hand_castable_options(state, _has_land_to_hand, abilities),
         "S2",
     )
     if hand_action is not None:
@@ -410,41 +439,41 @@ def _pick_s2_hand_fetch_when_no_land(state: GameState) -> CastAction | None:
     # From battlefield: any activated or prepared mode that fetches to hand.
     return _first_or_none(
         _chain(
-            _battlefield_activated_options(state, _has_land_to_hand),
-            _battlefield_prepared_options(state, _has_land_to_hand),
+            _battlefield_activated_options(state, _has_land_to_hand, abilities),
+            _battlefield_prepared_options(state, _has_land_to_hand, abilities),
         ),
         "S2",
     )
 
 
-def _pick_s3_card_draw_or_scry(state: GameState) -> CastAction | None:
+def _pick_s3_card_draw_or_scry(state: GameState, abilities: list[AbilityRef]) -> CastAction | None:
     """Cast / activate effects that draw, cycle, or scry."""
     hand_action = _first_or_none(
-        _hand_castable_options(state, _has_draw_or_scry),
+        _hand_castable_options(state, _has_draw_or_scry, abilities),
         "S3",
     )
     if hand_action is not None:
         return hand_action
     return _first_or_none(
         _chain(
-            _battlefield_activated_options(state, _has_draw_or_scry),
-            _battlefield_prepared_options(state, _has_draw_or_scry),
+            _battlefield_activated_options(state, _has_draw_or_scry, abilities),
+            _battlefield_prepared_options(state, _has_draw_or_scry, abilities),
         ),
         "S3",
     )
 
 
-def _pick_s4_hand_fetch(state: GameState) -> CastAction | None:
+def _pick_s4_hand_fetch(state: GameState, abilities: list[AbilityRef]) -> CastAction | None:
     hand_action = _first_or_none(
-        _hand_castable_options(state, _has_land_to_hand),
+        _hand_castable_options(state, _has_land_to_hand, abilities),
         "S4",
     )
     if hand_action is not None:
         return hand_action
     return _first_or_none(
         _chain(
-            _battlefield_activated_options(state, _has_land_to_hand),
-            _battlefield_prepared_options(state, _has_land_to_hand),
+            _battlefield_activated_options(state, _has_land_to_hand, abilities),
+            _battlefield_prepared_options(state, _has_land_to_hand, abilities),
         ),
         "S4",
     )
@@ -467,7 +496,9 @@ def _card_has_useful_prepared_mode(card: Card) -> bool:
     return False
 
 
-def _pick_s5_cast_prepared_enabler(state: GameState) -> CastAction | None:
+def _pick_s5_cast_prepared_enabler(
+    state: GameState, abilities: list[AbilityRef]
+) -> CastAction | None:
     """Cast a hand creature whose prepared mode is mulligan-relevant
     (fetch / draw / land-find), so the prepared spell is castable on a
     later turn. Last resort: only fires if no other tier matched.
@@ -477,7 +508,9 @@ def _pick_s5_cast_prepared_enabler(state: GameState) -> CastAction | None:
     """
     candidates = (
         (card, idx, mode, payment)
-        for card, idx, mode, payment in _hand_castable_options(state, lambda m: m.kind == "cast")
+        for card, idx, mode, payment in _hand_castable_options(
+            state, lambda m: m.kind == "cast", abilities
+        )
         if _card_has_useful_prepared_mode(card)
     )
     return _first_or_none(candidates, "S5")

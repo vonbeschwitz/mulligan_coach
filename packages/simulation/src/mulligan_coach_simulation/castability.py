@@ -24,7 +24,7 @@ from dataclasses import dataclass
 
 from mulligan_coach_cards import Mode
 
-from .mana import ManaPayment, available_mana_abilities, can_pay_cost
+from .mana import AbilityRef, ManaPayment, available_mana_abilities, can_pay_cost
 from .runtime import Card, GameState
 from .trace import CastabilityRecord
 
@@ -68,15 +68,24 @@ def _hand_castable_modes(card: Card) -> list[tuple[int, Mode]]:
     return out
 
 
-def is_castable(card: Card, state: GameState) -> CastabilityResult:
+def is_castable(
+    card: Card,
+    state: GameState,
+    abilities: list[AbilityRef] | None = None,
+) -> CastabilityResult:
     """Per-mode castability check for a single card in hand.
 
     The card itself is never tapped (it's in hand, not on the
     battlefield) so ``cost.tap`` on its modes is ignored. ``discard_self``
     on cycling / channel modes is always payable from hand. Mana cost
     is delegated to :func:`mana.can_pay_cost`.
+
+    *abilities* lets a caller that checks many cards against the same
+    battlefield (the L1 land lookahead) enumerate the mana sources once
+    instead of per card; ``None`` computes them from *state*.
     """
-    abilities = available_mana_abilities(state)
+    if abilities is None:
+        abilities = available_mana_abilities(state)
     castable_indices: list[int] = []
     witness: ManaPayment | None = None
     for mode_idx, mode in _hand_castable_modes(card):
@@ -112,6 +121,38 @@ def castability_snapshot(state: GameState) -> tuple[list[CastabilityRecord], dic
     """
     lands_in_hand = [c for c in state.hand if c.is_land]
     candidates: list[Card | None] = [None, *lands_in_hand]
+
+    # Enumerate the available mana abilities once per candidate land
+    # drop, not once per (card x mode x candidate) — the ability list
+    # depends only on the battlefield, and re-walking it inside the
+    # mode loop was one of the simulator's hottest paths. Each
+    # hypothetical drop uses a manual undo of ``play_land`` instead of
+    # full snapshot/restore: ``play_land`` only touches four fields
+    # (hand, battlefield_lands, tapped, land_drop_used), and the
+    # snapshot's six list-copies + two frozenset constructions are
+    # expensive at this call frequency.
+    candidate_abilities: list[list[AbilityRef]] = []
+    for cand in candidates:
+        if cand is None:
+            candidate_abilities.append(available_mana_abilities(state))
+            continue
+        orig_hand_idx = next(
+            i for i, c in enumerate(state.hand) if c.instance_id == cand.instance_id
+        )
+        state.play_land(cand)
+        was_tapped_added = cand.instance_id in state.tapped
+        try:
+            candidate_abilities.append(available_mana_abilities(state))
+        finally:
+            # Reverse ``play_land``: pop the just-appended land, put it
+            # back at its original hand position so policy tiebreakers
+            # stay stable, drop the tapped-set entry if play_land added
+            # one, clear the land-drop flag.
+            state.battlefield_lands.pop()
+            state.hand.insert(orig_hand_idx, cand)
+            if was_tapped_added:
+                state.tapped.discard(cand.instance_id)
+            state.land_drop_used = False
 
     records: list[CastabilityRecord] = []
     aggregate: dict[int, bool] = {}
@@ -149,40 +190,11 @@ def castability_snapshot(state: GameState) -> tuple[list[CastabilityRecord], dic
         for mode_idx, mode in modes:
             castable = False
             witness_id: int | None = None
-            for cand in candidates:
-                # Manual undo of ``play_land`` instead of full
-                # snapshot/restore: ``play_land`` only touches four
-                # fields (hand, battlefield_lands, tapped,
-                # land_drop_used), and the snapshot's six list-copies
-                # + two frozenset constructions are the hottest
-                # allocation in the simulator's inner loop.
-                if cand is not None:
-                    orig_hand_idx = next(
-                        i for i, c in enumerate(state.hand) if c.instance_id == cand.instance_id
-                    )
-                    state.play_land(cand)
-                    was_tapped_added = cand.instance_id in state.tapped
-                else:
-                    orig_hand_idx = -1
-                    was_tapped_added = False
-                try:
-                    abilities = available_mana_abilities(state)
-                    if can_pay_cost(mode.cost.mana, abilities, state) is not None:
-                        castable = True
-                        witness_id = cand.instance_id if cand is not None else None
-                        break
-                finally:
-                    if cand is not None:
-                        # Reverse ``play_land``: pop the just-appended
-                        # land, put it back at its original hand
-                        # position so policy tiebreakers stay stable,
-                        # drop the tapped-set entry if play_land added
-                        # one, clear the land-drop flag.
-                        state.battlefield_lands.pop()
-                        state.hand.insert(orig_hand_idx, cand)
-                        if was_tapped_added:
-                            state.tapped.discard(cand.instance_id)
-                        state.land_drop_used = False
+            for cand, abilities in zip(candidates, candidate_abilities, strict=True):
+                if can_pay_cost(mode.cost.mana, abilities, state) is not None:
+                    castable = True
+                    witness_id = cand.instance_id if cand is not None else None
+                    break
             records.append(
                 CastabilityRecord(
                     card_instance_id=card.instance_id,

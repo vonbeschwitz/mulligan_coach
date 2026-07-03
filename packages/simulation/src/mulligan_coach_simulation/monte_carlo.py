@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from mulligan_coach_cards import ParsedCard
 
 from .engine import simulate_one_game
+from .mana import reset_solver_caches
 from .runtime import Card
 from .stats import AggregateStats, aggregate
 from .trace import GameTrace
@@ -96,6 +97,9 @@ def _iter_games(
     stable within a game and doesn't bleed across runs) and a sub-RNG
     derived from the master seed (so fetch-shuffles inside the game
     are reproducible)."""
+    # Memory hygiene between unrelated decks; the games of THIS run
+    # batch then share solved mana shapes (see ``mana._CSP_CACHE``).
+    reset_solver_caches()
     n_hand = len(hand)
     for _ in range(n_runs):
         per_game_hand = [Card(instance_id=i, parsed=p) for i, p in enumerate(hand)]

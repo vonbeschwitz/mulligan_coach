@@ -42,6 +42,7 @@ from mulligan_coach_cards import ParsedCard
 
 from .bottoming import OhWrLookup, bottom_card
 from .engine import simulate_one_game
+from .mana import reset_solver_caches
 from .runtime import Card
 from .smoother import (
     ARENA_SMOOTHER_NUM_CANDIDATES,
@@ -166,6 +167,9 @@ def _iter_mulligan_games(
     runs) and a sub-RNG derived from the master seed (so any in-game
     shuffles — e.g. fetch lands — are reproducible).
     """
+    # Memory hygiene between unrelated decks; the games of THIS run
+    # batch then share solved mana shapes (see ``mana._CSP_CACHE``).
+    reset_solver_caches()
     for _ in range(n_runs):
         hand, library = post_mulligan_hand(
             deck,

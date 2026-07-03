@@ -24,13 +24,16 @@ Design choices fixed in the plan:
 Performance: the CSP is small (<= ~7 sources, <= ~6 pips in Limited).
 A plain DFS with a good ordering is fine; the first valid payment is
 returned without enumerating all of them. The same ``(cost,
-available-abilities)`` shape recurs many times per game (the
-castability snapshot walks every card x every mode x every candidate
-land), so :func:`can_pay_cost` is memoised on
-``(id(cost), abilities_signature)`` for the lifetime of a single
-``simulate_one_game`` call — see :func:`reset_per_game_caches`. The
-per-cost ``_expand_cost`` lookup is memoised for the whole session
-(``ManaCost`` objects outlive any single game).
+available-mana-in-kind)`` shape recurs many times per game AND across
+the games of one Monte Carlo run (same deck, different shuffles), so
+:func:`can_pay_cost` is memoised on ``(id(cost), tuple of ability
+identities in DFS order)`` with the payment stored as *positions* into
+the sorted ability list — see the comment on ``_CSP_CACHE`` for why
+that key is exact and how ``id()`` reuse is ruled out. The cache is
+valid indefinitely; :func:`reset_solver_caches` clears it between
+unrelated decks purely to bound memory. The per-cost ``_expand_cost``
+lookup is memoised for the whole session (``ManaCost`` objects outlive
+any single game).
 """
 
 from __future__ import annotations
@@ -106,10 +109,28 @@ class ManaPool:
 # is selected, and tapping is per-permanent, not per-ability.
 @dataclass(slots=True)
 class AbilityRef:
-    """A pointer to one ManaAbility on a specific permanent in play."""
+    """A pointer to one ManaAbility on a specific permanent in play.
+
+    ``cmc`` caches ``ability.cost.mana.cmc`` (the activation cost of the
+    ability itself — 0 for basics/dorks, >0 for filter lands). The two
+    hot sorts in this module key on it constantly, and reading it once
+    at construction avoids chasing three pydantic attributes per
+    comparison.
+    """
 
     source: Card
     ability: ManaAbility
+    cmc: int = field(init=False, default=0)
+
+    def __post_init__(self) -> None:
+        self.cmc = self.ability.cost.mana.cmc
+
+
+def _ref_cmc(ref: AbilityRef) -> int:
+    """Sort key for ability lists: activation cost ascending, so
+    producers (cost 0) come before filter lands. Stable sort keeps
+    battlefield order within equal costs."""
+    return ref.cmc
 
 
 # A payment plan: ``(ability_ref, option_chosen)`` pairs in activation
@@ -163,7 +184,7 @@ def available_mana_abilities(state: GameState) -> list[AbilityRef]:
             if not predicate_holds(ab.condition, state):
                 continue
             refs.append(AbilityRef(source=card, ability=ab))
-    refs.sort(key=lambda r: r.ability.cost.mana.cmc)
+    refs.sort(key=_ref_cmc)
     return refs
 
 
@@ -198,31 +219,53 @@ class _Requirement:
 # stay valid as long as the originating ``ManaCost`` object lives.
 _EXPAND_COST_CACHE: dict[int, tuple[ManaCost, list[_Requirement]]] = {}
 
-# Per-game memoisation of :func:`can_pay_cost`. Same ``(cost, set of
-# available abilities)`` repeats many times within a single game (the
-# castability snapshot walks every card x every land x every mode, the
-# L1 lookahead repeats the same next-turn check for every candidate
-# land, …). The key is ``(id(cost), abilities_signature)`` where the
-# signature is a sorted tuple of ``(id(ability), source.instance_id)``
-# pairs — stable within a single ``simulate_one_game`` call but not
-# across calls (instance_ids reflect each game's specific shuffle), so
-# :func:`reset_per_game_caches` must be called at the top of every
-# game. The cached value is the :class:`ManaPayment` itself, including
-# its :class:`AbilityRef`s — those AbilityRefs reference ``Card`` and
-# ``ManaAbility`` objects that remain valid for the duration of the
-# game, so ``state.cast`` can tap them correctly when consuming a
-# cached payment.
-_CSP_CACHE: dict[tuple[int, tuple[tuple[int, int], ...]], ManaPayment | None] = {}
+# Memoisation of :func:`can_pay_cost`. Same ``(cost, available mana in
+# kind)`` repeats many times within a game (the castability snapshot
+# walks every card x every land x every mode, the L1 lookahead repeats
+# the same next-turn check for every candidate land, …) AND across the
+# games of one Monte Carlo run (same deck, different shuffles).
+#
+# Key: ``(id(cost), tuple(id(ref.ability) for ref in sorted_abilities))``
+# where ``sorted_abilities`` is the cmc-sorted list the DFS walks. Two
+# calls with the same key present the DFS with position-for-position
+# identical inputs — ``_search`` reads abilities only through
+# ``ability.cost.mana`` and ``ability.produces``, never through the
+# source ``Card`` — so the winning activation pattern and option
+# choices are the same. The key is deliberately the exact post-sort
+# *sequence* (not a canonicalised multiset): a canonical key would let
+# two states with different DFS walk orders share an entry, and a
+# position-pattern from one order can select different abilities in
+# the other.
+#
+# Value: ``(cost, abilities, payment_positions | None)``. The payment
+# is stored as ``(position_in_sorted_abilities, chosen_option)`` pairs
+# and rebound to the *current* call's AbilityRefs on a hit, so the
+# engine always taps live Card instances — this is what makes the
+# cache safe across games (instance_ids and Card objects reset every
+# game; positions don't). The ``cost`` / ``abilities`` refs in the
+# value are never read: they pin the keyed objects alive so their
+# ``id()``s can't be recycled while the entry exists (same guard idea
+# as ``_EXPAND_COST_CACHE``). Correctness therefore does NOT depend on
+# ever clearing this cache; :func:`reset_solver_caches` exists purely
+# to bound memory between unrelated decks.
+_CspValue = tuple[
+    ManaCost,
+    tuple[ManaAbility, ...],
+    tuple[tuple[int, list[ManaOption]], ...] | None,
+]
+_CSP_CACHE: dict[tuple[int, tuple[int, ...]], _CspValue] = {}
 
 
-def reset_per_game_caches() -> None:
-    """Clear caches whose validity is bounded by a single game.
+def reset_solver_caches() -> None:
+    """Drop the CSP payment cache. Memory hygiene, not correctness —
+    the cache's identity-pinned keys stay valid indefinitely (see the
+    ``_CSP_CACHE`` comment), but its useful lifetime is one deck, so
+    the Monte Carlo entry points (``monte_carlo._iter_games``,
+    ``mulligan._iter_mulligan_games``) clear it before each run batch.
 
-    Called from :func:`engine.simulate_one_game` before any per-turn
-    work begins. The expand-cost cache is deliberately NOT cleared
-    here: ``ManaCost`` objects outlive any individual game and
-    re-expanding their pips on every game wastes the per-session
-    work.
+    The expand-cost cache is deliberately NOT cleared: ``ManaCost``
+    objects outlive any individual deck and re-expanding their pips
+    wastes per-session work.
     """
     _CSP_CACHE.clear()
 
@@ -236,6 +279,13 @@ def _expand_cost(cost: ManaCost) -> list[_Requirement]:
     * ``{W/P}`` (phyrexian) → treated as the colored side only.
     * ``{C}`` raises ``NotImplementedError`` — colorless requirements
       need a real card to motivate the work.
+
+    The returned list is pre-sorted by ``_REQ_PRIORITY`` (most- to
+    least-restrictive), which is the order the greedy allocator
+    consumes requirements in. Sorting once here instead of on every
+    ``_try_satisfy`` call was one of the simulator's hottest lines;
+    ``sorted`` is stable, so the pre-sorted list is exactly the
+    sequence the per-call sort used to produce.
     """
     cached = _EXPAND_COST_CACHE.get(id(cost))
     if cached is not None and cached[0] is cost:
@@ -243,6 +293,7 @@ def _expand_cost(cost: ManaCost) -> list[_Requirement]:
     reqs: list[_Requirement] = []
     for pip in cost.pips:
         reqs.extend(_expand_pip(pip))
+    reqs.sort(key=lambda r: _REQ_PRIORITY[r.kind])
     _EXPAND_COST_CACHE[id(cost)] = (cost, reqs)
     return reqs
 
@@ -291,10 +342,11 @@ _REQ_PRIORITY: Final[dict[str, int]] = {
 }
 
 
-def _try_satisfy(reqs: list[_Requirement], pool: ManaPool) -> bool:
+def _try_satisfy(reqs: list[_Requirement], counts: list[int]) -> bool:
     """Greedy allocation: walk requirements from most to least restrictive
-    and try to pay each from the pool. Returns True iff every requirement
-    is paid.
+    (``reqs`` comes from ``_expand_cost`` already priority-sorted) and
+    try to pay each from a scratch copy of *counts*. Returns True iff
+    every requirement is paid; *counts* itself is never mutated.
 
     The greedy is correct for the cost shapes we model: colored pips
     claim their colored bucket first, hybrids fall back to ``any``,
@@ -302,38 +354,44 @@ def _try_satisfy(reqs: list[_Requirement], pool: ManaPool) -> bool:
     combinations exist in theory but not in current Limited card data;
     if one shows up, the test suite will reveal the gap before it
     silently miscalculates.
+
+    The hot path works on raw 7-int lists (see ``_BUCKET_IDX``) rather
+    than :class:`ManaPool` objects — this runs once per DFS node and
+    the wrapper allocation was measurable. ``ManaPool`` remains the
+    public-facing type.
     """
-    pool = pool.copy()
-    for req in sorted(reqs, key=lambda r: _REQ_PRIORITY[r.kind]):
-        if not _pay_requirement(pool, req):
+    scratch = counts.copy()
+    # Plain loop, not all(...): this runs once per DFS node and the
+    # generator-expression allocation is measurable at that frequency.
+    for req in reqs:  # noqa: SIM110
+        if not _pay_requirement(scratch, req):
             return False
     return True
 
 
-def _pay_requirement(pool: ManaPool, req: _Requirement) -> bool:
+def _pay_requirement(counts: list[int], req: _Requirement) -> bool:
     if req.kind == "color":
-        return _take_color(pool, req.color)
+        return _take_color(counts, req.color)
     if req.kind == "hybrid":
         assert req.colors is not None
-        return _take_hybrid(pool, req.colors)
+        return _take_hybrid(counts, req.colors)
     if req.kind == "two_or_color":
         # Cheapest path: 1 mana of the colored side. Falls back to N generic.
         assert req.color is not None
-        if _take_color(pool, req.color):
+        if _take_color(counts, req.color):
             return True
-        return _take_generic(pool, req.amount)
+        return _take_generic(counts, req.amount)
     if req.kind == "generic":
-        return _take_generic(pool, req.amount)
+        return _take_generic(counts, req.amount)
     if req.kind == "colorless":
         # Reserved for the future {C} support; reachable only if
         # _expand_pip is extended.
-        return _take_colorless(pool)
+        return _take_colorless(counts)
     raise AssertionError(f"unknown requirement kind {req.kind!r}")
 
 
-def _take_color(pool: ManaPool, color: str | None) -> bool:
+def _take_color(counts: list[int], color: str | None) -> bool:
     assert color is not None
-    counts = pool.counts
     idx = _BUCKET_IDX[color]
     if counts[idx] > 0:
         counts[idx] -= 1
@@ -344,8 +402,7 @@ def _take_color(pool: ManaPool, color: str | None) -> bool:
     return False
 
 
-def _take_hybrid(pool: ManaPool, colors: tuple[str, ...]) -> bool:
-    counts = pool.counts
+def _take_hybrid(counts: list[int], colors: tuple[str, ...]) -> bool:
     for c in colors:
         idx = _BUCKET_IDX[c]
         if counts[idx] > 0:
@@ -357,8 +414,7 @@ def _take_hybrid(pool: ManaPool, colors: tuple[str, ...]) -> bool:
     return False
 
 
-def _take_colorless(pool: ManaPool) -> bool:
-    counts = pool.counts
+def _take_colorless(counts: list[int]) -> bool:
     c_idx = _BUCKET_IDX["C"]
     if counts[c_idx] > 0:
         counts[c_idx] -= 1
@@ -369,7 +425,7 @@ def _take_colorless(pool: ManaPool) -> bool:
     return False
 
 
-def _take_generic(pool: ManaPool, amount: int) -> bool:
+def _take_generic(counts: list[int], amount: int) -> bool:
     """Drain *amount* mana from the pool, regardless of color.
 
     We pull from ``any`` first (a wildcard wasted on generic anyway),
@@ -381,7 +437,6 @@ def _take_generic(pool: ManaPool, amount: int) -> bool:
     nearby states).
     """
     remaining = amount
-    counts = pool.counts
     for idx in _GENERIC_DRAIN:
         if remaining == 0:
             break
@@ -422,66 +477,88 @@ def can_pay_cost(
     if not reqs:
         # Free spells / abilities — payable trivially.
         return []
-    # Per-game memoisation: skip the DFS if we've already solved this
-    # exact (cost, available-abilities) shape this game. The signature
-    # uses ``id(ab.ability)`` for the ability (immutable, lives on the
-    # ParsedCard) and ``ab.source.instance_id`` for the source (stable
-    # within a game) — together they uniquely identify the search input.
-    abilities_sig = tuple(sorted((id(ab.ability), ab.source.instance_id) for ab in abilities))
-    key = (id(cost), abilities_sig)
-    if key in _CSP_CACHE:
-        return _CSP_CACHE[key]
     # Sort abilities so producers (no self-cost) come before filters.
     # The DFS branches "skip vs. activate", and a filter activated too
     # early would fail its own cost check; the producers-first order
     # ensures the pool is fed before filters consider activation.
-    sorted_abilities = sorted(abilities, key=lambda r: r.ability.cost.mana.cmc)
-    result = _search(reqs, sorted_abilities, 0, ManaPool.empty(), [])
-    _CSP_CACHE[key] = result
-    return result
+    # Inputs from ``available_mana_abilities`` arrive pre-sorted (and
+    # order-preserving filters keep them that way), so first verify
+    # sortedness with a plain int-compare walk — much cheaper at this
+    # call frequency than re-running timsort with a key function —
+    # and only fall back to a real sort for unsorted direct callers.
+    sorted_abilities = abilities
+    for i in range(1, len(abilities)):
+        if abilities[i].cmc < abilities[i - 1].cmc:
+            sorted_abilities = sorted(abilities, key=_ref_cmc)
+            break
+    # Memoisation on the identity sequence — see the _CSP_CACHE comment
+    # for the full correctness argument.
+    key = (id(cost), tuple([id(ref.ability) for ref in sorted_abilities]))
+    entry = _CSP_CACHE.get(key)
+    if entry is not None:
+        positions = entry[2]
+        if positions is None:
+            return None
+        return [(sorted_abilities[pos], option) for pos, option in positions]
+    result = _search(reqs, sorted_abilities, 0, [0] * _N_BUCKETS, [])
+    _CSP_CACHE[key] = (
+        cost,
+        tuple(ref.ability for ref in sorted_abilities),
+        None if result is None else tuple(result),
+    )
+    if result is None:
+        return None
+    return [(sorted_abilities[pos], option) for pos, option in result]
 
 
 def _search(
     reqs: list[_Requirement],
     abilities: list[AbilityRef],
     idx: int,
-    pool: ManaPool,
-    payment: ManaPayment,
-) -> ManaPayment | None:
+    counts: list[int],
+    payment: list[tuple[int, list[ManaOption]]],
+) -> list[tuple[int, list[ManaOption]]] | None:
+    """DFS over skip/activate decisions. The payment is built as
+    ``(position_in_abilities, chosen_option)`` pairs so the caller can
+    cache it independently of which ``Card`` instances own the
+    abilities this time around; :func:`can_pay_cost` rebinds positions
+    to live :class:`AbilityRef`\\ s."""
     # Goal check first: with the current pool, can we pay everything?
-    if _try_satisfy(reqs, pool):
+    if _try_satisfy(reqs, counts):
         return payment
     if idx >= len(abilities):
         return None
     head = abilities[idx]
     # Branch 1: skip this ability.
-    result = _search(reqs, abilities, idx + 1, pool, payment)
+    result = _search(reqs, abilities, idx + 1, counts, payment)
     if result is not None:
         return result
     # Branch 2: activate. Only legal if its own cost is payable now.
     head_cost = head.ability.cost.mana
-    if head_cost.cmc > 0 and not _try_satisfy(_expand_cost(head_cost), pool):
+    if head.cmc > 0 and not _try_satisfy(_expand_cost(head_cost), counts):
         return None
     for option in head.ability.produces:
-        new_pool = pool.copy()
-        if head_cost.cmc > 0:
+        new_counts = counts.copy()
+        if head.cmc > 0:
             # We've already proven the cost is payable; pay it now.
-            # _try_satisfy was a feasibility check that mutated a copy,
-            # so we apply the deduction to ``new_pool`` in-place here.
-            assert _try_satisfy_inplace(_expand_cost(head_cost), new_pool)
+            # _try_satisfy was a feasibility check on a scratch copy,
+            # so we apply the deduction to ``new_counts`` in-place here.
+            assert _try_satisfy_inplace(_expand_cost(head_cost), new_counts)
         for color in option:
-            new_pool.add(color)
-        result = _search(reqs, abilities, idx + 1, new_pool, [*payment, (head, option)])
+            new_counts[_BUCKET_IDX[color]] += 1
+        result = _search(reqs, abilities, idx + 1, new_counts, [*payment, (idx, option)])
         if result is not None:
             return result
     return None
 
 
-def _try_satisfy_inplace(reqs: list[_Requirement], pool: ManaPool) -> bool:
-    """Like :func:`_try_satisfy` but mutates *pool* directly. Used to
+def _try_satisfy_inplace(reqs: list[_Requirement], counts: list[int]) -> bool:
+    """Like :func:`_try_satisfy` but mutates *counts* directly. Used to
     actually deduct an activated ability's own mana cost from the live
-    pool after we've branched into the activate path."""
-    for req in sorted(reqs, key=lambda r: _REQ_PRIORITY[r.kind]):
-        if not _pay_requirement(pool, req):
+    pool after we've branched into the activate path. ``reqs`` comes
+    from ``_expand_cost`` already priority-sorted."""
+    # Plain loop, not all(...) — same hot-path reasoning as _try_satisfy.
+    for req in reqs:  # noqa: SIM110
+        if not _pay_requirement(counts, req):
             return False
     return True
