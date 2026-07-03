@@ -83,12 +83,12 @@ These supersede the corresponding workstream items below.
    advisor. Precedent suggests tolerance (Untapped.gg draw-odds overlays,
    17Lands draft overlay, Arena Tutor), and the project already holds the
    community-norm line (read-only log parsing, no memory reads, no client
-   interaction, no automation). Before launch: re-read the current MTGA
-   Terms of Service / Code of Conduct + Wizards **Fan Content Policy**;
-   write a one-page compliance note (docs/) stating the position and the
-   red lines; be prepared to comply with a takedown. **Must stay free** —
-   FCP requires fan content be free (donations are generally OK but verify
-   current FCP text before adding even a Ko-fi link).
+   interaction, no automation). *DONE 2026-07-03:* position written at
+   `docs/compliance_position.md` (sources re-read that day; includes red
+   lines, per-source obligations, takedown protocol, and a pre-launch
+   checklist that feeds Phase 1). **Must stay free** — FCP requires fan
+   content be free (verified 2026-07-03: current FCP expressly permits
+   Patreon-style donations; launching without one anyway).
 2. **Third-party data terms.** 17Lands public-data usage guidelines →
    attribution in app About + landing page (we *redistribute derived*
    ratings parquets to users). Scryfall API guidelines → hotlinking is
