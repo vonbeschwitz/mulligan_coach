@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an improvement or a new capability for the overlay.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! Tell us what you're trying to do — the
+        underlying goal helps as much as a specific proposal.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: What's the situation or frustration this would address?
+      placeholder: e.g. "I play a lot of Sealed and want the overlay to account for the different format."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like the overlay to do? (Rough ideas are fine.)
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or context
+      description: Anything else that would help — workarounds you use today, examples, etc.
+    validations:
+      required: false
