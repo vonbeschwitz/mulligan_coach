@@ -13,8 +13,9 @@ comparable background apps (Untapped.gg, Discord, Steam) do.
 Two pieces:
 
 * :class:`OverlayTray` — the icon itself plus a right-click menu
-  (Start with Windows, Quit) and the "Mulligan Coach is running"
-  balloon shown on *manual* launches when Arena is closed. Autostart
+  (update-check entries, "Setup & troubleshooting…", Start with
+  Windows, Quit) and the "Mulligan Coach is running" balloon shown
+  on *manual* launches when Arena is closed. Autostart
   launches (identified by :data:`autostart.AUTOSTART_LAUNCH_FLAG` on
   the command line) stay silent: a balloon at every login would read
   as nagging and imply background activity that isn't happening.
@@ -95,6 +96,16 @@ class OverlayTray(QSystemTrayIcon):
         update_separator.setVisible(False)
         self._update_separator = update_separator
 
+        # First-run / troubleshooting wizard entry. Hidden until the GUI
+        # wires it via ``enable_setup`` (there's nothing to open from a
+        # headless context). Gives a user whose overlay stays silent —
+        # Detailed Logs off, Arena in an odd install location — a way
+        # back to the setup guide after the launch dialog is dismissed.
+        setup_action = self._menu.addAction("Setup & troubleshooting…")
+        assert setup_action is not None
+        setup_action.setVisible(False)
+        self._setup_action = setup_action
+
         self._autostart_action: QAction | None = None
         if autostart.supported():
             action = self._menu.addAction("Start with Windows")
@@ -130,6 +141,17 @@ class OverlayTray(QSystemTrayIcon):
         """
         self._check_action.triggered.connect(lambda _checked=False: on_check())
         self._check_action.setVisible(True)
+
+    def enable_setup(self, on_open: Callable[[], None]) -> None:
+        """Reveal + wire the "Setup & troubleshooting…" menu entry.
+
+        *on_open* is invoked on the GUI thread when the user clicks the
+        entry; the GUI uses it to (re-assess and) show the first-run
+        wizard dialog. Only called when a GUI is present, so a headless
+        run never shows a dead menu item.
+        """
+        self._setup_action.triggered.connect(lambda _checked=False: on_open())
+        self._setup_action.setVisible(True)
 
     def show_update_available(self, title: str, body: str, url: str) -> None:
         """Surface an available EXE update: balloon + "Download update" entry.

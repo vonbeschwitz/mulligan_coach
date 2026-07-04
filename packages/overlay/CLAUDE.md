@@ -26,13 +26,18 @@ src/mulligan_coach_overlay/
 ├── __init__.py          # Re-exports nothing — top-level import is Qt-free
 ├── arena_paths.py       # Resolve Player.log on Windows / macOS
 ├── arena_card_db.py     # Read Arena's local Raw_CardDatabase SQLite for grpId mapping
+│                        #   (auto-locates standalone / Epic / log-derived installs)
 ├── arena_window.py      # Win32 watcher: Arena foreground / minimised / absent state
 ├── deck_persistence.py  # Save / load last submitted deck (cross-restart fallback)
+├── detailed_logs.py     # Detect Arena's "Detailed Logs (Plugin Support)" setting from the log
 ├── events.py            # Pydantic events: DeckSubmitted, MulliganDecisionRequest, MatchEnded
+├── first_run.py         # Setup assessment (Arena / Detailed Logs / card DB) + onboarded-state
+├── first_run_dialog.py  # Thin Qt wizard dialog over first_run
 ├── log_tailer.py        # Poll-based tail + block / JSON parsing + event extraction
 ├── card_index.py        # arena_id -> ParsedCard (MTGJSON + Arena DB merged)
 ├── coordinator.py       # State machine: events -> CoordinatorOutput
 ├── headless.py          # CLI: tail + recommend + print verdicts
+├── screen_geometry.py   # Clamp a restored window position onto an attached screen
 ├── tray.py              # System tray icon + menu + manual-launch balloon
 └── gui.py               # PyQt6 overlay widget + Arena-follow + collapse hotkey
 tests/
@@ -67,12 +72,23 @@ Three layers, each replaceable without touching the others:
      a freshly-rotated format (TLA/TMT/ECL/SOS at the time of writing —
      177 of ~1180 cards covered).
    * Arena's local SQLite — `Raw_CardDatabase_<hash>.mtga` inside the
-     MTGA install (default
-     `C:\Program Files\Wizards of the Coast\MTGA\MTGA_Data\Downloads\Raw`).
-     Authoritative and always-current. Joined to ParsedCards by
-     `(set_code, collector_number)`. Adds ~1000 more arena_ids on the
-     current rotation — without this source, the overlay can't resolve
-     any deck card on a recent set.
+     MTGA install. Authoritative and always-current. Joined to
+     ParsedCards by `(set_code, collector_number)`. Adds ~1000 more
+     arena_ids on the current rotation — without this source, the
+     overlay can't resolve any deck card on a recent set.
+
+     `arena_card_db.default_card_database_path()` locates it
+     install-source-agnostically: first the install dir Arena records
+     in its own `Player.log` (`Mono path[0] = '.../MTGA_Data/Managed'`
+     — covers Epic Games Store, Steam, and custom-drive installs
+     automatically), then the well-known standalone
+     (`C:\Program Files\Wizards of the Coast\...`) and Epic
+     (`C:\Program Files\Epic Games\MagicTheGathering\...`) fallbacks.
+     `MULLIGAN_COACH_MTGA_CARDDB` (a file path) still overrides
+     everything, and the first-run wizard's folder picker persists a
+     `Downloads/Raw` dir (`first_run.json`'s `card_db_dir`) as a last
+     resort — stored as the *directory* so it survives a content patch
+     renaming the file.
 
    See `arena_card_db.py` for the SQLite reader. The file is opened
    read-only via `?mode=ro&immutable=1` so we don't compete with the
@@ -198,8 +214,9 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   Arena isn't running, and Start-with-Windows is on by default — so
   without a tray icon the app would frequently be running with zero
   visible presence and no way to quit it. The tray icon is permanent
-  for the app's lifetime; its right-click menu holds Start-with-
-  Windows (mirrors the gear menu) and Quit. On a *manual* launch with
+  for the app's lifetime; its right-click menu holds the update-check
+  entries, "Setup & troubleshooting…" (first-run wizard), Start-with-
+  Windows (mirrors the gear menu), and Quit. On a *manual* launch with
   Arena closed it shows a one-shot balloon ("Mulligan Coach is
   running — the overlay will appear when you open MTG Arena") so the
   user knows the launch worked. Autostart launches are identified by
@@ -227,6 +244,21 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   never disturbs the overlay (silent on auto-checks, gentle "couldn't
   check" only on a manual one). Disable via
   `MULLIGAN_COACH_EXE_VERSION_URL=""`.
+* **First-run wizard** (`first_run.py` + `first_run_dialog.py` + tray).
+  The overlay is silent unless three prerequisites hold: Arena has run
+  (Player.log exists), **Detailed Logs (Plugin Support)** is enabled
+  (detected via the `DETAILED LOGS: ENABLED`/`DISABLED` marker Arena
+  writes at session start — see `detailed_logs.py`; falls back to
+  "any GRE message ⇒ enabled"), and a `Raw_CardDatabase` is reachable.
+  `first_run.assess_setup` produces a `SetupStatus`; the thin
+  `FirstRunDialog` renders it with a Detailed-Logs enable guide, a
+  Re-check button, and a "Locate Arena install…" folder picker (last
+  resort for the card DB). It auto-pops at launch **only** when
+  something's wrong *and* the user hasn't been onboarded before —
+  `first_run.json`'s `detailed_logs_verified` flips on the first
+  all-clear and suppresses auto-popping thereafter (no-nag guarantee).
+  The tray's **"Setup & troubleshooting…"** entry re-opens it any time.
+  All decision logic is Qt-free + unit-tested; the dialog is thin glue.
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as
@@ -234,7 +266,11 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   window.
 * Position is top-right of the primary screen by default; the user
   can drag-to-move and the position is preserved across layout
-  toggles.
+  toggles. A restored position is clamped onto a currently-attached
+  screen (`screen_geometry.clamp_to_screens`) so a spot saved on a
+  since-unplugged monitor doesn't strand the (frameless, taskbar-
+  hidden) window off every display. A deliberately edge-parked
+  position is left untouched — only a stranded one is rescued.
 
 ## Out of scope (for now)
 

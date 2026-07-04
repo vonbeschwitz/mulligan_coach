@@ -86,8 +86,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from . import arena_window, autostart, user_data
+from . import arena_window, autostart, first_run, user_data
 from ._frozen import configure_bundle_paths, configure_frozen_logging, running_bundle_version
+from .arena_card_db import find_card_database_in
 from .arena_paths import default_log_path
 from .arena_window import ArenaWindowWatcher
 from .auto_update import UpdateRunner
@@ -110,8 +111,10 @@ from .coordinator import (
 )
 from .deck_persistence import default_persistence_path, load_last_deck, save_last_deck
 from .events import DeckSubmitted, MulliganDecisionRequest
+from .first_run_dialog import FirstRunDialog
 from .log_tailer import LogTailer
 from .position_persistence import default_positions_path, load_positions, save_positions
+from .screen_geometry import clamp_to_screens
 from .stats_html import (
     _KEEP_COLOR,
     _MARGINAL_COLOR,
@@ -774,9 +777,29 @@ class OverlayWindow(QWidget):
         # anywhere and the new position is persisted on quit.
         target_pos = self._compact_pos if self._compact else self._expanded_pos
         if target_pos is not None:
-            self.move(target_pos)
+            # Clamp to a currently-attached screen: a position saved on a
+            # monitor that's since been unplugged (or a rearranged /
+            # lower-res desktop) would otherwise place this frameless,
+            # taskbar-hidden window off every display — invisible and
+            # un-grabbable. clamp_to_screens leaves a deliberately-parked
+            # position untouched and only rescues one that's stranded.
+            self.move(self._clamp_to_screens(target_pos))
         else:
             self._position_default_for_current_layout()
+
+    def _clamp_to_screens(self, pos: QPoint) -> QPoint:
+        """Return *pos* nudged onto an attached screen if it's stranded.
+
+        Pure geometry lives in :func:`screen_geometry.clamp_to_screens`;
+        here we just marshal Qt's ``QScreen.geometry()`` rectangles into
+        the plain-tuple form it expects and back.
+        """
+        rects = [
+            (g.left(), g.top(), g.width(), g.height())
+            for g in (screen.geometry() for screen in QGuiApplication.screens())
+        ]
+        x, y = clamp_to_screens((pos.x(), pos.y()), (self.width(), self.height()), rects)
+        return QPoint(x, y)
 
     # -----------------------------------------------------------------
     # Paint event: rounded-rect background with a subtle border
@@ -1195,8 +1218,22 @@ def main(argv: list[str] | None = None) -> int:
     if tray is not None:
         tray.show()
 
+    # Resolve Arena's log path + persisted first-run state up front. A
+    # card-database directory the user pinned via the wizard's folder
+    # picker (when auto-detection failed) feeds the card-index build,
+    # and the same log path drives the setup assessment wired in below.
+    log_path = default_log_path()
+    first_run_path = first_run.default_first_run_path()
+    fr_state = first_run.load_first_run_state(first_run_path)
+    user_card_db = (
+        find_card_database_in(Path(fr_state.card_db_dir)) if fr_state.card_db_dir else None
+    )
+
     log.info("loading card index + recommendation service…")
-    card_index = ArenaCardIndex.build()
+    # arena_db_path=None lets ArenaCardIndex auto-detect the CardDatabase
+    # (now including Epic Games Store + log-derived install locations);
+    # a user-pinned dir overrides that.
+    card_index = ArenaCardIndex.build(arena_db_path=user_card_db)
     service = load_service(card_index.loaded_sets)
     coordinator = OverlayCoordinator(card_index, service)
 
@@ -1207,7 +1244,6 @@ def main(argv: list[str] | None = None) -> int:
     persistence_path = default_persistence_path()
     seeded_output = _seed_from_disk(coordinator, persistence_path)
 
-    log_path = default_log_path()
     log.info("tailing %s", log_path)
     tailer = LogTailer(log_path, start_at_end=True)
 
@@ -1259,6 +1295,15 @@ def main(argv: list[str] | None = None) -> int:
     # + "Download update" entry that open the release page. Needs the
     # tray as its UI surface, so skipped on desktops without one.
     exe_update = _install_exe_update_check(tray) if tray is not None else None
+
+    # First-run wizard: assess the Detailed-Logs / Arena / card-database
+    # setup and, only when something needs fixing and the user hasn't
+    # been onboarded before, pop a guide dialog. Always wires the tray's
+    # "Setup & troubleshooting…" entry so it stays reachable later. Held
+    # in a local so the QDialog isn't garbage-collected.
+    first_run_dialog = _install_first_run_wizard(  # noqa: F841 — keeps the dialog alive
+        tray, log_path=log_path, first_run_path=first_run_path, state=fr_state
+    )
 
     def _on_app_quit() -> None:
         # IMPORTANT: don't rely on a queued ``worker.stopped → thread.quit``
@@ -1569,6 +1614,60 @@ def _install_exe_update_check(
     timer.start()
     log.info("exe-update: scheduled every 6h against %s", version_url)
     return controller, timer
+
+
+def _install_first_run_wizard(
+    tray: OverlayTray | None,
+    *,
+    log_path: Path,
+    first_run_path: Path,
+    state: first_run.FirstRunState,
+) -> FirstRunDialog:
+    """Build the first-run wizard, wire the tray entry, auto-show if needed.
+
+    Assesses the setup once here (Detailed Logs / Arena log / card DB),
+    persists the "verified" flag on the first all-clear so the wizard
+    stops auto-popping thereafter, and auto-shows the dialog only when
+    something needs fixing *and* the user hasn't been onboarded before
+    (:func:`first_run.should_auto_show`). The tray "Setup &
+    troubleshooting…" entry re-assesses and re-shows on demand.
+
+    Returns the dialog so ``main`` keeps a strong reference — a
+    garbage-collected QDialog would silently disappear.
+    """
+    status = first_run.assess_setup(log_path=log_path, card_db_dir=state.card_db_dir)
+    reconciled = first_run.reconcile_state(status, state)
+    if reconciled != state:
+        try:
+            first_run.save_first_run_state(first_run_path, reconciled)
+        except OSError:
+            log.exception("could not persist first-run state to %s", first_run_path)
+
+    dialog = FirstRunDialog(
+        None,
+        status=status,
+        state=reconciled,
+        state_path=first_run_path,
+        log_path=log_path,
+    )
+
+    if tray is not None:
+
+        def _open_wizard() -> None:
+            dialog.refresh()
+            dialog.show()
+            dialog.raise_()
+            dialog.activateWindow()
+
+        tray.enable_setup(_open_wizard)
+
+    if first_run.should_auto_show(status, reconciled):
+        log.info("first-run: setup needs attention (%s); showing wizard", status)
+        dialog.show()
+    else:
+        log.info("first-run: setup OK or already onboarded; wizard available from tray")
+
+    return dialog
 
 
 def _seed_from_disk(
