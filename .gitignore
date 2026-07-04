@@ -45,6 +45,12 @@ Thumbs.db
 !/data/processed/parsed_cards/
 models/
 
+# Append-only download-count snapshots written by the publishers before
+# each `gh release upload --clobber` (which resets GitHub's per-asset
+# download counter). A local operational record, not source — see
+# packages/overlay/packaging/publish_*.py `_snapshot_download_counts`.
+/logs/download_counts.jsonl
+
 # DuckDB transient/lock files (the .duckdb file itself lives under data/)
 *.duckdb-wal
 *.duckdb.wal

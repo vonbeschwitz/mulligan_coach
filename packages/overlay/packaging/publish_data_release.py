@@ -17,9 +17,11 @@ What it does
    (:mod:`mulligan_coach_overlay.auto_update.manifest`) describing
    every artifact + the URL it'll live at after upload.
 4. Ensures the ``data-current`` GitHub Release exists (creates it
-   if missing), then uploads each artifact + the manifest itself
-   with ``gh release upload --clobber`` so re-runs replace assets
-   in place rather than tearing down the release.
+   if missing), snapshots the existing assets' download counts to
+   ``logs/download_counts.jsonl`` (``--clobber`` resets them), then
+   uploads each artifact + the manifest itself with
+   ``gh release upload --clobber`` so re-runs replace assets in place
+   rather than tearing down the release.
 
 Why a floating ``data-current`` release
 ---------------------------------------
@@ -55,6 +57,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -380,6 +383,101 @@ def _ensure_release(repo: str, tag: str, *, dry_run: bool) -> None:
     )
 
 
+def _snapshot_download_counts(
+    repo: str,
+    tag: str,
+    *,
+    dry_run: bool,
+    log_path: Path | None = None,
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]] | None = None,
+) -> int:
+    """Record each release asset's ``download_count`` before a ``--clobber``.
+
+    GitHub resets an asset's download counter when the asset is replaced,
+    which every ``--clobber`` upload below does. Download counts are our
+    only install/usage signal (``manifest.json`` downloads ~ active
+    machines; see the going-public plan), so we append the current counts
+    to an append-only log *before* clobbering, giving a reconstructable
+    running total across publishes.
+
+    Best-effort + read-only: any failure — ``gh`` missing, auth, network,
+    or the release not existing yet (first publish) — is warned about but
+    NEVER blocks the publish. Returns the number of asset rows recorded.
+
+    ``runner`` / ``log_path`` are injectable for tests; production shells
+    out to ``gh api`` and appends to ``logs/download_counts.jsonl``.
+
+    NOTE: this logic is duplicated (near-verbatim) in
+    ``publish_exe_release.py`` on purpose — the same convention the two
+    publishers already use for ``_run_gh`` / ``_ensure_release``, so
+    neither script takes a dependency on the other.
+    """
+    if dry_run:
+        print(">>> (dry-run) skipping download-count snapshot")
+        return 0
+    log_path = log_path or (REPO_ROOT / "logs" / "download_counts.jsonl")
+    api_args = ["api", f"repos/{repo}/releases/tags/{tag}"]
+    try:
+        if runner is None:
+            result = subprocess.run(
+                ["gh", *api_args], cwd=REPO_ROOT, text=True, capture_output=True
+            )
+        else:
+            result = runner(api_args)
+    except OSError as exc:
+        print(
+            f"!! WARNING: could not run gh for download-count snapshot ({exc}); continuing publish",
+            file=sys.stderr,
+        )
+        return 0
+    if result.returncode != 0:
+        blob = f"{result.stdout}{result.stderr}".lower()
+        if "not found" in blob or "404" in blob:
+            print(f"no existing release {tag!r} on {repo}; no download counts to snapshot")
+        else:
+            print(
+                f"!! WARNING: download-count snapshot failed (gh exit {result.returncode}): "
+                f"{result.stderr.strip()}; continuing publish",
+                file=sys.stderr,
+            )
+        return 0
+    try:
+        assets = json.loads(result.stdout).get("assets", [])
+        stamp = (
+            datetime.datetime.now(datetime.UTC)
+            .replace(microsecond=0)
+            .isoformat()
+            .replace("+00:00", "Z")
+        )
+        rows = [
+            {
+                "snapshot_at": stamp,
+                "repo": repo,
+                "tag": tag,
+                "name": asset.get("name"),
+                "download_count": asset.get("download_count"),
+                "updated_at": asset.get("updated_at"),
+            }
+            for asset in assets
+        ]
+        if rows:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with log_path.open("a", encoding="utf-8") as fh:
+                for row in rows:
+                    fh.write(json.dumps(row) + "\n")
+    except (json.JSONDecodeError, OSError, AttributeError, TypeError) as exc:
+        print(
+            f"!! WARNING: could not record download counts ({exc}); continuing publish",
+            file=sys.stderr,
+        )
+        return 0
+    if rows:
+        print(f"snapshotted {len(rows)} asset download-count(s) to {log_path}")
+    else:
+        print(f"release {tag!r} on {repo} has no assets yet; nothing to snapshot")
+    return len(rows)
+
+
 _RELEASE_NOTES = (
     "Floating data release for the Mulligan Coach auto-updater.\n\n"
     "This release's assets are overwritten each time the publisher runs; "
@@ -424,6 +522,9 @@ def push_release(
     cross-asset ordering is ours to enforce.)
     """
     _ensure_release(repo, tag, dry_run=dry_run)
+    # Snapshot the pre-clobber download counts (the uploads below reset
+    # them). Best-effort — never blocks the publish.
+    _snapshot_download_counts(repo, tag, dry_run=dry_run)
     for artifact in artifacts:
         _upload_asset(repo, tag, artifact.local_path, dry_run=dry_run)
     _upload_asset(repo, tag, manifest_path, dry_run=dry_run)
