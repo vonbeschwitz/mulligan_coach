@@ -153,6 +153,22 @@ without re-materialising the data pipeline:
 uv run python packages/overlay/packaging/fetch_release_inputs.py
 ```
 
+## Publishing & download-count snapshots
+
+Both publishers (`publish_exe_release.py`, `publish_data_release.py`)
+upload with `gh release upload --clobber`, which **resets GitHub's
+per-asset `download_count`** each time. Download counts are the only
+install/usage signal we have (EXE-zip downloads ≈ installs;
+`manifest.json` downloads ≈ active machines — see the going-public
+plan), so right before clobbering, each publisher appends the current
+counts to an append-only log at `logs/download_counts.jsonl` (one JSON
+line per asset: `snapshot_at`, `repo`, `tag`, `name`, `download_count`,
+`updated_at`). Summing the per-asset deltas across snapshots
+reconstructs a running total. The snapshot is best-effort: if `gh`
+is missing, unauthenticated, offline, or the release doesn't exist yet,
+it warns and the publish continues. The log is gitignored (a local
+operational record, not source). `--dry-run` skips the snapshot.
+
 ## Known limitations
 
 * **Single-platform (Windows).** PyInstaller builds for the host
