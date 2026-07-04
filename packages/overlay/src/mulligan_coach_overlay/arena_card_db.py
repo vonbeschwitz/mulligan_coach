@@ -22,29 +22,76 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sqlite3
 import sys
 from pathlib import Path
 
+from .arena_paths import default_log_path
+
 log = logging.getLogger(__name__)
 
 # Env var override — both for tests and for users whose MTGA install
-# lives somewhere non-standard (custom drive, Steam, etc.).
+# lives somewhere non-standard (custom drive, Steam, etc.). Points at
+# the ``Raw_CardDatabase_*.mtga`` *file* directly.
 _ENV_OVERRIDE = "MULLIGAN_COACH_MTGA_CARDDB"
 
-# Standard Windows install. Arena is a Wizards-published Windows client;
-# Mac users typically run it through Wine / Parallels with the file laid
-# out in a Wine prefix at an arbitrary path — we don't try to guess those.
-_DEFAULT_WINDOWS_DIR = Path("C:/Program Files/Wizards of the Coast/MTGA/MTGA_Data/Downloads/Raw")
+# Well-known ``MTGA_Data`` install locations, by distribution channel.
+# We append ``Downloads/Raw`` to each to reach the CardDatabase dir.
+# These are *fallbacks*: the primary, install-source-agnostic source is
+# the path Arena records in its own log (see
+# :func:`arena_data_dir_from_log`), which covers Epic / Steam / custom
+# drives without us having to enumerate them here.
+_DEFAULT_WINDOWS_DATA_DIRS: tuple[Path, ...] = (
+    # Standalone Wizards installer (the historical default).
+    Path("C:/Program Files/Wizards of the Coast/MTGA/MTGA_Data"),
+    Path("C:/Program Files (x86)/Wizards of the Coast/MTGA/MTGA_Data"),
+    # Epic Games Store. Arena's Epic app installs under the app folder
+    # ``MagicTheGathering`` (confirmed via the Epic/macOS layout
+    # ``Epic Games/MagicTheGathering/MTGA``); on Windows Epic defaults
+    # to ``C:/Program Files/Epic Games/<AppFolder>``.
+    Path("C:/Program Files/Epic Games/MagicTheGathering/MTGA/MTGA_Data"),
+    Path("C:/Program Files (x86)/Epic Games/MagicTheGathering/MTGA/MTGA_Data"),
+)
+
+# ``Downloads/Raw`` under an ``MTGA_Data`` dir is where the
+# ``Raw_CardDatabase_<hash>.mtga`` files live.
+_RAW_SUBDIR = ("Downloads", "Raw")
+
+# Glob for the CardDatabase file (the ``<hash>`` changes each content patch).
+_CARD_DB_GLOB = "Raw_CardDatabase_*.mtga"
+
+# Arena's ``Player.log`` opens with Unity's ``Mono path[0]`` line, which
+# embeds the install's managed-assemblies dir, e.g.::
+#
+#     Mono path[0] = 'C:/Program Files/Epic Games/MagicTheGathering/MTGA/MTGA_Data/Managed'
+#
+# The part before ``/Managed`` is the ``MTGA_Data`` dir — an
+# authoritative, install-source-agnostic pointer at where *this* user's
+# Arena lives (the same trick MTGA_Draft_17Lands uses). We match both
+# separators so a backslash variant is covered.
+_MANAGED_RE = re.compile(r"['\"]([^'\"]+?)[/\\]Managed['\"]")
+
+# How many bytes of the log head to read when hunting for the Mono-path
+# line. It's the first line, so this is generous.
+_LOG_HEAD_BYTES = 65_536
 
 
-def default_card_database_path() -> Path | None:
+def default_card_database_path(log_path: Path | None = None) -> Path | None:
     """Locate Arena's most recent ``Raw_CardDatabase_*.mtga``.
+
+    Resolution order:
+
+    1. The ``MULLIGAN_COACH_MTGA_CARDDB`` env override (a file path).
+    2. The install dir Arena records in its own ``Player.log`` (covers
+       Epic Games Store / Steam / custom-drive installs automatically).
+    3. The well-known standalone + Epic install locations.
 
     Returns ``None`` if no database is found — the overlay then falls
     back to the MTGJSON/Scryfall-derived ``arena_id`` already on
     :class:`ParsedCard`, which is reliable for older sets but mostly
-    empty for the current Premier Draft rotation.
+    empty for the current Premier Draft rotation. ``log_path`` defaults
+    to Arena's canonical log location; pass an explicit path for tests.
     """
     override = os.environ.get(_ENV_OVERRIDE, "").strip()
     if override:
@@ -55,15 +102,113 @@ def default_card_database_path() -> Path | None:
         # above still works for users with a custom layout (Bottles,
         # Crossover, …).
         return None
-    if not _DEFAULT_WINDOWS_DIR.exists():
+    if log_path is None:
+        try:
+            log_path = default_log_path()
+        except RuntimeError:
+            log_path = None
+    for raw_dir in candidate_raw_dirs(log_path):
+        db = find_card_database_in(raw_dir)
+        if db is not None:
+            return db
+    return None
+
+
+def arena_data_dir_from_log(log_path: Path) -> Path | None:
+    """Return the ``MTGA_Data`` dir Arena records in ``Player.log``, if any.
+
+    Reads the log head, extracts the ``Mono path[0] = '.../Managed'``
+    line, and returns the ``MTGA_Data`` dir that precedes ``/Managed``
+    when it exists on disk. This is the most reliable install locator —
+    it's whatever path Arena itself was launched from — so it resolves
+    Epic Games Store, Steam, and custom-drive installs without a
+    hard-coded candidate list. Returns ``None`` on any read/parse miss.
+    """
+    try:
+        with log_path.open("r", encoding="utf-8", errors="replace") as fh:
+            head = fh.read(_LOG_HEAD_BYTES)
+    except OSError as exc:
+        log.info("card-db: could not read log head for install dir: %s", exc)
         return None
-    candidates = list(_DEFAULT_WINDOWS_DIR.glob("Raw_CardDatabase_*.mtga"))
+    match = _MANAGED_RE.search(head)
+    if match is None:
+        return None
+    data_dir = Path(match.group(1))
+    return data_dir if data_dir.is_dir() else None
+
+
+def candidate_raw_dirs(log_path: Path | None) -> list[Path]:
+    """Ordered, de-duplicated list of ``Downloads/Raw`` dirs to probe.
+
+    The log-derived install (if resolvable) comes first — it's the one
+    the running Arena actually uses — followed by the well-known
+    standalone + Epic locations as fallbacks.
+    """
+    dirs: list[Path] = []
+    if log_path is not None:
+        data_dir = arena_data_dir_from_log(log_path)
+        if data_dir is not None:
+            dirs.append(data_dir.joinpath(*_RAW_SUBDIR))
+    for data_dir in _DEFAULT_WINDOWS_DATA_DIRS:
+        dirs.append(data_dir.joinpath(*_RAW_SUBDIR))
+    # De-dupe while preserving order (the log-derived dir often equals a
+    # default one on a standalone install).
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for d in dirs:
+        if d not in seen:
+            seen.add(d)
+            unique.append(d)
+    return unique
+
+
+def find_card_database_in(raw_dir: Path) -> Path | None:
+    """Newest ``Raw_CardDatabase_*.mtga`` directly inside ``raw_dir``.
+
+    Newest mtime wins — Arena keeps the previous file briefly after a
+    content patch and we want the freshly-downloaded one. Returns
+    ``None`` when the dir is absent or holds no matching file.
+    """
+    if not raw_dir.is_dir():
+        return None
+    candidates = [p for p in raw_dir.glob(_CARD_DB_GLOB) if p.is_file()]
     if not candidates:
         return None
-    # Newest mtime wins — Arena keeps the previous file briefly after
-    # a content patch and we want the freshly-downloaded one.
     candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
     return candidates[0]
+
+
+def find_card_database_under(root: Path) -> Path | None:
+    """Search a user-picked folder for a CardDatabase (wizard last resort).
+
+    The first-run wizard lets a user point at their Arena install when
+    auto-detection fails (an exotic drive, a portable copy). They might
+    pick the install root, the ``MTGA_Data`` dir, or the ``Raw`` dir
+    itself — so we check the likely spots directly, then fall back to a
+    bounded recursive search. Returns the newest matching file, or
+    ``None``.
+    """
+    if not root.is_dir():
+        return None
+    # Likely exact locations first (cheap, no walk).
+    direct = [
+        root,
+        root.joinpath(*_RAW_SUBDIR),
+        root.joinpath("MTGA_Data", *_RAW_SUBDIR),
+        root.joinpath("MTGA", "MTGA_Data", *_RAW_SUBDIR),
+    ]
+    for raw_dir in direct:
+        db = find_card_database_in(raw_dir)
+        if db is not None:
+            return db
+    # Fallback: recursive hunt. Arena's data tree is large but finite;
+    # collect every match and take the newest so we're robust to the
+    # user picking a level above the Raw dir.
+    matches = [p for p in root.rglob(_CARD_DB_GLOB) if p.is_file()]
+    if not matches:
+        return None
+    matches.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return matches[0]
 
 
 def load_arena_id_pairs(db_path: Path) -> list[tuple[str, str, int, str]]:
