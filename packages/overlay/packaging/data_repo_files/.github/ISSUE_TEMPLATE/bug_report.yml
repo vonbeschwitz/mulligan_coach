@@ -1,0 +1,69 @@
+name: Bug report
+description: Something in the Mulligan Coach overlay isn't working right.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem! A few quick details make bugs
+        much faster to fix. The overlay's **"Send feedback…"** tray entry
+        pre-fills the version fields for you — if you used that, they're
+        already filled in below.
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead?
+      placeholder: e.g. "The overlay showed no recommendation for my opening hand on the play."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we make it happen again?
+      placeholder: |
+        1. Started Arena and queued a Premier Draft.
+        2. Kept a 7-card hand on the play.
+        3. Overlay stayed blank.
+    validations:
+      required: false
+  - type: input
+    id: app_version
+    attributes:
+      label: App version
+      description: >
+        From the "Send feedback…" pre-fill, or the About/version info.
+        Looks like "20260703+abc123", or "source" for a dev build.
+      placeholder: 20260703+abc123
+    validations:
+      required: false
+  - type: input
+    id: data_version
+    attributes:
+      label: Data version
+      description: The data-bundle version (also pre-filled by "Send feedback…").
+      placeholder: 2026-06-30
+    validations:
+      required: false
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: e.g. Windows-11-10.0.26200.
+      placeholder: Windows-11-10.0.26200
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log snippet
+      description: >
+        Paste the last ~50 lines of the overlay log if you can. It lives at
+        %LOCALAPPDATA%\MulliganCoach\logs\overlay.log on Windows. Please
+        remove anything you'd rather not share — the log is just for
+        diagnosing this issue.
+      render: text
+    validations:
+      required: false

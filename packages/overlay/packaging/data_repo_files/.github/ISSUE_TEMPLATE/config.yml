@@ -1,0 +1,14 @@
+# Issue-template chooser config for the PUBLIC data repo.
+#
+# blank_issues_enabled: keep True so users can still open a free-form
+# issue that doesn't fit either template.
+blank_issues_enabled: true
+
+# Optional: once the Google Form exists (see the overlay's feedback.py
+# OWNER CONFIGURATION block), you can surface it here as a contact link
+# on the "New issue" chooser. Uncomment and paste the form's public URL.
+#
+# contact_links:
+#   - name: Send feedback via Google Form
+#     url: https://docs.google.com/forms/d/e/FORM_ID/viewform
+#     about: Quick structured feedback (pre-fills your app/data/OS versions).

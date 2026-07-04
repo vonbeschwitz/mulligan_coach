@@ -31,6 +31,7 @@ src/mulligan_coach_overlay/
 ├── deck_persistence.py  # Save / load last submitted deck (cross-restart fallback)
 ├── detailed_logs.py     # Detect Arena's "Detailed Logs (Plugin Support)" setting from the log
 ├── events.py            # Pydantic events: DeckSubmitted, MulliganDecisionRequest, MatchEnded
+├── feedback.py          # Build the "Send feedback" URL (Google Form pre-fill or Issues fallback)
 ├── first_run.py         # Setup assessment (Arena / Detailed Logs / card DB) + onboarded-state
 ├── first_run_dialog.py  # Thin Qt wizard dialog over first_run
 ├── log_tailer.py        # Poll-based tail + block / JSON parsing + event extraction
@@ -215,8 +216,9 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   without a tray icon the app would frequently be running with zero
   visible presence and no way to quit it. The tray icon is permanent
   for the app's lifetime; its right-click menu holds the update-check
-  entries, "Setup & troubleshooting…" (first-run wizard), Start-with-
-  Windows (mirrors the gear menu), and Quit. On a *manual* launch with
+  entries, "Setup & troubleshooting…" (first-run wizard), "Send
+  feedback…" (see below), Start-with-Windows (mirrors the gear menu),
+  and Quit. On a *manual* launch with
   Arena closed it shows a one-shot balloon ("Mulligan Coach is
   running — the overlay will appear when you open MTG Arena") so the
   user knows the launch worked. Autostart launches are identified by
@@ -259,6 +261,20 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   all-clear and suppresses auto-popping thereafter (no-nag guarantee).
   The tray's **"Setup & troubleshooting…"** entry re-opens it any time.
   All decision logic is Qt-free + unit-tested; the dialog is thin glue.
+* **Feedback channel** (`feedback.py` + tray). The tray's always-visible
+  **"Send feedback…"** entry opens a feedback destination in the default
+  browser. When the owner has configured a Google Form (the
+  `OWNER CONFIGURATION` block in `feedback.py` — form URL + three
+  `entry.<id>` field ids), it opens that form pre-filled with the app
+  (EXE build) version, the seeded data version, and the OS as
+  `entry.<id>=` query params. Until then it falls back to the **public
+  data repo's Issues page** (`.../mulligan_coach_data/issues`), so the
+  entry is functional before the form exists. URL construction is pure +
+  unit-tested (`build_feedback_url`); the `QDesktopServices.openUrl` call
+  is the only Qt part, in `tray._open_feedback`. GitHub issue templates
+  for the public data repo are staged (not pushed) under
+  `packaging/data_repo_files/.github/ISSUE_TEMPLATE/` with copy
+  instructions in that dir's README — a one-time owner action.
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as

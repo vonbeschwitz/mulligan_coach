@@ -123,6 +123,25 @@ def user_models_root() -> Path:
     return user_state_root() / "models"
 
 
+def seeded_data_version() -> str | None:
+    """Return the version stamp of the data bundle this install seeded from.
+
+    Reads ``_seeded_version.txt`` (written by :func:`seed_from_bundle`),
+    which records the EXE bundle whose bundled data/model were copied
+    into the user dir. Returns ``None`` from source or before the first
+    seed.
+
+    Caveat: this is the *baseline* data version. The in-process
+    auto-updater refreshes individual data artifacts (ratings, model)
+    without re-seeding, so a long-running install's live data can be
+    newer than this stamp. It's still the best single "which data does
+    this user have?" signal we persist today, which is why the feedback
+    channel reports it; finer-grained per-artifact versioning is a
+    future "Copy diagnostics" concern (see the going-public plan).
+    """
+    return _read_version(user_state_root() / _SEEDED_VERSION_FILE)
+
+
 def seed_from_bundle(bundle_root: Path, *, force: bool = False) -> bool:
     """Copy bundled data + model files into the user state dir.
 

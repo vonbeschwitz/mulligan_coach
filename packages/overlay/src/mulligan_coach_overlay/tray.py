@@ -47,7 +47,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from . import autostart
+from . import autostart, feedback
 
 log = logging.getLogger(__name__)
 
@@ -105,6 +105,14 @@ class OverlayTray(QSystemTrayIcon):
         assert setup_action is not None
         setup_action.setVisible(False)
         self._setup_action = setup_action
+
+        # "Send feedback…" — always visible; self-contained (opens a URL
+        # in the browser), so unlike the setup entry it needs no GUI
+        # callback wired in later and works the moment the tray exists.
+        feedback_action = self._menu.addAction("Send feedback…")
+        assert feedback_action is not None
+        feedback_action.triggered.connect(lambda _checked=False: self._open_feedback())
+        self._feedback_action = feedback_action
 
         self._autostart_action: QAction | None = None
         if autostart.supported():
@@ -184,6 +192,17 @@ class OverlayTray(QSystemTrayIcon):
         """Open the pending update URL in the default browser, if set."""
         if self._update_url:
             QDesktopServices.openUrl(QUrl(self._update_url))
+
+    def _open_feedback(self) -> None:
+        """Open the feedback destination (Google Form or Issues) in the browser.
+
+        The URL — pre-filled with app/data/OS versions when a Google Form
+        is configured, otherwise the public data repo's Issues page — is
+        built by the tested, Qt-free :mod:`feedback` module.
+        """
+        url = feedback.feedback_url()
+        log.info("opening feedback URL: %s", url)
+        QDesktopServices.openUrl(QUrl(url))
 
     def show_started_message(self) -> None:
         """Balloon: the app is alive and will appear with Arena.
