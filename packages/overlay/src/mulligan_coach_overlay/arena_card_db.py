@@ -133,7 +133,13 @@ def arena_data_dir_from_log(log_path: Path) -> Path | None:
     match = _MANAGED_RE.search(head)
     if match is None:
         return None
-    data_dir = Path(match.group(1))
+    # Normalise separators to ``/`` before building the Path. Unity writes
+    # forward slashes on Windows in practice, but a backslash variant is
+    # possible — and on a non-Windows interpreter (dev/CI) ``pathlib.Path``
+    # does NOT treat ``\`` as a separator, so an un-normalised backslash
+    # path would collapse to one weird component and never match a real
+    # dir. ``/`` is accepted as a separator on every platform.
+    data_dir = Path(match.group(1).replace("\\", "/"))
     return data_dir if data_dir.is_dir() else None
 
 
