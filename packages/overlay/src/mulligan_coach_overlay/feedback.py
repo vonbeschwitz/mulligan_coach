@@ -14,10 +14,10 @@ Qt-free-logic / thin-Qt-glue split as the rest of the overlay).
 Two destinations
 -----------------
 
-1. **A Google Form** (preferred), once the owner creates one and pastes
-   its details into the OWNER CONFIGURATION block below. Google Forms
-   supports pre-filling short-answer questions via ``entry.<id>=value``
-   query parameters, so the version/OS fields arrive already populated.
+1. **A Google Form** (preferred; configured in the OWNER CONFIGURATION
+   block below). Google Forms supports pre-filling short-answer
+   questions via ``entry.<id>=value`` query parameters, so the
+   version/OS fields arrive already populated.
 2. **GitHub Issues on the public data repo** as the fallback. This works
    *today* (the public ``mulligan_coach_data`` repo has Issues enabled
    even while the main code repo stays private), so the feature ships
@@ -39,37 +39,33 @@ from ._frozen import running_bundle_version
 from .user_data import seeded_data_version
 
 # ============================================================================
-# OWNER CONFIGURATION — Google Form feedback (one-time setup)
+# OWNER CONFIGURATION — Google Form feedback
 # ============================================================================
-# The Google Form does NOT exist yet. Until you create it and paste its
-# details below, "Send feedback…" opens the GitHub Issues fallback
-# (ISSUES_FALLBACK_URL) — which already works, so the feature is live
-# either way. Leaving FEEDBACK_FORM_URL = "" keeps the fallback.
+# Configured 2026-07-03 against the owner's live form
+# (short link: https://forms.gle/xZKc6Fm1UuEDpiDXA). The entry ids were
+# read from the form's public viewform page (Google embeds each
+# question's pre-fill id in FB_PUBLIC_LOAD_DATA_ in the page source).
 #
-# To wire up the Google Form (one time):
-#   1. Create a form at https://forms.google.com. Add three
-#      *short-answer* questions — their titles don't matter to this code,
-#      but name them clearly, e.g.:
-#         - "App version"
-#         - "Data version"
-#         - "Operating system"
-#      Add your real questions too ("What happened?", "Steps to
-#      reproduce", etc.).
-#   2. Top-right three-dots menu -> "Get pre-filled link". Type any
-#      placeholder into those three questions, then click "Get link".
-#      Google produces a URL shaped like:
+# If the form is ever RECREATED (deleting a question and re-adding it
+# also changes its id), refresh these four strings:
+#   1. Open the form editor -> three-dots menu -> "Get pre-filled link".
+#      Type a placeholder into the three version questions, click
+#      "Get link". Google produces a URL shaped like:
 #         https://docs.google.com/forms/d/e/<FORM_ID>/viewform?usp=pp_url&entry.111=App&entry.222=Data&entry.333=OS
-#   3. Paste the part up to and including "/viewform" into
+#   2. Paste the part up to and including "/viewform" into
 #      FEEDBACK_FORM_URL below.
-#   4. Paste each "entry.<NNN>" *number* into the matching _ENTRY_* below
+#   3. Paste each "entry.<NNN>" *number* into the matching _ENTRY_* below
 #      (just the digits: "entry.111" -> "111"). Match them to the right
-#      question by the placeholder text you typed in step 2.
+#      question by the placeholder text you typed in step 1.
 #
-# That's the whole change — no code edits beyond these four strings.
-FEEDBACK_FORM_URL = ""
-_ENTRY_APP_VERSION = ""  # entry.<NNN> id for the "App version" question
-_ENTRY_DATA_VERSION = ""  # entry.<NNN> id for the "Data version" question
-_ENTRY_OS = ""  # entry.<NNN> id for the "Operating system" question
+# Setting FEEDBACK_FORM_URL = "" reverts to the GitHub Issues fallback.
+FEEDBACK_FORM_URL = (
+    "https://docs.google.com/forms/d/e/"
+    "1FAIpQLSf4LpTPVScCZsXIGNXZ53y7_S2rRK2bVFLYfL1-ffbIFL0jMw/viewform"
+)
+_ENTRY_APP_VERSION = "1189621491"  # entry id for the "App version" question
+_ENTRY_DATA_VERSION = "1045681741"  # entry id for the "Data version" question
+_ENTRY_OS = "1230678341"  # entry id for the "Operating system" question
 
 # Fallback destination while the Google Form is unconfigured (and a
 # perfectly good permanent option). Issues on the PUBLIC data repo, which
