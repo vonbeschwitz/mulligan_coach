@@ -101,7 +101,9 @@ def score_one(
     for i, row in enumerate(df.itertuples(index=False)):
         on_play = bool(row.on_play)
         opp_mull = None if on_play or pd.isna(row.opp_num_mulligans) else int(row.opp_num_mulligans)
-        items.append((i, list(row.hand_cards), decks_by_draft[str(row.draft_id)], on_play, opp_mull, n_sims))
+        items.append(
+            (i, list(row.hand_cards), decks_by_draft[str(row.draft_id)], on_play, opp_mull, n_sims)
+        )
 
     p_keep: list[float | None] = [None] * len(df)
     t0 = time.time()
@@ -116,7 +118,9 @@ def score_one(
             if done % 500 == 0 or done == len(items):
                 elapsed = time.time() - t0
                 eta = elapsed * (len(items) - done) / done if done else 0.0
-                log.info("  progress %d/%d  elapsed=%.0fs  eta=%.0fs", done, len(items), elapsed, eta)
+                log.info(
+                    "  progress %d/%d  elapsed=%.0fs  eta=%.0fs", done, len(items), elapsed, eta
+                )
 
     return pd.DataFrame(
         {
