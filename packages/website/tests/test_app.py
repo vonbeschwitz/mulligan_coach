@@ -200,11 +200,15 @@ def _stub_explanation() -> RecommendationExplanation:
 
 
 def _choice_rec(
-    *, degradations: tuple[str, ...], stats_coverage: tuple[int, int]
+    *,
+    degradations: tuple[str, ...],
+    stats_coverage: tuple[int, int],
+    verdict: str = "marginal_keep",
+    p_keep: float = 0.7,
 ) -> ChoiceRecommendation:
     return ChoiceRecommendation(
-        verdict="marginal_keep",
-        p_keep=0.6,
+        verdict=verdict,  # type: ignore[arg-type]
+        p_keep=p_keep,
         mulligan_number_from=0,
         mulligan_number_to=1,
         n_sims=100,
@@ -294,6 +298,22 @@ def test_recommend_healthy_shows_no_degradations() -> None:
         assert "17Lands data: 23/23 spells" in text
         assert "win-rate features are zeroed" not in text
         assert "no 17Lands ratings row" not in text
+
+
+def test_recommend_renders_borderline_verdict() -> None:
+    """The no-judgement ``borderline`` verdict renders with its grey CSS
+    class and the coin-flip explainer, not a keep/mull colour."""
+    rec = _choice_rec(
+        degradations=(),
+        stats_coverage=(23, 23),
+        verdict="borderline",
+        p_keep=0.55,
+    )
+    for c in _client_with_rec(rec):
+        text = _post_recommend(c)
+        assert "rec-verdict-borderline" in text
+        assert "Borderline" in text
+        assert "coin flip" in text
 
 
 def test_healthz_returns_load_status(client: TestClient) -> None:

@@ -1,0 +1,77 @@
+==== Elite first-mulligan agreement check ====
+Set: SOS   n_sims: 300   n_workers: 10
+Choice model: models\choice_v9
+
+=== PremierDraft / SOS ===
+  Elite filter: {'min_n_games_bucket': 500, 'min_wr_bucket': 0.62, 'ranks': {'diamond', 'mythic'}, 'parquet': 'combined.PremierDraft.parquet'}
+  loaded 1,490,025 rows from combined.PremierDraft.parquet
+  elite mn=0 subset for PremierDraft/SOS: 1,553 rows
+  decks parsed: 263 kept  (dropped 0 unresolved, 1 size, 0 unsafe)
+  rows after parse: 1,546
+  progress 200/1546  elapsed=25s  eta=170s
+  progress 400/1546  elapsed=43s  eta=124s
+  progress 600/1546  elapsed=64s  eta=101s
+  progress 800/1546  elapsed=83s  eta=77s
+  progress 1000/1546  elapsed=101s  eta=55s
+  progress 1200/1546  elapsed=121s  eta=35s
+  progress 1400/1546  elapsed=140s  eta=15s
+  progress 1546/1546  elapsed=153s  eta=0s
+  inference done in 153s
+
+  --- Summary (PremierDraft / SOS) ---
+  n decisions:          1546
+  actual mull rate:     10.74%  (166 / 1546)
+  predicted mull rate:  7.96%  (123 / 1546)
+  verdict distribution:
+    clear_keep           1338  (86.55%)
+    marginal_keep          85  (5.50%)
+    marginal_mulligan      60  (3.88%)
+    clear_mulligan         63  (4.08%)
+
+  AGREEMENT (model keep/mull == player keep/mull): 1459 / 1546  (94.37%)
+  NOT COMPLETE DISAGREEMENT (excludes clear_keep+mulled, clear_mulligan+kept):  1513 / 1546  (97.87%)
+
+  Confusion matrix (rows=verdict, cols=actual):
+
+was_kept           player_kept  player_mulled  total
+verdict                                             
+clear_keep                1310             28   1338
+marginal_keep               48             37     85
+marginal_mulligan           17             43     60
+clear_mulligan               5             58     63
+total                     1380            166   1546
+
+=== TradDraft / SOS ===
+  Elite filter: {'min_n_games_bucket': 500, 'min_wr_bucket': 0.68, 'ranks': None, 'parquet': 'combined.TradDraft.parquet'}
+  loaded 184,952 rows from combined.TradDraft.parquet
+  elite mn=0 subset for TradDraft/SOS: 777 rows
+  decks parsed: 129 kept  (dropped 0 unresolved, 0 size, 0 unsafe)
+  rows after parse: 777
+  progress 200/777  elapsed=25s  eta=71s
+  progress 400/777  elapsed=44s  eta=41s
+  progress 600/777  elapsed=62s  eta=18s
+  progress 777/777  elapsed=78s  eta=0s
+  inference done in 78s
+
+  --- Summary (TradDraft / SOS) ---
+  n decisions:          777
+  actual mull rate:     15.83%  (123 / 777)
+  predicted mull rate:  16.99%  (132 / 777)
+  verdict distribution:
+    clear_keep            579  (74.52%)
+    marginal_keep          66  (8.49%)
+    marginal_mulligan      35  (4.50%)
+    clear_mulligan         97  (12.48%)
+
+  AGREEMENT (model keep/mull == player keep/mull): 732 / 777  (94.21%)
+  NOT COMPLETE DISAGREEMENT (excludes clear_keep+mulled, clear_mulligan+kept):  762 / 777  (98.07%)
+
+  Confusion matrix (rows=verdict, cols=actual):
+
+was_kept           player_kept  player_mulled  total
+verdict                                             
+clear_keep                 575              4    579
+marginal_keep               52             14     66
+marginal_mulligan           16             19     35
+clear_mulligan              11             86     97
+total                      654            123    777

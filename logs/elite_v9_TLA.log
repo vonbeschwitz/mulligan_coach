@@ -1,0 +1,92 @@
+==== Elite first-mulligan agreement check ====
+Set: TLA   n_sims: 300   n_workers: 10
+Choice model: models\choice_v9
+
+=== PremierDraft / TLA ===
+  Elite filter: {'min_n_games_bucket': 500, 'min_wr_bucket': 0.62, 'ranks': {'diamond', 'mythic'}, 'parquet': 'combined.PremierDraft.parquet'}
+  loaded 1,490,025 rows from combined.PremierDraft.parquet
+  elite mn=0 subset for PremierDraft/TLA: 4,449 rows
+  decks parsed: 753 kept  (dropped 0 unresolved, 9 size, 0 unsafe)
+  rows after parse: 4,392
+  progress 200/4392  elapsed=23s  eta=483s
+  progress 400/4392  elapsed=40s  eta=398s
+  progress 600/4392  elapsed=57s  eta=358s
+  progress 800/4392  elapsed=75s  eta=335s
+  progress 1000/4392  elapsed=92s  eta=312s
+  progress 1200/4392  elapsed=110s  eta=292s
+  progress 1400/4392  elapsed=128s  eta=275s
+  progress 1600/4392  elapsed=147s  eta=256s
+  progress 1800/4392  elapsed=164s  eta=236s
+  progress 2000/4392  elapsed=181s  eta=217s
+  progress 2200/4392  elapsed=200s  eta=199s
+  progress 2400/4392  elapsed=218s  eta=181s
+  progress 2600/4392  elapsed=237s  eta=163s
+  progress 2800/4392  elapsed=254s  eta=144s
+  progress 3000/4392  elapsed=272s  eta=126s
+  progress 3200/4392  elapsed=291s  eta=108s
+  progress 3400/4392  elapsed=308s  eta=90s
+  progress 3600/4392  elapsed=326s  eta=72s
+  progress 3800/4392  elapsed=344s  eta=54s
+  progress 4000/4392  elapsed=362s  eta=35s
+  progress 4200/4392  elapsed=381s  eta=17s
+  progress 4392/4392  elapsed=399s  eta=0s
+  inference done in 399s
+
+  --- Summary (PremierDraft / TLA) ---
+  n decisions:          4392
+  actual mull rate:     9.15%  (402 / 4392)
+  predicted mull rate:  6.49%  (285 / 4392)
+  verdict distribution:
+    clear_keep           3860  (87.89%)
+    marginal_keep         247  (5.62%)
+    marginal_mulligan     143  (3.26%)
+    clear_mulligan        142  (3.23%)
+
+  AGREEMENT (model keep/mull == player keep/mull): 4179 / 4392  (95.15%)
+  NOT COMPLETE DISAGREEMENT (excludes clear_keep+mulled, clear_mulligan+kept):  4309 / 4392  (98.11%)
+
+  Confusion matrix (rows=verdict, cols=actual):
+
+was_kept           player_kept  player_mulled  total
+verdict                                             
+clear_keep                3787             73   3860
+marginal_keep              155             92    247
+marginal_mulligan           38            105    143
+clear_mulligan              10            132    142
+total                     3990            402   4392
+
+=== TradDraft / TLA ===
+  Elite filter: {'min_n_games_bucket': 500, 'min_wr_bucket': 0.68, 'ranks': None, 'parquet': 'combined.TradDraft.parquet'}
+  loaded 184,952 rows from combined.TradDraft.parquet
+  elite mn=0 subset for TradDraft/TLA: 979 rows
+  decks parsed: 156 kept  (dropped 0 unresolved, 0 size, 0 unsafe)
+  rows after parse: 979
+  progress 200/979  elapsed=24s  eta=93s
+  progress 400/979  elapsed=42s  eta=61s
+  progress 600/979  elapsed=59s  eta=37s
+  progress 800/979  elapsed=77s  eta=17s
+  progress 979/979  elapsed=93s  eta=0s
+  inference done in 93s
+
+  --- Summary (TradDraft / TLA) ---
+  n decisions:          979
+  actual mull rate:     21.25%  (208 / 979)
+  predicted mull rate:  20.63%  (202 / 979)
+  verdict distribution:
+    clear_keep            718  (73.34%)
+    marginal_keep          59  (6.03%)
+    marginal_mulligan      55  (5.62%)
+    clear_mulligan        147  (15.02%)
+
+  AGREEMENT (model keep/mull == player keep/mull): 931 / 979  (95.10%)
+  NOT COMPLETE DISAGREEMENT (excludes clear_keep+mulled, clear_mulligan+kept):  964 / 979  (98.47%)
+
+  Confusion matrix (rows=verdict, cols=actual):
+
+was_kept           player_kept  player_mulled  total
+verdict                                             
+clear_keep                 710              8    718
+marginal_keep               40             19     59
+marginal_mulligan           14             41     55
+clear_mulligan               7            140    147
+total                      771            208    979

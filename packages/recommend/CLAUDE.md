@@ -18,6 +18,14 @@ path.** Both the website (`app.py`) and the overlay (`coordinator.py`)
 call it. It runs the choice model (`P(a skilled player keeps this
 hand)`) over the simulator features and returns a `ChoiceRecommendation`.
 
+The verdict has five bands (`CHOICE_*_THRESHOLD` in `service.py`):
+clear_keep > 0.85, marginal_keep > 0.65, **borderline** > 0.45
+(no judgement — rendered grey on both surfaces; elite players mull
+~46% of these hands), marginal_mulligan > 0.25, else clear_mulligan.
+The bands are deliberately asymmetric around 0.5 — see the threshold
+comment in `service.py` for the elite-calibration evidence
+(2026-07-06, `logs/elite_calibration_dump.log`).
+
 `recommend_asymmetric` (→ `AsymmetricRecommendation`) is the **legacy
 win-model path**: it runs the win model twice (keep vs. simulated
 mulligan-to-N-1) with the asymmetric sim budget, +4 pp mulligan bias,

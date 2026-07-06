@@ -1,10 +1,14 @@
 """Elite first-mulligan agreement check for the production choice model.
 
-Loads the production choice-model bundle (``models/choice_v6`` by
-default) and asks how often its 4-level verdict
-(clear/marginal x keep/mull) agrees with the actual first-mulligan
-decisions made by elite players on TLA, separately for PremierDraft
-and TradDraft.
+Loads the production choice-model bundle (``models/choice_prod`` by
+default) and asks how often its 5-level verdict
+(clear/marginal x keep/mull, plus the no-judgement ``borderline``
+band) agrees with the actual first-mulligan decisions made by elite
+players on TLA, separately for PremierDraft and TradDraft.
+``borderline`` verdicts are excluded from the agreement denominators
+— the band deliberately withholds a call (elite players mull ~46% of
+those hands), so scoring them as either side would be arbitrary. The
+borderline count is reported separately in the summary.
 
 "Elite" cohort definitions are pinned in the root ``CLAUDE.md``:
 
@@ -70,7 +74,7 @@ from mulligan_coach_recommend import FormatStats, RecommendationService
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DECISIONS_DIR = REPO_ROOT / "data" / "processed" / "seventeenlands" / "mulligan_decisions"
-DEFAULT_CHOICE_MODEL_DIR = REPO_ROOT / "models" / "choice_v6"
+DEFAULT_CHOICE_MODEL_DIR = REPO_ROOT / "models" / "choice_prod"
 
 # Pinned in CLAUDE.md. If these change, also edit the "Elite player
 # cohorts" section there so the docs stay in sync.
@@ -89,7 +93,7 @@ ELITE_DEFS: dict[str, dict[str, Any]] = {
     },
 }
 
-VERDICTS = ("clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan")
+VERDICTS = ("clear_keep", "marginal_keep", "borderline", "marginal_mulligan", "clear_mulligan")
 
 
 def setup_logger() -> logging.Logger:
@@ -353,15 +357,29 @@ def evaluate(
     df["pred_mull"] = df["verdict"].isin(["clear_mulligan", "marginal_mulligan"])
     df["actual_mull"] = ~df["was_kept"]
 
+    # ``borderline`` verdicts deliberately withhold a keep/mull
+    # judgement, so agreement is scored over the JUDGED subset only.
+    # Hard-disagreement cells (clear_* on the wrong side) are
+    # borderline-free by construction but use the judged base too so
+    # the two headline percentages share a denominator.
     n = len(df)
-    n_agree = int((df["pred_mull"] == df["actual_mull"]).sum())
-    complete_wrong = ((df["verdict"] == "clear_keep") & df["actual_mull"]) | (
-        (df["verdict"] == "clear_mulligan") & ~df["actual_mull"]
+    judged = df["verdict"] != "borderline"
+    n_judged = int(judged.sum())
+    jd = df.loc[judged]
+    n_agree = int((jd["pred_mull"] == jd["actual_mull"]).sum())
+    complete_wrong = ((jd["verdict"] == "clear_keep") & jd["actual_mull"]) | (
+        (jd["verdict"] == "clear_mulligan") & ~jd["actual_mull"]
     )
-    n_not_complete_wrong = n - int(complete_wrong.sum())
+    n_not_complete_wrong = n_judged - int(complete_wrong.sum())
 
     log.info("\n  --- Summary (%s / %s) ---", event_type, set_code)
     log.info("  n decisions:          %d", n)
+    log.info(
+        "  judged (non-borderline): %d  (borderline: %d = %.2f%%)",
+        n_judged,
+        n - n_judged,
+        100.0 * (n - n_judged) / n,
+    )
     log.info(
         "  actual mull rate:     %.2f%%  (%d / %d)",
         100.0 * float(df["actual_mull"].mean()),
@@ -369,7 +387,7 @@ def evaluate(
         n,
     )
     log.info(
-        "  predicted mull rate:  %.2f%%  (%d / %d)",
+        "  predicted mull rate:  %.2f%%  (%d / %d; borderline not counted)",
         100.0 * float(df["pred_mull"].mean()),
         int(df["pred_mull"].sum()),
         n,
@@ -381,17 +399,17 @@ def evaluate(
 
     log.info("")
     log.info(
-        "  AGREEMENT (model keep/mull == player keep/mull): %d / %d  (%.2f%%)",
+        "  AGREEMENT (model keep/mull == player keep/mull, judged only): %d / %d  (%.2f%%)",
         n_agree,
-        n,
-        100.0 * n_agree / n,
+        n_judged,
+        100.0 * n_agree / n_judged if n_judged else float("nan"),
     )
     log.info(
         "  NOT COMPLETE DISAGREEMENT (excludes clear_keep+mulled, "
-        "clear_mulligan+kept):  %d / %d  (%.2f%%)",
+        "clear_mulligan+kept; judged only):  %d / %d  (%.2f%%)",
         n_not_complete_wrong,
-        n,
-        100.0 * n_not_complete_wrong / n,
+        n_judged,
+        100.0 * n_not_complete_wrong / n_judged if n_judged else float("nan"),
     )
 
     log.info("\n  Confusion matrix (rows=verdict, cols=actual):")

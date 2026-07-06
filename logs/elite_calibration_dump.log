@@ -1,0 +1,117 @@
+=== PremierDraft / TLA ===
+  loaded 1,490,025 rows from combined.PremierDraft.parquet
+  elite mn=0 subset for PremierDraft/TLA: 4,449 rows
+  rows after parse: 4392
+  progress 500/4392  elapsed=40s  eta=312s
+  progress 1000/4392  elapsed=74s  eta=251s
+  progress 1500/4392  elapsed=109s  eta=210s
+  progress 2000/4392  elapsed=144s  eta=173s
+  progress 2500/4392  elapsed=183s  eta=139s
+  progress 3000/4392  elapsed=219s  eta=102s
+  progress 3500/4392  elapsed=255s  eta=65s
+  progress 4000/4392  elapsed=292s  eta=29s
+  progress 4392/4392  elapsed=321s  eta=0s
+=== TradDraft / TLA ===
+  loaded 184,952 rows from combined.TradDraft.parquet
+  elite mn=0 subset for TradDraft/TLA: 979 rows
+  rows after parse: 979
+  progress 500/979  elapsed=40s  eta=38s
+  progress 979/979  elapsed=73s  eta=0s
+=== PremierDraft / TMT ===
+  loaded 1,490,025 rows from combined.PremierDraft.parquet
+  elite mn=0 subset for PremierDraft/TMT: 327 rows
+  rows after parse: 296
+  progress 296/296  elapsed=27s  eta=0s
+=== TradDraft / TMT ===
+  loaded 184,952 rows from combined.TradDraft.parquet
+  elite mn=0 subset for TradDraft/TMT: 337 rows
+  rows after parse: 253
+  progress 253/253  elapsed=23s  eta=0s
+=== PremierDraft / SOS ===
+  loaded 1,490,025 rows from combined.PremierDraft.parquet
+  elite mn=0 subset for PremierDraft/SOS: 1,553 rows
+  rows after parse: 1546
+  progress 500/1546  elapsed=43s  eta=90s
+  progress 1000/1546  elapsed=81s  eta=44s
+  progress 1500/1546  elapsed=121s  eta=4s
+  progress 1546/1546  elapsed=123s  eta=0s
+=== TradDraft / SOS ===
+  loaded 184,952 rows from combined.TradDraft.parquet
+  elite mn=0 subset for TradDraft/SOS: 777 rows
+  rows after parse: 777
+  progress 500/777  elapsed=42s  eta=23s
+  progress 777/777  elapsed=62s  eta=0s
+
+Wrote 8243 rows to C:\Users\basti\Documents\Mulligan_Coach\logs\elite_calibration_rows.parquet
+
+== Calibration (ALL sets, Premier+Trad): P(mull) bucket vs observed elite mull fraction ==
+bucket                n      mean pred    actual mulled
+[0.00,0.05)        5683           1.0%             0.2%
+[0.05,0.10)         594           7.0%             4.0%
+[0.10,0.15)         330          12.4%             9.7%
+[0.15,0.20)         193          17.4%            13.5%
+[0.20,0.25)         143          22.4%            18.9%
+[0.25,0.30)         128          27.5%            25.0%
+[0.30,0.35)         117          32.4%            30.8%
+[0.35,0.40)          99          37.4%            41.4%
+[0.40,0.45)          80          42.2%            38.8%
+[0.45,0.50)          65          47.7%            52.3%
+[0.50,0.55)          66          52.4%            54.5%
+[0.55,0.60)          58          57.4%            62.1%
+[0.60,0.65)          71          62.5%            74.6%
+[0.65,0.70)          52          67.1%            84.6%
+[0.70,0.75)          68          72.6%            80.9%
+[0.75,0.80)          72          77.8%            84.7%
+[0.80,0.85)          87          82.4%            82.8%
+[0.85,0.90)          81          87.4%            93.8%
+[0.90,0.95)         106          92.6%            98.1%
+[0.95,1.00)         150          97.9%            98.7%
+TOTAL              8243   overall pred 12.36%  actual 11.91%
+
+== Calibration (ALL sets, PremierDraft): P(mull) bucket vs observed elite mull fraction ==
+bucket                n      mean pred    actual mulled
+[0.00,0.05)        4530           1.0%             0.3%
+[0.05,0.10)         444           7.0%             4.3%
+[0.10,0.15)         238          12.4%            10.5%
+[0.15,0.20)         144          17.5%            14.6%
+[0.20,0.25)         106          22.6%            24.5%
+[0.25,0.30)          80          27.3%            25.0%
+[0.30,0.35)          83          32.4%            31.3%
+[0.35,0.40)          73          37.5%            46.6%
+[0.40,0.45)          56          42.1%            42.9%
+[0.45,0.50)          53          47.7%            52.8%
+[0.50,0.55)          55          52.5%            58.2%
+[0.55,0.60)          42          57.4%            66.7%
+[0.60,0.65)          45          62.6%            77.8%
+[0.65,0.70)          29          66.9%            86.2%
+[0.70,0.75)          43          72.5%            83.7%
+[0.75,0.80)          46          77.7%            82.6%
+[0.80,0.85)          53          82.3%            94.3%
+[0.85,0.90)          45          87.2%            91.1%
+[0.90,0.95)          50          92.4%            96.0%
+[0.95,1.00)          19          96.7%           100.0%
+TOTAL              6234   overall pred 9.51%  actual 9.45%
+
+== Calibration (ALL sets, TradDraft): P(mull) bucket vs observed elite mull fraction ==
+bucket                n      mean pred    actual mulled
+[0.00,0.05)        1153           1.0%             0.0%
+[0.05,0.10)         150           7.1%             3.3%
+[0.10,0.15)          92          12.5%             7.6%
+[0.15,0.20)          49          17.4%            10.2%
+[0.20,0.25)          37          22.0%             2.7%
+[0.25,0.30)          48          27.7%            25.0%
+[0.30,0.35)          34          32.5%            29.4%
+[0.35,0.40)          26          37.4%            26.9%
+[0.40,0.45)          24          42.4%            29.2%
+[0.45,0.50)          12          47.8%            50.0%
+[0.50,0.55)          11          51.9%            36.4%
+[0.55,0.60)          16          57.6%            50.0%
+[0.60,0.65)          26          62.3%            69.2%
+[0.65,0.70)          23          67.4%            82.6%
+[0.70,0.75)          25          72.9%            76.0%
+[0.75,0.80)          26          77.9%            88.5%
+[0.80,0.85)          34          82.5%            64.7%
+[0.85,0.90)          36          87.8%            97.2%
+[0.90,0.95)          56          92.7%           100.0%
+[0.95,1.00)         131          98.1%            98.5%
+TOTAL              2009   overall pred 21.20%  actual 19.56%

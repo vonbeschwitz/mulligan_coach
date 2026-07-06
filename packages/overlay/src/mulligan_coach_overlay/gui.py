@@ -1129,16 +1129,20 @@ _TITLE_BTN_STYLE = (
 
 
 def _verdict_display(verdict: str) -> tuple[str, str]:
-    """Human label + colour for one of the four verdict tags.
+    """Human label + colour for one of the five verdict tags.
 
     Labels use "mull" rather than "mulligan" so they fit on a single
     line in the compact pill at 12px and don't need to wrap in the
-    expanded panel either.
+    expanded panel either. ``borderline`` is grey (neither the keep
+    green nor the amber of the marginal bands) — the model withholds
+    judgement on these hands; elite players mull about half of them.
     """
     if verdict == "clear_keep":
         return "CLEAR KEEP", _KEEP_COLOR
     if verdict == "marginal_keep":
         return "Marginal keep", _MARGINAL_COLOR
+    if verdict == "borderline":
+        return "Borderline", _TEXT_MUTED
     if verdict == "marginal_mulligan":
         return "Marginal mull", _MARGINAL_COLOR
     if verdict == "clear_mulligan":

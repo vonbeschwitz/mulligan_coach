@@ -425,7 +425,9 @@ button.ghost {
 /* Clear verdicts use the full keep/mulligan colour. Marginal
    verdicts share the colour but lose saturation (dashed border +
    muted background) so the user can see at a glance that the
-   recommendation isn't strong. */
+   recommendation isn't strong. Borderline hands are deliberately
+   grey — the model withholds judgement in either direction (elite
+   players mull ~half of these), so neither verdict colour applies. */
 .rec-verdict-clear-keep {
   border-color: var(--keep);
   background: var(--keep-bg);
@@ -438,6 +440,13 @@ button.ghost {
   background: var(--keep-bg);
   color: var(--keep);
   opacity: 0.85;
+}
+
+.rec-verdict-borderline {
+  border-style: dashed;
+  border-color: var(--text-muted);
+  background: rgba(154, 160, 176, 0.12);
+  color: var(--text-muted);
 }
 
 .rec-verdict-marginal-mulligan {

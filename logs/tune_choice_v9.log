@@ -1,0 +1,38 @@
+2026-07-05 01:01:52,409 ==== choice_v9 sweep (choice_v7 methodology + fresh TLA/TMT caches) ====
+2026-07-05 01:01:52,409 Output dir: C:\Users\basti\Documents\Mulligan_Coach\models\choice_v9
+2026-07-05 01:01:52,410 Sets: ('TLA', 'TMT', 'SOS')  Event types: ('PremierDraft', 'TradDraft')
+2026-07-05 01:01:52,410 Configs to run: 6
+2026-07-05 01:01:52,410 n_estimators=8000  early_stopping=50  seed=0
+2026-07-05 01:01:52,410 
+Loading data...
+2026-07-05 01:01:52,412   TLA/PremierDraft: 105 chunks
+2026-07-05 01:01:53,765   TLA/TradDraft: 15 chunks
+2026-07-05 01:01:53,960   TMT/PremierDraft: 32 chunks
+2026-07-05 01:01:54,381   TMT/TradDraft: 6 chunks
+2026-07-05 01:01:54,457   SOS/PremierDraft: 110 chunks
+2026-07-05 01:01:55,925   SOS/TradDraft: 16 chunks
+2026-07-05 01:01:56,149 Shard lineage OK: 6 shard(s) match {'simulation': 1, 'features': 3}
+2026-07-05 01:01:56,717 Total rows=1392598  features=203
+2026-07-05 01:01:56,759 Per-set rows: {'TLA': 592003, 'TMT': 180221, 'SOS': 620374}
+2026-07-05 01:01:58,051 Split rows: train=1113618 val=139893 test=139087
+2026-07-05 01:02:01,945 
+id  | lr      depth mcw subs   |  secs |    val_ll  val_p_ll  val_t_ll |   test_ll test_p_ll test_t_ll | best_it
+2026-07-05 01:08:58,464 0   | 0.030   6     1   0.80   | 416.5 |    0.1706    0.1700    0.1752 |    0.1749    0.1745    0.1772 | 2859
+2026-07-05 01:15:29,717 1   | 0.030   6     5   0.80   | 391.3 |    0.1705    0.1699    0.1750 |    0.1747    0.1744    0.1768 | 2827
+2026-07-05 01:21:59,231 2   | 0.030   6     1   1.00   | 389.5 |    0.1710    0.1703    0.1757 |    0.1754    0.1751    0.1778 | 3010
+2026-07-05 01:26:45,973 3   | 0.030   6     5   1.00   | 286.7 |    0.1714    0.1708    0.1759 |    0.1758    0.1755    0.1780 | 2172
+2026-07-05 01:36:07,653 4   | 0.020   6     1   0.80   | 561.7 |    0.1705    0.1699    0.1746 |    0.1745    0.1742    0.1768 | 3991
+2026-07-05 01:45:34,736 5   | 0.020   6     5   0.80   | 567.1 |    0.1704    0.1698    0.1750 |    0.1745    0.1742    0.1765 | 4062
+2026-07-05 01:45:34,746 
+Sweep finished in 43.5 min
+2026-07-05 01:45:34,746 
+==== Best config (lowest Premier-val log_loss) ====
+2026-07-05 01:45:34,746   id=5  config={'max_depth': 6, 'learning_rate': 0.02, 'min_child_weight': 5, 'subsample': 0.8}
+2026-07-05 01:45:34,746   best_iteration=4062  premier_val_log_loss=0.1698
+2026-07-05 01:45:55,281 
+Test metrics for best model:
+2026-07-05 01:45:55,282   ALL     n=139087  log_loss=0.1745  brier=0.0524  acc=0.9284
+2026-07-05 01:45:55,282   Premier n=120999  log_loss=0.1742  brier=0.0522  acc=0.9288
+2026-07-05 01:45:55,282   Trad    n=18088  log_loss=0.1765  brier=0.0536  acc=0.9256
+2026-07-05 01:45:55,772 
+Wrote model to C:\Users\basti\Documents\Mulligan_Coach\models\choice_v9

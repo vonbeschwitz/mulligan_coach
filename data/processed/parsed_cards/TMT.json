@@ -4106,12 +4106,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix 2026-07-03: end-step-triggered draw cleared per guide \u00a716 (recurring triggers not modeled)"
     ]
   },
   {
@@ -9639,12 +9640,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 3-mana 3/1 with Sneak {1}{B} alt-cost. Combat-damage trigger draws a card and loses 1 life (cards_drawn=1 already captured)"
+      "llm: 3-mana 3/1 with Sneak {1}{B} alt-cost. Combat-damage trigger draws a card and loses 1 life (cards_drawn=1 already captured)",
+      "fix 2026-07-03: combat-damage-triggered draw cleared per guide \u00a72/\u00a716 (April, Reporter of the Weird precedent)"
     ]
   },
   {
@@ -10670,7 +10672,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "draw_cards",
+            "n": 2
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -10685,7 +10692,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -10701,12 +10708,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 0,
+      "cards_drawn": 2,
       "cards_manipulated": 0
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 3-mana modal \u2014 discard 2 OR opponent draws 2 / loses 2. Hand disruption / draw forced; not creature removal"
+      "llm: 3-mana modal \u2014 discard 2 OR opponent draws 2 / loses 2. Hand disruption / draw forced; not creature removal",
+      "fix 2026-07-03: 'target player draws two cards and loses 2 life' is self-targetable (Sign in Blood templating) \u2014 cards_drawn=2 per \u00a712 aggregation, DrawCardsEffect(2) per \u00a718 modal-draw sim rule"
     ]
   },
   {

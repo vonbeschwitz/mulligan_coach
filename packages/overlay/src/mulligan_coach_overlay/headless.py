@@ -170,6 +170,7 @@ def _format_output(output: CoordinatorOutput) -> str:
         verdict_label = {
             "clear_keep": "CLEAR KEEP",
             "marginal_keep": "marginal keep",
+            "borderline": "borderline (no judgement)",
             "marginal_mulligan": "marginal mulligan",
             "clear_mulligan": "CLEAR MULLIGAN",
         }[rec.verdict]

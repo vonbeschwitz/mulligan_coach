@@ -3,8 +3,9 @@
 The reload seam is covered by ``test_recommend_reload.py``; this file
 covers what review #5 flagged as the least-tested production layer:
 
-* ``_classify_choice_verdict`` — the four-band verdict boundaries
-  (inclusive at the upper edge, so exactly 0.75 is ``marginal_keep``).
+* ``_classify_choice_verdict`` — the five-band verdict boundaries
+  (inclusive at the upper edge, so exactly 0.85 is ``marginal_keep``),
+  including the no-judgement ``borderline`` band at 0.45-0.65.
 * Deterministic seed derivation — ``_stable_seed`` /
   ``_deck_signature`` are stable + order-independent, and
   ``recommend_choice`` derives the same seed from the same inputs.
@@ -45,6 +46,7 @@ from mulligan_coach_features import CardZScores, ShrunkWinRates
 from mulligan_coach_model import ChoiceModelBundle
 from mulligan_coach_recommend import service as service_module
 from mulligan_coach_recommend.service import (
+    CHOICE_BORDERLINE_THRESHOLD,
     CHOICE_CLEAR_KEEP_THRESHOLD,
     CHOICE_MARGINAL_KEEP_THRESHOLD,
     CHOICE_MARGINAL_MULL_THRESHOLD,
@@ -229,9 +231,12 @@ class TestClassifyChoiceVerdict:
             # threshold lands in the *lower* band; a hair above jumps up.
             (math.nextafter(CHOICE_CLEAR_KEEP_THRESHOLD, 1.0), "clear_keep"),
             (CHOICE_CLEAR_KEEP_THRESHOLD, "marginal_keep"),
-            (0.60, "marginal_keep"),
+            (0.70, "marginal_keep"),
             (math.nextafter(CHOICE_MARGINAL_KEEP_THRESHOLD, 1.0), "marginal_keep"),
-            (CHOICE_MARGINAL_KEEP_THRESHOLD, "marginal_mulligan"),
+            (CHOICE_MARGINAL_KEEP_THRESHOLD, "borderline"),
+            (0.50, "borderline"),
+            (math.nextafter(CHOICE_BORDERLINE_THRESHOLD, 1.0), "borderline"),
+            (CHOICE_BORDERLINE_THRESHOLD, "marginal_mulligan"),
             (0.40, "marginal_mulligan"),
             (math.nextafter(CHOICE_MARGINAL_MULL_THRESHOLD, 1.0), "marginal_mulligan"),
             (CHOICE_MARGINAL_MULL_THRESHOLD, "clear_mulligan"),
@@ -247,6 +252,7 @@ class TestClassifyChoiceVerdict:
         # the bands.
         assert (
             CHOICE_MARGINAL_MULL_THRESHOLD
+            < CHOICE_BORDERLINE_THRESHOLD
             < CHOICE_MARGINAL_KEEP_THRESHOLD
             < CHOICE_CLEAR_KEEP_THRESHOLD
         )
@@ -398,7 +404,7 @@ class TestRecommendChoiceGuards:
         )
         assert isinstance(rec, ChoiceRecommendation)
         assert rec.p_keep == pytest.approx(0.6)
-        assert rec.verdict == "marginal_keep"
+        assert rec.verdict == "borderline"
         assert 0.0 <= rec.mulligan_percent <= 100.0
 
     @pytest.mark.parametrize("deck_size", [39, 43, 60])
