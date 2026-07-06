@@ -18950,7 +18950,7 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 1-mana 2-damage to creature (5 if kicked). Has kicker alt-cost; conservative removal_burn_damage=2"
+      "llm: 1-mana 2-damage to creature (5 if kicked); removal_burn_damage=5 = kicked value per guide \u00a712/\u00a717"
     ]
   },
   {
@@ -42176,6 +42176,10 @@
           {
             "kind": "noop",
             "role_tag": "modal:variable_draw_or_mass_pump"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
           }
         ]
       }
@@ -42213,7 +42217,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm_encoded: modal instant: variable draw (min 1) + mass +3/+3 EOT; aggregated per guide 12"
+      "llm_encoded: modal instant: variable draw (min 1) + mass +3/+3 EOT; aggregated per guide 12",
+      "fix 2026-07-03: variable-draw mode (min 1 per \u00a79) \u2014 wired per \u00a718 modal-draw sim rule"
     ]
   },
   {

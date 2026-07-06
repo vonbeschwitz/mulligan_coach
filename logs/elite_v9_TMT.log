@@ -1,0 +1,69 @@
+==== Elite first-mulligan agreement check ====
+Set: TMT   n_sims: 300   n_workers: 10
+Choice model: models\choice_v9
+
+=== PremierDraft / TMT ===
+  Elite filter: {'min_n_games_bucket': 500, 'min_wr_bucket': 0.62, 'ranks': {'mythic', 'diamond'}, 'parquet': 'combined.PremierDraft.parquet'}
+  loaded 1,490,025 rows from combined.PremierDraft.parquet
+  elite mn=0 subset for PremierDraft/TMT: 327 rows
+  decks parsed: 55 kept  (dropped 6 unresolved, 0 size, 0 unsafe)
+  rows after parse: 296
+  progress 200/296  elapsed=24s  eta=11s
+  progress 296/296  elapsed=32s  eta=0s
+  inference done in 32s
+
+  --- Summary (PremierDraft / TMT) ---
+  n decisions:          296
+  actual mull rate:     7.09%  (21 / 296)
+  predicted mull rate:  6.42%  (19 / 296)
+  verdict distribution:
+    clear_keep            264  (89.19%)
+    marginal_keep          13  (4.39%)
+    marginal_mulligan      11  (3.72%)
+    clear_mulligan          8  (2.70%)
+
+  AGREEMENT (model keep/mull == player keep/mull): 284 / 296  (95.95%)
+  NOT COMPLETE DISAGREEMENT (excludes clear_keep+mulled, clear_mulligan+kept):  290 / 296  (97.97%)
+
+  Confusion matrix (rows=verdict, cols=actual):
+
+was_kept           player_kept  player_mulled  total
+verdict                                             
+clear_keep                 260              4    264
+marginal_keep               10              3     13
+marginal_mulligan            3              8     11
+clear_mulligan               2              6      8
+total                      275             21    296
+
+=== TradDraft / TMT ===
+  Elite filter: {'min_n_games_bucket': 500, 'min_wr_bucket': 0.68, 'ranks': None, 'parquet': 'combined.TradDraft.parquet'}
+  loaded 184,952 rows from combined.TradDraft.parquet
+  elite mn=0 subset for TradDraft/TMT: 337 rows
+  decks parsed: 41 kept  (dropped 12 unresolved, 0 size, 0 unsafe)
+  rows after parse: 253
+  progress 200/253  elapsed=23s  eta=6s
+  progress 253/253  elapsed=29s  eta=0s
+  inference done in 29s
+
+  --- Summary (TradDraft / TMT) ---
+  n decisions:          253
+  actual mull rate:     24.51%  (62 / 253)
+  predicted mull rate:  19.76%  (50 / 253)
+  verdict distribution:
+    clear_keep            184  (72.73%)
+    marginal_keep          19  (7.51%)
+    marginal_mulligan      11  (4.35%)
+    clear_mulligan         39  (15.42%)
+
+  AGREEMENT (model keep/mull == player keep/mull): 235 / 253  (92.89%)
+  NOT COMPLETE DISAGREEMENT (excludes clear_keep+mulled, clear_mulligan+kept):  247 / 253  (97.63%)
+
+  Confusion matrix (rows=verdict, cols=actual):
+
+was_kept           player_kept  player_mulled  total
+verdict                                             
+clear_keep                 178              6    184
+marginal_keep               10              9     19
+marginal_mulligan            3              8     11
+clear_mulligan               0             39     39
+total                      191             62    253

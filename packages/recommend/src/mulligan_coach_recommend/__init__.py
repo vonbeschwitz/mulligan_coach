@@ -13,6 +13,7 @@ import path and nothing else.
 from __future__ import annotations
 
 from .service import (
+    CHOICE_BORDERLINE_THRESHOLD,
     CHOICE_CLEAR_KEEP_THRESHOLD,
     CHOICE_MARGINAL_KEEP_THRESHOLD,
     CHOICE_MARGINAL_MULL_THRESHOLD,
@@ -37,6 +38,7 @@ from .service import (
 )
 
 __all__ = [
+    "CHOICE_BORDERLINE_THRESHOLD",
     "CHOICE_CLEAR_KEEP_THRESHOLD",
     "CHOICE_MARGINAL_KEEP_THRESHOLD",
     "CHOICE_MARGINAL_MULL_THRESHOLD",

@@ -10,10 +10,11 @@
 
    The verdict bucket comes from p_keep thresholds (see
    ``CHOICE_*_THRESHOLD`` constants in mulligan_coach_recommend):
-   ``>0.75`` clear keep, ``>0.50`` marginal keep, ``>0.25`` marginal
-   mulligan, else clear mulligan. The displayed percentage is the
-   complementary mulligan probability — one number, not two arms —
-   so users read a single 0-100 signal instead of comparing arms.
+   ``>0.85`` clear keep, ``>0.65`` marginal keep, ``>0.45`` borderline
+   (no judgement — rendered grey), ``>0.25`` marginal mulligan, else
+   clear mulligan. The displayed percentage is the complementary
+   mulligan probability — one number, not two arms — so users read a
+   single 0-100 signal instead of comparing arms.
 #}
 
 {% if error %}
@@ -29,6 +30,7 @@
   {% set verdict_label = {
       'clear_keep': 'Clear keep',
       'marginal_keep': 'Marginal keep',
+      'borderline': 'Borderline — could go either way',
       'marginal_mulligan': 'Marginal mulligan',
       'clear_mulligan': 'Clear mulligan',
   }[verdict] %}
@@ -49,9 +51,14 @@
 
     <p class="rec-delta">
       Model P(keep) = <strong>{{ keep_pct }}%</strong>.
-      Bucket thresholds: clear keep &gt; 75%, marginal keep &gt; 50%,
-      marginal mull &gt; 25%, clear mull at or below 25%.
-      {% if verdict.startswith('marginal_') %}
+      Bucket thresholds: clear keep &gt; 85%, marginal keep &gt; 65%,
+      borderline &gt; 45%, marginal mull &gt; 25%, clear mull at or
+      below 25%.
+      {% if verdict == 'borderline' %}
+        Borderline hands are a genuine coin flip &mdash; skilled players
+        mulligan roughly half of them. Game context (matchup, mana base,
+        opponent's plan) should drive the call, not the model.
+      {% elif verdict.startswith('marginal_') %}
         Marginal verdicts are close to a band edge &mdash; game context
         (matchup, mana base, opponent's plan) should drive the final call.
       {% endif %}

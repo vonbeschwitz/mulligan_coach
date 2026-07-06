@@ -26965,7 +26965,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "draw_cards",
+            "n": 2
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -27001,7 +27006,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 5-mana 'Choose two' command \u2014 copy elemental / draw 2 / 2 damage each opp creature / 2 Treasures. Powerful multi-mode"
+      "llm: 5-mana 'Choose two' command \u2014 copy elemental / draw 2 / 2 damage each opp creature / 2 Treasures. Powerful multi-mode",
+      "fix 2026-07-03: draw-2 mode \u2014 wired per \u00a718 modal-draw sim rule"
     ]
   },
   {
@@ -32998,7 +33004,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "draw_cards",
+            "n": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -33034,7 +33045,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 3-mana Merfolk command \u2014 copy / lifelink / draw a card / tap+stun. Multi-utility"
+      "llm: 3-mana Merfolk command \u2014 copy / lifelink / draw a card / tap+stun. Multi-utility",
+      "fix 2026-07-03: draw-1 mode \u2014 wired per \u00a718 modal-draw sim rule"
     ]
   },
   {

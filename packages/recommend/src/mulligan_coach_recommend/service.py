@@ -6,13 +6,18 @@ Production path (overlay + website)
 The shipped verdict comes from the **choice model** (``models/choice_prod``
 by default), via :meth:`RecommendationService.recommend_choice`. The
 choice model predicts ``P(skilled player would keep | hand)``; we
-bucket that into four levels using fixed thresholds
+bucket that into five levels using fixed thresholds
 (``CHOICE_*_THRESHOLD``):
 
-* ``p_keep > 0.75``   -> ``clear_keep``
-* ``p_keep > 0.50``   -> ``marginal_keep``
+* ``p_keep > 0.85``   -> ``clear_keep``
+* ``p_keep > 0.65``   -> ``marginal_keep``
+* ``p_keep > 0.45``   -> ``borderline``
 * ``p_keep > 0.25``   -> ``marginal_mulligan``
 * otherwise           -> ``clear_mulligan``
+
+``borderline`` deliberately withholds a keep/mull judgement — elite
+players mulled 46% of the hands that land in that band, a genuine
+coin flip (see the calibration study referenced at the thresholds).
 
 Each call runs one simulate + build_feature_row + predict pass. The
 resulting :class:`ChoiceRecommendation` carries the verdict, the
@@ -107,18 +112,30 @@ _DEFAULT_EVENT_TYPE = "PremierDraft"
 
 # Choice-model verdict thresholds, applied to p_keep:
 #
-#   p_keep > 0.75            -> clear_keep         (mull% < 25)
-#   0.50 < p_keep <= 0.75    -> marginal_keep
-#   0.25 < p_keep <= 0.50    -> marginal_mulligan
-#   p_keep <= 0.25           -> clear_mulligan     (mull% >= 75)
+#   p_keep > 0.85            -> clear_keep
+#   0.65 < p_keep <= 0.85    -> marginal_keep
+#   0.45 < p_keep <= 0.65    -> borderline         (no judgement)
+#   0.25 < p_keep <= 0.45    -> marginal_mulligan
+#   p_keep <= 0.25           -> clear_mulligan
 #
-# The thresholds map directly onto bucket boundaries the user picked
-# (clear keep > 75% chance of keeping, clear mull < 25%, two marginal
-# bands of equal width between). The displayed number in the overlay
-# is the *mulligan* percentage = round(100 * (1 - p_keep)), so a
-# `clear_mulligan` hand shows >=75% and a `clear_keep` hand shows <25%.
-CHOICE_CLEAR_KEEP_THRESHOLD = 0.75
-CHOICE_MARGINAL_KEEP_THRESHOLD = 0.50
+# Calibrated 2026-07-06 against 8,243 elite first-mull decisions on
+# TLA/TMT/SOS (logs/elite_calibration_dump.log + the "borderline"
+# section of scripts/elite_first_mull_results.md). The bands are
+# deliberately ASYMMETRIC around 0.5: per-5%-bucket calibration shows
+# the model's probabilities are compressed toward the middle relative
+# to elite behaviour — elites mull the model's mull-leaning hands more
+# often than predicted — so the no-judgement band reaches further into
+# nominal "keep" territory (up to 0.65) than "mull" territory (down to
+# 0.45). Observed elite mull rates per band: clear_keep 1.1%,
+# marginal_keep 21%, borderline 46% (a coin flip — hence no
+# judgement), marginal_mulligan 76%, clear_mulligan 93%. vs the old
+# 4-band scheme this halves hard clear_keep errors (elite mulled a
+# "clear keep") while sending only ~4% of hands to the grey band.
+# The displayed number in the overlay is the *mulligan* percentage =
+# round(100 * (1 - p_keep)).
+CHOICE_CLEAR_KEEP_THRESHOLD = 0.85
+CHOICE_MARGINAL_KEEP_THRESHOLD = 0.65
+CHOICE_BORDERLINE_THRESHOLD = 0.45
 CHOICE_MARGINAL_MULL_THRESHOLD = 0.25
 
 # Default sims-per-decision for the choice-model recommendation. The
@@ -512,13 +529,18 @@ class ChoiceRecommendation:
 
     The production keep/mull verdict, driven by the choice model
     (``models/choice_prod``). The model predicts ``P(skilled player
-    would keep | hand)``; we bucket that into four levels using
+    would keep | hand)``; we bucket that into five levels using
     fixed thresholds (see :data:`CHOICE_CLEAR_KEEP_THRESHOLD` etc.):
 
-    * ``p_keep > 0.75``            -> ``"clear_keep"``
-    * ``0.50 < p_keep <= 0.75``    -> ``"marginal_keep"``
-    * ``0.25 < p_keep <= 0.50``    -> ``"marginal_mulligan"``
+    * ``p_keep > 0.85``            -> ``"clear_keep"``
+    * ``0.65 < p_keep <= 0.85``    -> ``"marginal_keep"``
+    * ``0.45 < p_keep <= 0.65``    -> ``"borderline"``
+    * ``0.25 < p_keep <= 0.45``    -> ``"marginal_mulligan"``
     * ``p_keep <= 0.25``           -> ``"clear_mulligan"``
+
+    ``borderline`` withholds judgement in either direction (rendered
+    grey, not green/red): elite players mull ~46% of these hands, so
+    game context should drive the call, not the model.
 
     ``mulligan_percent`` is the *display* number — the recommender
     surfaces a single "should-mulligan" percentage in 0..100 rather
@@ -537,7 +559,9 @@ class ChoiceRecommendation:
     legacy paths that don't compute it.
     """
 
-    verdict: Literal["clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan"]
+    verdict: Literal[
+        "clear_keep", "marginal_keep", "borderline", "marginal_mulligan", "clear_mulligan"
+    ]
     p_keep: float
     mulligan_number_from: int
     mulligan_number_to: int
@@ -556,18 +580,19 @@ class ChoiceRecommendation:
 
 def _classify_choice_verdict(
     p_keep: float,
-) -> Literal["clear_keep", "marginal_keep", "marginal_mulligan", "clear_mulligan"]:
-    """Map a ``p_keep`` in ``[0, 1]`` to one of the four verdict tags.
+) -> Literal["clear_keep", "marginal_keep", "borderline", "marginal_mulligan", "clear_mulligan"]:
+    """Map a ``p_keep`` in ``[0, 1]`` to one of the five verdict tags.
 
     Boundaries are inclusive at the upper edge of each band: a value
-    of exactly 0.75 lands in ``marginal_keep`` (not ``clear_keep``)
-    so the bucket whose visible label is "75% or more" requires the
-    model to be strictly above 75%.
+    of exactly 0.85 lands in ``marginal_keep`` (not ``clear_keep``)
+    so each band requires the model to be strictly above its floor.
     """
     if p_keep > CHOICE_CLEAR_KEEP_THRESHOLD:
         return "clear_keep"
     if p_keep > CHOICE_MARGINAL_KEEP_THRESHOLD:
         return "marginal_keep"
+    if p_keep > CHOICE_BORDERLINE_THRESHOLD:
+        return "borderline"
     if p_keep > CHOICE_MARGINAL_MULL_THRESHOLD:
         return "marginal_mulligan"
     return "clear_mulligan"

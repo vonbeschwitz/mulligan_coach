@@ -86,12 +86,12 @@ def _build_index(arena_ids: list[int]) -> ArenaCardIndex:
 
 def _fake_choice_recommendation(
     *,
-    p_keep: float = 0.85,
+    p_keep: float = 0.90,
     verdict: str = "clear_keep",
 ) -> ChoiceRecommendation:
     """Hand-built ChoiceRecommendation with sane field values.
 
-    Default ``p_keep`` lands above the 0.75 clear-keep threshold, so
+    Default ``p_keep`` lands above the 0.85 clear-keep threshold, so
     the verdict matches by default; tests that need a different
     bucket pass both fields.
     """

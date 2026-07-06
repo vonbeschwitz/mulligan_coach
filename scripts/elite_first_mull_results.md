@@ -320,3 +320,130 @@ the cross-scored table.)
   held-out comparisons silently leak. Fix = materialisation-invariant split
   (hash `draft_id` -> bucket) + a retrain of both models under it. Related to
   the invisible-consistency risk in `docs/design_review_2026-07-01.md`.
+
+# choice_v9 (TLA + TMT + SOS, FEATURES-v3 caches) — runs 2026-07-05
+
+`models/choice_v9` = the v7/v8 methodology (same 6-config sweep, seed=0,
+Premier-val selection; see `packages/model/scripts/tune_choice_v9.py`) re-run
+on the 2026-07-04/05 re-materialisation of all six choice caches
+(`logs/remat_20260703/`). Three input changes vs v8 (details in the tune
+script's docstring):
+
+1. **FEATURES_SEMANTICS_VERSION 3** — folded-card-name 17Lands stats join
+   (roadmap Step 5, PR #87); per-card WR / z-score features no longer zeroed
+   on arena_id-less rows.
+2. **2026-07-03 card-encoding fixes** — random-commons spot-check
+   (triggered-draw clearances on Oroku Saki / April O'Neil Hacktivist, Stone
+   Docent, Visionary's Dance) + modal-draw sim wiring (guide §18).
+3. **Full set-code one-hots** — `set_onehots_v1` vocabulary (SOS/MSH included);
+   203 features vs v8's 201.
+
+v9 is the first tuned model with automatic lineage stamps: `metadata.json`
+records `pipeline_versions={simulation:1, features:3}`,
+`split_method=draftid_hash_v1`, and per-shard lineage; the sweep now enforces
+`check_training_lineage` at load (the earlier tune scripts silently bypassed
+it). Winning config unchanged from v6/v7/v8: max_depth=6, lr=0.02,
+min_child_weight=5, subsample=0.8; best_iteration=4062.
+
+**Comparison caveats.** (a) The elite evals below run the LIVE pipeline
+(v3 features) for v9, while the v8 rows ran the pre-Step-5 pipeline — the
+numbers compare deployable systems, not the boosters in isolation. (b) v9's
+held-out split is `draftid_hash_v1`; v7/v8 used the permutation split, so
+held-out log-losses are not row-comparable across models (each model's own
+held-out remains leakage-free). **Sample status:** all three sets in-sample,
+as for v8.
+
+## Full elite sets — v9 vs v8
+
+| Set | Event | n | v8 agree | v9 agree | v9 actual mull % | v9 pred mull % | v9 lift | v9 not-complete-disagree |
+|-----|-------|---|----------|----------|------------------|----------------|---------|--------------------------|
+| TLA | Premier | 4,392 | 95.08% | **95.15%** | 9.15%  | 6.49%  | +4.30  | 98.11% |
+| TLA | Trad    | 979   | 94.69% | **95.10%** | 21.25% | 20.63% | +16.35 | 98.47% |
+| TMT | Premier | 296   | 94.26% | **95.95%** | 7.09%  | 6.42%  | +3.04  | 97.97% |
+| TMT | Trad    | 253   | 92.89% | **92.89%** | 24.51% | 19.76% | +17.40 | 97.63% |
+| SOS | Premier | 1,546 | 94.37% | **94.37%** | 10.74% | 7.96%  | +5.11  | 97.87% |
+| SOS | Trad    | 777   | 94.21% | **94.21%** | 15.83% | 16.99% | +10.04 | 98.07% |
+
+(Logs: `logs/elite_v9_{TLA,TMT,SOS}.log`. Replay snapshot 2026-06-27 for all
+sets, same as the v8 runs, so the n's match v8 exactly.)
+
+## Mull recall / precision (v9)
+
+| Set | Event | Mull recall | Mull precision |
+|-----|-------|-------------|----------------|
+| TLA | Premier | 59% (237/402)  | 83% (237/285)  |
+| TLA | Trad    | 87% (181/208)  | 90% (181/202)  |
+| TMT | Premier | 67% (14/21)    | 74% (14/19)    |
+| TMT | Trad    | 76% (47/62)    | 94% (47/50)    |
+| SOS | Premier | 61% (101/166)  | 82% (101/123)  |
+| SOS | Trad    | 85% (105/123)  | 80% (105/132)  |
+
+## Honest held-out (each model's own leakage-free test split)
+
+| Model | held-out test log-loss | brier | acc | n | split |
+|-------|------------------------|-------|-----|---|-------|
+| choice_v7 | 0.1733 | 0.0518 | 0.9296 | 138,557 | permutation |
+| choice_v8 | 0.1736 | 0.0520 | 0.9286 | 139,458 | permutation |
+| choice_v9 | 0.1745 | 0.0524 | 0.9284 | 139,087 | draftid_hash_v1 |
+
+Within-noise of v7/v8 (different split scheme + different feature semantics,
+so the third decimal is not meaningful across rows).
+
+## Headline read (v9)
+
+- **No regression anywhere; small gains on three of six cells.** TLA Premier
+  +0.07pp, TLA Trad +0.41pp, TMT Premier +1.69pp vs v8; TMT Trad and both SOS
+  cells land on exactly the same agreement counts as v8 (near-identical
+  boosters flip only a handful of verdicts, which netted to zero there).
+- **TMT Premier mull recall improves** (67% vs v8's 48%) on an admittedly tiny
+  n=21; TLA Trad recall 87% (v8 86%), SOS steady.
+- **Still conservatively keep-leaning in Premier** (pred mull ~6.5–8% vs
+  actual ~9–11%), unchanged in character from v6–v8; Trad calibration close
+  (SOS Trad 16.99% pred vs 15.83% actual).
+- **v9 is the promotion candidate**: identical quality to v8 with the Step-5
+  stats join live at train AND serve time, single simulator version, full
+  set-code vocabulary, and complete lineage stamps — promoting it to
+  `models/choice_prod` clears the pipeline-version degradation on the website
+  and overlay.
+
+# Borderline verdict band adopted + choice_v9 promoted (2026-07-06)
+
+Owner decision following the per-5%-bucket calibration study
+(`scripts/elite_calibration_dump.py`, rows at
+`logs/elite_calibration_rows.parquet`): the verdict gains a fifth,
+no-judgement **borderline** band, rendered grey on both surfaces. New
+thresholds on p_keep (asymmetric around 0.5 because the model's
+probabilities are compressed toward the middle relative to elite
+behaviour — elites mull the mull-leaning hands more than predicted):
+
+| band | p_keep | observed elite mull rate |
+|------|--------|--------------------------|
+| clear_keep | > 0.85 | 1.1% |
+| marginal_keep | 0.65–0.85 | 21% |
+| borderline | 0.45–0.65 | **46% — a coin flip** |
+| marginal_mulligan | 0.25–0.45 | 76% |
+| clear_mulligan | ≤ 0.25 | 93% |
+
+Effect on the elite deviation counts (all six set×event cells, n=8,243;
+borderline excluded from the judged denominators):
+
+| | old 4-band | new 5-band (judged) |
+|---|---|---|
+| agreement | 94.87% | 96.38% |
+| soft keep-direction | 297 (3.6%) | 191 (2.41%) |
+| soft mull-direction | 126 (1.5%) | 96 (1.21%) |
+| hard clear_keep+mulled | 123 (1.5%) | 70 (0.88%) |
+| hard clear_mulligan+kept | 35 (0.4%) | 35 (0.44%) |
+
+Only 3.8% of hands land in the grey band. Caveat: thresholds were
+picked and evaluated on the same elite sample — treat the cut points
+as reasonable, not optimal. `elite_first_mull_agreement.py` now
+reports borderline counts separately and scores agreement over judged
+hands only, so post-change eval numbers are NOT directly comparable
+to the v6–v9 tables above.
+
+**choice_v9 was promoted to `models/choice_prod`** the same day (old
+prod backed up to `models/choice_prod_pre_v9_backup/`). Verified: the
+promoted bundle loads with no version warning and `recommend_choice`
+returns zero degradations — the pipeline-version caveat both surfaces
+showed since Step 5 is cleared.

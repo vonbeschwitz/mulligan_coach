@@ -4590,11 +4590,12 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 1
+      "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "fix 2026-07-03: surveil lives on a graveyard-resident activation ('{W}, Exile this card from your graveyard:') that can't fire in the mulligan window \u2014 cards_manipulated cleared (Sewer-veillance Cam conservatism, guide \u00a72)"
     ]
   },
   {
@@ -28324,6 +28325,14 @@
           {
             "kind": "noop",
             "role_tag": "modal_charm"
+          },
+          {
+            "kind": "scry",
+            "n": 2
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
           }
         ]
       }
@@ -28361,7 +28370,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 2-mana Prismari Charm modal \u2014 surveil2+draw / 1-burn / bounce"
+      "llm: 2-mana Prismari Charm modal \u2014 surveil2+draw / 1-burn / bounce",
+      "fix 2026-07-03: surveil-2-then-draw mode \u2014 wired per \u00a718 modal-draw sim rule"
     ]
   },
   {
@@ -31186,6 +31196,10 @@
           {
             "kind": "noop",
             "role_tag": "modal_draw_4_or_sweeper_4"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 4
           }
         ]
       }
@@ -31223,7 +31237,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 5-mana modal \u2014 draw 4 OR 4 dmg sweeper (aggregated all modes)"
+      "llm: 5-mana modal \u2014 draw 4 OR 4 dmg sweeper (aggregated all modes)",
+      "fix 2026-07-03: draw-4 mode \u2014 wired per \u00a718 modal-draw sim rule"
     ]
   },
   {
@@ -32847,12 +32862,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 1
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 7-mv token sorcery with a cheap '{2}, Discard this card: look at top 2, take 1' filter mode (channel + LookAtTopEffect) \u2014 mulligan-relevant from turn 2; cards_drawn=1, cards_manipulated=1"
+      "llm: 7-mv token sorcery with a cheap '{2}, Discard this card: look at top 2, take 1' filter mode (channel + LookAtTopEffect) \u2014 mulligan-relevant from turn 2; cards_drawn=1, cards_manipulated=1",
+      "fix 2026-07-03: discard-self channel filter is net-0 on hand size \u2014 cards_drawn 1 -> 0 (consistent with cycling / Gristle Glutton); cards_manipulated=1 stays"
     ]
   },
   {

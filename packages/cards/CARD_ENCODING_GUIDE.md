@@ -473,6 +473,9 @@ across **every** legal mode, not just the "primary" one a player will
 most often pick. The role_features feature space has no "modal"
 concept, so summing flags reflects the option value the card gives.
 
+Sim side: a modal spell with an unconditionally-available draw / filter
+mode also wires that mode's effects onto the cast Mode — see §18.
+
 ### Booleans — set if any mode triggers
 
 If any mode of a modal spell would set a flag in isolation, set it on
@@ -971,7 +974,68 @@ rules above):
   Ravager → `is_creature` only; Intruder Alarm / Training Grounds /
   Rhythm of the Wild → `is_other`.
 
-## 18. When to update this guide
+## 18. Random-commons spot check (2026-07-03)
+
+A review of 20 random TLA/TMT/SOS commons (seed 20260703) surfaced a
+few fixes and one new convention, applied by
+`scripts/audit/apply_review_20260703_fixes.py`.
+
+### Modal draw modes get sim effects
+
+The owner's call: a modal instant/sorcery whose draw (or filter) mode
+is **unconditionally available at the spell's cost** wires that mode's
+effects onto the cast Mode, so the simulator sees the card as playable
+card draw — mirroring the §12 "player picks the best option" logic that
+already governs `role_features`. (Previously modal cards carried the
+draw only in `role_features`; there was no reason for the asymmetry.)
+
+- Splatter Technique → `DrawCardsEffect(4)`; Shredder's Revenge →
+  `DrawCardsEffect(2)`; Ashling's Command → `DrawCardsEffect(2)`;
+  Sygg's Command → `DrawCardsEffect(1)`; Return of the Wildspeaker →
+  `DrawCardsEffect(1)` (variable draw, min 1 per §9); Prismari Charm →
+  `ScryEffect(2) + DrawCardsEffect(1)` (both from its
+  "surveil 2, then draw" mode — the chosen mode does both).
+- **Gated modes stay unwired**: Witherbloom Charm (draw needs a
+  sacrifice — assume the fodder isn't there, §9), Glorious Decay (draw
+  mode needs a graveyard target, often absent turns 1–4), Zuko,
+  Conflicted / Professor Dellian Fel (the choice isn't made at cast
+  time — it's a recurring trigger / planeswalker activation).
+
+### "Target player draws" is self-targetable
+
+Shredder's Revenge's "Target player draws two cards and loses 2 life"
+mode reads as opponent disruption but is Sign in Blood templating — the
+caster can (and in Limited often does) target themselves. Count it as a
+draw mode: `cards_drawn=2` per §12.
+
+### Triggered-draw clearances (§16 back-applied)
+
+Two TMT cards predating the §16 policy still carried parser-set
+`cards_drawn=1` from recurring triggers; both cleared, matching the
+April, Reporter of the Weird precedent (§2) and the Mystic Remora
+cleanup (§17): Oroku Saki, Shredder Rising (combat-damage trigger) and
+April O'Neil, Hacktivist (end-step trigger).
+
+### Stats on graveyard-resident activations don't count
+
+Stone Docent's "{W}, Exile this card from your graveyard: … Surveil 1"
+had parser-set `cards_manipulated=1` — but the creature has to already
+be dead for the ability to exist, so it can't contribute in the
+mulligan window the way cast/ETB surveil does. Cleared (same
+conservatism as Sewer-veillance Cam, §2). Watch for the deterministic
+parser crediting scry/surveil/draw chunks inside activation lines; it
+doesn't check the activation zone.
+
+### Net-0 discard-self filters are `cards_drawn=0`
+
+Visionary's Dance's "{2}, Discard this card: look at top 2, take 1"
+channel mode replaces itself — net hand change is 0, like cycling
+(Locust Spray) and Gristle Glutton's net-0 loot. `cards_drawn` corrected
+1 → 0; `cards_manipulated=1` and the `LookAtTopEffect` stay. §15's
+"look-at-top sets cards_drawn += 1" applies to *cast-mode*
+look-at-top (Sleight of Hand shapes), where the net really is +1.
+
+## 19. When to update this guide
 
 Update when:
 
