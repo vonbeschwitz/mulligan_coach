@@ -4298,7 +4298,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
+      "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -4314,12 +4314,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "enchantment"
+      "enchantment",
+      "unc-batch3 fix 2026-07-07: cleared cards_drawn (the 'draw a card' fires only on the FOURTH plan counter \u2014 gated behind 4 creature-ETBs, outside the mulligan window per \u00a716/\u00a719); matches sibling Plans (Death to Our Enemies / Rewrite History / Robot Domination \u2192 is_other)."
     ]
   },
   {
@@ -11032,6 +11033,10 @@
           {
             "kind": "draw_cards",
             "n": 3
+          },
+          {
+            "kind": "discard_card",
+            "n": 2
           }
         ]
       }
@@ -11064,12 +11069,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 3,
-      "cards_manipulated": 0
+      "cards_drawn": 1,
+      "cards_manipulated": 3
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: draw_cards x3"
+      "effects: draw_cards x3",
+      "unc-batch3 fix 2026-07-07: loot (draw 3, then discard 2 unless artifact) \u2192 NET cards_drawn=1, cards_manipulated=3 per \u00a72 (Thirst for Identity precedent); DiscardCardEffect(2) wired onto the cast mode. Gross cards_drawn=3 was wrong (the discard sentence's 'unless' clause slipped past the loot matcher)."
     ]
   },
   {
@@ -25102,8 +25108,8 @@
       "is_mana_rock": false,
       "is_saga": false,
       "is_class": false,
-      "is_punch_fight": false,
-      "is_other": true,
+      "is_punch_fight": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -25122,9 +25128,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (removal_damage_variable)"
+      "effects: noop (removal_damage_variable)",
+      "unc-batch3 fix 2026-07-07: 'target creature you control deals damage equal to twice its power to target creature an opponent controls' is a punch (\u00a71); the 'twice its power' variable amount tripped the variable-damage matcher into is_other."
     ]
   },
   {
