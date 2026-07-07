@@ -2453,3 +2453,23 @@ def test_equipment_trigger_token_not_double_counted() -> None:
     )
     parsed = parse_card(card)
     assert len(parsed.role_features.creates_creatures) == 1
+
+
+def test_negative_phrasing_restricted_mana_dropped() -> None:
+    """ "This mana can't be spent to cast a nonartifact spell." is the same
+    restriction as "Spend this mana only …" — drop the ability (MSH
+    Hydraulic Helper, batch-3 commons audit 2026-07-07)."""
+    card = _scryfall(
+        name="Hydraulic Helper",
+        type_line="Artifact Creature — Robot",
+        mana_cost="{1}{U}",
+        power="2",
+        toughness="3",
+        keywords=["Defender"],
+        oracle_text=(
+            "Defender\n{T}: Add {U}. This mana can't be spent to cast a nonartifact spell."
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.status is ParseStatus.AUTO
+    assert parsed.mana_abilities == []

@@ -4,8 +4,47 @@ Working through all 94 MSH commons alphabetically, 15 per batch,
 judging each against `packages/cards/CARD_ENCODING_GUIDE.md`.
 Source: `data/processed/parsed_cards/MSH.json` (334 cards total).
 
-Status: **batches 1–2 done (cards 1–30), all fixes applied
-(2026-07-06)**. Next batch starts at #31 Giant-Sized Flying Ant.
+Status: **batches 1–3 done (cards 1–45), all fixes applied
+(2026-07-07)**. Next batch starts at #46 I Am Iron Man.
+
+## Batch 3 (2026-07-07): cards 31–45
+
+### Clean (12 of 15)
+
+| Card | Verdict |
+|---|---|
+| Giant-Sized Flying Ant (#56) | ETB tap/untap modal — neither mode maps to a role_features field; flash creature without ETB pump stays plain (§3). |
+| Go Nuts! (#168) | Teamwork modal: sorcery counter (is_other per §7) / fight → is_punch_fight (§12). |
+| Guerrilla Gorilla (#169) | Sac-gated noncreature-artifact/enchantment destroy stays off per §1/§10 (Curious Farm Animals shape). |
+| H.E.R.B.I.E. Scout Unit (#247) | ETB draw wired; the "put a land from hand onto the battlefield tapped" rider has no effect kind — unmodelled, and at 4 MV only the T4 land drop could care. Revisit only if a cheap version ships. |
+| HULK SMASH! (#135) | Teamwork modal: artifact destroy (no flag) / punch → is_punch_fight. |
+| HYDRA Assault Robot (#137) | Recurring face-damage ping — no removal_burn_damage (creature damage only, §1). |
+| HYDRA Infiltration (#100) | Opponent discard has no role_features field; is_other. |
+| HYDRA Troopers (#101) | Conditional token needs 2+ creature cards in gy — assume not met in the mulligan window (§9 conservatism); no token credited. |
+| Hawkeye's Bow (#132) | Equipment statics + recurring face ping — plain is_equipment. |
+| Helicarrier Strike (#15) | Teamwork burn encoded at the paid value 4 (§16 reference card). |
+| Hell's Kitchen (#268) | Tapped B/R dual. |
+| Hero in Training (#bonus-msc-840) | ETB draw wired; conditional lifegain unmodelled. |
+
+### Fixed (3 of 15)
+
+1. **Hire a Crew (#134)** — the "creatures you control get +1/+0
+   until end of turn" anthem rider is a combat trick per the Lorehold
+   Charm precedent (§12) → `combat_trick_power=1,
+   combat_trick_toughness=0` added beside the menace token.
+   (`apply_msh_batch3_fixes_20260707.py`)
+2. **Hour of Defeat (#99)** — mid-line "… Surveil 1." rider after the
+   destroy sentence was dropped by the chunk matcher → 
+   `cards_manipulated=1` + `ScryEffect(1)` on the cast mode (§2).
+   (same script) Only other mid-line rider in MSH is Colleen Wing's,
+   which sits in a recurring trigger and correctly gets no credit.
+3. **Hydraulic Helper (#57)** — "{T}: Add {U}. This mana can't be
+   spent to cast a nonartifact spell." was encoded as an
+   *unrestricted* mana dork; `_RESTRICTED_MANA_RE` only knew the
+   "Spend this mana only …" phrasing. Parser fixed (negative phrasing
+   now drops the ability, matching the Purple Dragon Punks /
+   Hydro-Channeler convention) + detector rerun. Only card in any set
+   with this phrasing.
 
 ## Batch 2 (2026-07-06): cards 16–30
 

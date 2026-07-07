@@ -7957,10 +7957,9 @@
             "kind": "enters_battlefield"
           }
         ]
-      }
-    ],
-    "mana_abilities": [
+      },
       {
+        "kind": "activated",
         "cost": {
           "mana": {
             "raw": "",
@@ -7978,14 +7977,15 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "produces": [
-          [
-            "U"
-          ]
-        ],
-        "condition": null
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
+    "mana_abilities": [],
     "enter_condition": null,
     "role_features": {
       "is_creature": true,
@@ -8020,7 +8020,7 @@
     "reasons": [
       "creature stats parsed",
       "evergreen keywords: defender",
-      "mana dork ability detected"
+      "alternative modes: activated"
     ]
   },
   {
@@ -13742,6 +13742,10 @@
           {
             "kind": "noop",
             "role_tag": "removal_destroy"
+          },
+          {
+            "kind": "scry",
+            "n": 1
           }
         ]
       }
@@ -13775,11 +13779,12 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (removal_destroy)"
+      "effects: noop (removal_destroy)",
+      "batch3 fix 2026-07-07: surveil-1 rider after the destroy sentence credited per \u00a72 (surveil = scry; mid-line rider missed by the chunk matcher)"
     ]
   },
   {
@@ -18678,8 +18683,8 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": null,
-      "combat_trick_toughness": null,
+      "combat_trick_power": 1,
+      "combat_trick_toughness": 0,
       "combat_trick_granted_keywords": [],
       "is_removal_aura": false,
       "is_pump_aura": false,
@@ -18689,9 +18694,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (create_token)"
+      "effects: noop (create_token)",
+      "batch3 fix 2026-07-07: mass +1/+0 anthem EOT on an instant = combat trick per the Lorehold Charm precedent (guide \u00a712); token body unchanged"
     ]
   },
   {
