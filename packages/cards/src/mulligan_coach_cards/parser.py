@@ -1604,7 +1604,10 @@ _COST_ONLY_FOR_ANY_RE = re.compile(
 # counts mana on the spell types the source CAN pay for, but never lets the
 # simulator cast a creature off Hydro-Channeler's instant/sorcery mana.
 # See packages/simulation/CLAUDE.md, "Things explicitly out of scope".
-_RESTRICTED_MANA_RE = re.compile(r"spend this mana only", re.IGNORECASE)
+# Both templating directions count: "Spend this mana only to cast …" and the
+# negative "This mana can't be spent to cast a nonartifact spell." (MSH
+# Hydraulic Helper — found in the batch-3 commons audit, 2026-07-07).
+_RESTRICTED_MANA_RE = re.compile(r"spend this mana only|this mana can't be spent", re.IGNORECASE)
 
 # Conditional ETB-tapped patterns.
 _DEATHCAP_RE = re.compile(
