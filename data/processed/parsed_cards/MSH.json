@@ -29156,7 +29156,19 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [],
+      "creates_creatures": [
+        {
+          "power": "1",
+          "toughness": "1",
+          "colors": [
+            "W"
+          ],
+          "subtypes": [
+            "Soldier"
+          ],
+          "keywords": []
+        }
+      ],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -29174,12 +29186,13 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
       "unrecognised line: '\u2022 Create a 1/1 white Soldier creature token.'",
       "unrecognised line: '\u2022 Creatures you control get +1/+1 until end of turn.'",
-      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns",
+      "unc-batch1 fix 2026-07-07: recurring-trigger modal token recorded per the Sokka / Madame Masque precedent (\u00a74) aggregated per \u00a712; the +1/+1-EOT anthem mode is trigger-gated, not a combat trick"
     ]
   },
   {

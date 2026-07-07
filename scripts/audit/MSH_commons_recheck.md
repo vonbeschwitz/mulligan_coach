@@ -1,8 +1,38 @@
-# MSH commons encoding recheck (pre-release audit)
+# MSH commons + uncommons encoding recheck (pre-release audit)
 
-Working through all 94 MSH commons alphabetically, 15 per batch,
-judging each against `packages/cards/CARD_ENCODING_GUIDE.md`.
+Working through all 94 MSH commons (done) and 107 uncommons
+alphabetically, judging each against
+`packages/cards/CARD_ENCODING_GUIDE.md`.
 Source: `data/processed/parsed_cards/MSH.json` (334 cards total).
+
+## Uncommons batch 1 (2026-07-07): cards 1–20
+
+**19 clean, 1 fixed.** The parser-hardening rounds clearly paid off —
+most would-be findings (recurring-trigger draws on Agent Maria Hill /
+Attuma / Beast / Colleen Wing, expensive power-up and land
+activations, teamwork encodes) were already correct.
+
+Clean highlights worth a note:
+* Arnim Zola (#86) — his token activation is graveyard-gated
+  ("two or more creature cards in your graveyard"), so no body per
+  §9's assume-condition-not-met; the "tapped" token phrasing also
+  doesn't match the token regex, same as HYDRA Troopers.
+* Beast Within (#bonus) — the 3/3 Beast goes to the *target's*
+  controller (usually the opponent), so correctly no
+  creates_creatures.
+* Bullseye (#209) — ETB burn-2 credited (discard-a-nonland additional
+  cost is reliably payable per §9); the repeatable {3},{T} version
+  correctly adds nothing.
+
+Fixed: **Black Panther, Vanguard (#207)** — recurring-trigger modal
+("choose one — create a 1/1 Soldier / +1/+1 EOT") broke on the
+bullets and fast-pathed with no token. Sokka/Madame Masque
+recurring-trigger-token precedent (§4) + §12 aggregation →
+`creates_creatures=[1/1 W Soldier]`
+(`apply_msh_unc_batch1_fix_20260707.py`). Scan confirmed it's the
+only "• Create …" bullet card in the set without a body.
+
+Next uncommons batch starts at #21 Dark Deed.
 
 Status: **COMPLETE — all 94 commons checked (batches 1–6), all fixes
 applied (2026-07-07).** Totals: 76 clean, 18 fixed (plus the parser
