@@ -209,6 +209,16 @@ the rule **literally** with these clarifications:
 - **Flash creatures** with ETB pump effects → set combat-trick fields.
   No flash → no combat-trick (Stratosoarer, Glen-Elendra Liege, etc.
   do not qualify).
+- **Flash Equipment / Auras that pump on arrival** → set combat-trick
+  fields too (owner-confirmed 2026-07-07 on MSH Stolen Stark Tech).
+  The play pattern is exactly "flash in to save/win a combat":
+  Stolen Stark Tech (#114, ETB auto-attach, +1/+0 + indestructible
+  EOT → trick 1/0 ['indestructible']), Super Suit (#78, ETB
+  auto-attach, +1/+2 + untap → trick 1/2), Super Speed (#154, flash
+  pump aura, +1/+0 haste + first-strike EOT → trick 1/0
+  ['first strike'], while the §5 aura fields keep the STATIC grants).
+  A flash Equipment WITHOUT an ETB auto-attach doesn't qualify — the
+  equip cost gates it past the combat.
 - **Sorceries** → suppress combat-trick fields, even if they pump.
   Special case: sorceries with an instant-speed alternative (e.g.
   Sneak ability) keep combat-trick. Karai's Technique (Sorcery,

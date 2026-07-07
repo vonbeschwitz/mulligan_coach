@@ -4,8 +4,54 @@ Working through all 94 MSH commons alphabetically, 15 per batch,
 judging each against `packages/cards/CARD_ENCODING_GUIDE.md`.
 Source: `data/processed/parsed_cards/MSH.json` (334 cards total).
 
-Status: **batches 1–5 done (cards 1–75), all fixes applied
-(2026-07-07)**. Next batch starts at #76 Sundering Growth.
+Status: **COMPLETE — all 94 commons checked (batches 1–6), all fixes
+applied (2026-07-07).** Totals: 76 clean, 18 fixed (plus the parser
+hardening the findings drove and one out-of-batch rider, Rancor).
+The uncommons/rares have NOT had an equivalent pass; the flash-trick
+and dropped-aura-grant scans below already cover the full set.
+
+## Batch 6 (2026-07-07): cards 76–94 (final)
+
+### Clean (15 of 19)
+
+Sundering Growth (#bonus — non-creature removal → is_other; populate
+needs an existing token, assume absent per §9), Surveillance Room
+(#274 — land ETB surveil credited per the Rumble Arena precedent),
+Trickster's Stratagem (#81 — tripwire encode held), Ultron Drone
+(#253), Undercover Skrull (#194 — any-color dork; conditional pump
+static ignored), Unliving Legionnaire (#119), Vibranium Energy
+Daggers (#254), Vision of Love (#158 — Abandon Attachments net-1
+precedent; the discard option makes the cost reliably payable, unlike
+Deadly Dispute), Visions of Villainy (#120), Volcanic Villain (#159),
+Wakandan Drone Flock (#40 — ETB scry 2 wired), Wakandan Royal Guard
+(#195 — counters not modelled), We Say Thee Nay! (#82 — soft counter
+= is_counterspell, Mana Leak precedent), Web Up (#41 — O-Ring-style
+exile = removal, Dimensional Exile precedent; got its flag in the
+round-2 ETB wiring), Widow's Bite (#122 — §16 reference card).
+
+### Fixed (4 of 19 + 1 rider) — `apply_msh_batch6_fixes_20260707.py`
+
+1. **Take Up the Shield (#39)** — the exact Saved by the Shell
+   precedent (§3): counter + lifelink/indestructible EOT on an
+   instant → `combat_trick 1/1 + ['lifelink', 'indestructible']`.
+   Was sitting at `is_other`.
+2. **Super Suit (#78)** — flash Equipment, ETB auto-attach (+1/+2,
+   untap) → `combat_trick 1/2` per the owner-confirmed flash ruling
+   (now codified in §3).
+3. **Super Speed (#154)** — two fixes: the aura's static grant is
+   *haste* (parser had captured the ETB line's temporary first
+   strike into the static field), and as a flash pump aura it also
+   gets `combat_trick 1/0 + ['first strike']`.
+4. **Super Strength (#189)** — dropped "has trample and ward {1}"
+   tail restored → `aura_pump_granted_keywords=['trample','ward']`.
+5. *(rider)* **Rancor (#bonus-2x2-156, uncommon)** — same
+   dropped-grant shape found by the same scan; `['trample']`.
+
+Parser note (not fixed): the aura branch's granted-keywords capture
+misses "gets +N/+M and has X and Y" tails and can grab keywords from
+the wrong line (Super Speed). Three MSH cards + Rancor were affected;
+all hand-fixed. Teach `_parse_aura` the "and has <keywords>" tail if
+this recurs in the next set.
 
 ## Batches 4–5 (2026-07-07): cards 46–75
 
