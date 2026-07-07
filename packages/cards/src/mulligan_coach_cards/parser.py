@@ -32,13 +32,18 @@ trip on it.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import re
+from collections.abc import Iterator
 from typing import Any
 
 from .keywords import (
     ALT_COST_KEYWORDS,
     EVERGREEN_KEYWORDS,
     IGNORABLE_KEYWORD_LINES,
+    KNOWN_KEYWORDS_EXTRA,
+    MODE_EMITTING_KEYWORDS,
     SET_SPECIFIC_KEYWORDS,
 )
 from .mana import ManaCost, Pip, parse_mana_cost
@@ -123,8 +128,12 @@ def _split_chunks(text: str) -> list[str]:
 # that act as a header before the actual cost/effect. Stripping them
 # lets the standard activated / waterbend / triggered matchers fire on
 # the body. New entries added as new sets ship.
+# Note: "power-up" (MSH) contains a hyphen. It's placed first in the
+# alternation and, because no shorter alternative is a prefix of it, the
+# ordered match consumes the whole "Power-up" label before the trailing
+# ``[—\-]`` separator matcher runs.
 _LABEL_PREFIX_RE = re.compile(
-    r"^(?:exhaust|raid|fateful hour|delirium|metalcraft|landfall|morbid|"
+    r"^(?:power-up|exhaust|raid|fateful hour|delirium|metalcraft|landfall|morbid|"
     r"hellbent|threshold|formidable|coven|domain|battalion|vivid|"
     r"firebending|champion of dawn|champion of dusk|"
     r"alliance|disappear|kicker)"
@@ -144,6 +153,71 @@ def _empty_mana() -> ManaCost:
     """Build a fresh empty ManaCost. Pydantic models are not safely shared
     as defaults across instances, so we build a new one each time."""
     return ManaCost(raw="", pips=[], cmc=0, color_pips={})
+
+
+# The full vocabulary of Scryfall structured ``keywords`` values the parser
+# knows about — either handles directly (evergreen / mode-emitting), bails on
+# cleanly (alt-cost / set-specific), tolerates as a bare line
+# (ignorable), or grandfathered as "seen in a current set and deliberately
+# accepted" (KNOWN_KEYWORDS_EXTRA). A keyword in NONE of these is a brand-new
+# mechanic; :func:`_flag_unknown_keywords` routes such a card to review.
+_KNOWN_KEYWORDS_UNION: frozenset[str] = (
+    EVERGREEN_KEYWORDS
+    | MODE_EMITTING_KEYWORDS
+    | ALT_COST_KEYWORDS
+    | IGNORABLE_KEYWORD_LINES
+    | SET_SPECIFIC_KEYWORDS
+    | KNOWN_KEYWORDS_EXTRA
+)
+
+
+# ---------------------------------------------------------------------------
+# Silent-drop census (opt-in).
+#
+# Several of the parser's tolerance paths deliberately drop oracle text they
+# can't model (unparseable ETB effects, ignored triggers, death triggers,
+# activated abilities whose cost/effect doesn't parse, static prose). That
+# tolerance is what keeps the auto-classification rate high — but it's also
+# how a brand-new mechanic (MSH's Connive) can slip through unnoticed.
+#
+# ``collect_drops()`` installs a per-context collector list; while it's
+# active every tolerance site records a ``(site_tag, chunk)`` pair via
+# ``_record_drop``. The ``census-drops`` CLI uses this to surface, set by
+# set, exactly what the parser is throwing away. In normal operation the
+# ContextVar defaults to ``None`` and ``_record_drop`` is a cheap no-op, so
+# there is zero overhead on the hot path.
+_DROP_COLLECTOR: contextvars.ContextVar[list[tuple[str, str]] | None] = contextvars.ContextVar(
+    "_DROP_COLLECTOR", default=None
+)
+
+
+def _record_drop(site: str, chunk: str) -> None:
+    """Record a dropped oracle chunk when a census collector is active.
+
+    ``site`` is a short tag identifying which tolerance path dropped the
+    chunk (e.g. ``"trigger_ignored"``); ``chunk`` is the raw text. No-op
+    unless a collector has been installed via :func:`collect_drops`.
+    """
+    collector = _DROP_COLLECTOR.get()
+    if collector is not None:
+        collector.append((site, chunk.strip()))
+
+
+@contextlib.contextmanager
+def collect_drops() -> Iterator[list[tuple[str, str]]]:
+    """Install a fresh drop collector for the duration of the ``with`` block.
+
+    Yields the collector list; every ``(site_tag, chunk)`` pair recorded by
+    the parser's tolerance sites while the block is active is appended to
+    it. Used by the ``census-drops`` CLI to audit silently-dropped text.
+    The previous collector (usually ``None``) is restored on exit.
+    """
+    collector: list[tuple[str, str]] = []
+    token = _DROP_COLLECTOR.set(collector)
+    try:
+        yield collector
+    finally:
+        _DROP_COLLECTOR.reset(token)
 
 
 # ---------------------------------------------------------------------------
@@ -712,9 +786,43 @@ def _is_likely_static_or_triggered(chunk: str) -> bool:
     return any(cl.startswith(p) for p in _STATIC_PREFIXES)
 
 
+# "When/Whenever … dies" triggered ability. We cap the gap between the
+# trigger word and "die(s)" at 80 chars so we match the trigger's subject
+# clause ("When this creature dies", "Whenever another Villain you control
+# dies", "Whenever one or more creatures die") without straying into an
+# unrelated later sentence.
+_DEATH_TRIGGER_RE = re.compile(r"^when(?:ever)?\b.{0,80}?\bdie(?:s)?\b", re.IGNORECASE)
+# Recurring-trigger prefix — "Whenever …" / "At the beginning of …". Per
+# guide §16 these never credit draw / loot / scry (they fire repeatedly on
+# events we don't model), unlike one-shot "When … enters" triggers.
+_RECURRING_TRIGGER_RE = re.compile(r"^(?:whenever|at the beginning of)\b", re.IGNORECASE)
+
+
+def _is_death_trigger(chunk: str) -> bool:
+    """True if ``chunk`` is a "when/whenever … dies" triggered ability.
+
+    Owner convention (2026-07-06): death triggers are too conditional on
+    board state to encode for mulligan-relevant turns. Both the
+    role-features signal extraction (``_extract_triggered_signal``) and the
+    token-creation scans at trigger sites skip these chunks, so a card like
+    MSH "Agents of HYDRA" ("When this creature dies, create a 2/1 … token
+    with menace") records no ``creates_creatures`` entry at all.
+    """
+    return bool(_DEATH_TRIGGER_RE.match(chunk.strip()))
+
+
 def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
     """Scan an ignorable static/triggered chunk for card-draw and mana
     production and reflect them in role_features.
+
+    Death triggers ("When/Whenever … dies") are skipped entirely: per the
+    owner convention (2026-07-06) they're too conditional to credit any
+    signal (draw / scry / loot / earthbend token / airbend bounce), so the
+    function returns early on them. Note this function is also called with
+    inner ETB-effect text that lacks the "When … enters" trigger prefix —
+    that text never matches the death-trigger shape, so the early return
+    only fires on full death-trigger chunks and those inner-effect calls
+    are unaffected.
 
     Mana production currently has nowhere to go on the simulator side
     (ManaAbility models permanent-resident activated abilities, not
@@ -724,7 +832,7 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
 
     Also picks up bending effects nested inside triggered abilities
     (e.g. "When this enters, airbend up to one target nonland permanent."
-    sets `rf.is_bounce`; "When this dies, earthbend 2." appends to
+    sets `rf.is_bounce`; a non-death "earthbend 2" trigger appends to
     `rf.creates_creatures`).
 
     Loot patterns nested in a trigger ("you may discard a card. If you do,
@@ -733,51 +841,64 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
     zero (or the gross-vs-net delta for asymmetric shapes) per design.
     Surveil triggers populate cards_manipulated.
     """
+    # Death triggers credit nothing — return before any signal extraction.
+    # This is the canonical "death-trigger skip" the census counts.
+    if _is_death_trigger(chunk):
+        _record_drop("death_trigger", chunk)
+        return
+    # Recurring triggers ("Whenever …" / "At the beginning of …") never
+    # credit draw / loot / scry — guide §16's policy, previously enforced
+    # only by per-set audit patches (April O'Neil, Oroku Saki, Mystic
+    # Remora, Political Triumph). One-shot "When … enters" triggers still
+    # credit. Bending signals below stay unaffected: attack-trigger
+    # earthbend bodies are wanted per the Sokka token precedent (§4).
+    recurring = _RECURRING_TRIGGER_RE.match(chunk) is not None
     # Loot patterns take precedence over the plain draw matcher — both
     # orders ("discard then draw" and "draw then discard") count as
     # manipulated cards rather than as new draws.
     handled_draws = 0
     handled_discards = 0
-    for m in _INNER_LOOT_RE.finditer(chunk):
-        n_draw = _to_int(m.group("draw"))
-        n_discard = _to_int(m.group("discard"))
-        if n_draw is None or n_discard is None:
-            continue
-        rf.cards_manipulated += n_draw
-        net = max(0, n_draw - n_discard)
-        rf.cards_drawn += net
-        handled_draws += n_draw
-        handled_discards += n_discard
-    for m in _INNER_LOOT_DRAW_FIRST_RE.finditer(chunk):
-        n_draw = _to_int(m.group("draw"))
-        n_discard = _to_int(m.group("discard"))
-        if n_draw is None or n_discard is None:
-            continue
-        rf.cards_manipulated += n_draw
-        net = max(0, n_draw - n_discard)
-        rf.cards_drawn += net
-        handled_draws += n_draw
-        handled_discards += n_discard
-    # Plain "draw N cards" matches — only count any draws beyond the
-    # ones we already attributed to loot. Sum up all draw mentions and
-    # subtract the ones the loot matchers already consumed.
-    total_inner_draws = 0
-    for m in _INNER_DRAW_RE.finditer(chunk):
-        n = _to_int(m.group(1))
-        if n is not None:
-            total_inner_draws += n
-    remaining_draws = max(0, total_inner_draws - handled_draws)
-    if remaining_draws:
-        rf.cards_drawn += remaining_draws
-    # Surveil / scry inside a trigger.
-    for m in _INNER_SURVEIL_RE.finditer(chunk):
-        n = _to_int(m.group(1))
-        if n is not None:
-            rf.cards_manipulated += n
-    for m in _INNER_SCRY_RE.finditer(chunk):
-        n = _to_int(m.group(1))
-        if n is not None:
-            rf.cards_manipulated += n
+    if not recurring:
+        for m in _INNER_LOOT_RE.finditer(chunk):
+            n_draw = _to_int(m.group("draw"))
+            n_discard = _to_int(m.group("discard"))
+            if n_draw is None or n_discard is None:
+                continue
+            rf.cards_manipulated += n_draw
+            net = max(0, n_draw - n_discard)
+            rf.cards_drawn += net
+            handled_draws += n_draw
+            handled_discards += n_discard
+        for m in _INNER_LOOT_DRAW_FIRST_RE.finditer(chunk):
+            n_draw = _to_int(m.group("draw"))
+            n_discard = _to_int(m.group("discard"))
+            if n_draw is None or n_discard is None:
+                continue
+            rf.cards_manipulated += n_draw
+            net = max(0, n_draw - n_discard)
+            rf.cards_drawn += net
+            handled_draws += n_draw
+            handled_discards += n_discard
+        # Plain "draw N cards" matches — only count any draws beyond the
+        # ones we already attributed to loot. Sum up all draw mentions and
+        # subtract the ones the loot matchers already consumed.
+        total_inner_draws = 0
+        for m in _INNER_DRAW_RE.finditer(chunk):
+            n = _to_int(m.group(1))
+            if n is not None:
+                total_inner_draws += n
+        remaining_draws = max(0, total_inner_draws - handled_draws)
+        if remaining_draws:
+            rf.cards_drawn += remaining_draws
+        # Surveil / scry inside a trigger.
+        for m in _INNER_SURVEIL_RE.finditer(chunk):
+            n = _to_int(m.group(1))
+            if n is not None:
+                rf.cards_manipulated += n
+        for m in _INNER_SCRY_RE.finditer(chunk):
+            n = _to_int(m.group(1))
+            if n is not None:
+                rf.cards_manipulated += n
     # Mana production breadcrumb only — no role_features field today.
     _ = _INNER_ADD_MANA_RE.search(chunk)
     # Bending mechanics nested inside a triggered ability.
@@ -990,6 +1111,19 @@ def _extract_granted_keywords(text: str) -> list[str]:
 # Token-creation pattern. We capture power, toughness, color, and subtype
 # words so we can build a CreatureBody. Plenty of variations exist; this
 # covers the most common "create a/N P/T <color> <type> creature token(s)".
+# Count words _CREATE_TOKEN_RE can capture, mapped to how many CreatureBody
+# entries to emit (guide §4: one entry per token). Digit counts are rare in
+# Limited-relevant text; cap at 5 to bound pathological inputs.
+_COUNT_WORD_TO_N: dict[str, int] = {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    **{str(i): min(i, 5) for i in range(1, 10)},
+}
 _CREATE_TOKEN_RE = re.compile(
     r"create (?P<count>a|an|one|two|three|four|five|\d+)\s+"
     r"(?P<power>\d+|\*)/(?P<toughness>\d+|\*)\s+"
@@ -1069,12 +1203,61 @@ _COLOR_WORD_TO_LETTER: dict[str, str] = {
 }
 
 
+# Trailing "with <keyword list>" clause on a token phrase, e.g.
+# "…creature token with menace" / "…with flying and haste". We only look at
+# the remainder of the same sentence (the caller passes the text starting at
+# the token match's end position).
+_TOKEN_WITH_RE = re.compile(r"^\s*with\s+(?P<rest>.+)$", re.IGNORECASE)
+
+
+def _match_token_keywords(trailing: str) -> list[str]:
+    """Parse a trailing "with <keywords>" clause into evergreen keywords.
+
+    ``trailing`` is the oracle text immediately following a token phrase
+    (sliced from the match's end position, so the "with …" must be adjacent
+    to that specific token — not just anywhere in the chunk). Rules,
+    deliberately conservative (§4 of CARD_ENCODING_GUIDE.md):
+
+    * Only words in ``EVERGREEN_KEYWORDS`` are accepted, matched
+      case-insensitively and stored lowercase.
+    * The list is split on commas and the conjunction "and"; each piece is
+      validated and we STOP at the first non-keyword token. So
+      "…with menace, then creatures you control get +1/+0" captures only
+      ``["menace"]`` and "…with haste and they gain …" captures only
+      ``["haste"]``.
+
+    Returns an empty list when there's no adjacent "with …" clause.
+    """
+    # The keyword list lives within a single sentence/line — cut at the
+    # first period or newline so a following sentence can't leak in
+    # (e.g. "…token with flying\nWhenever this attacks, …").
+    same_sentence = re.split(r"[.\n]", trailing, maxsplit=1)[0]
+    m = _TOKEN_WITH_RE.match(same_sentence)
+    if m is None:
+        return []
+    keywords: list[str] = []
+    for piece in re.split(r"\s*,\s*|\s+and\s+", m.group("rest")):
+        candidate = piece.strip().rstrip(".,;").strip().lower()
+        if candidate in EVERGREEN_KEYWORDS:
+            keywords.append(candidate)
+        else:
+            # First non-keyword token ends the list — trailing prose after
+            # the keywords must not be mis-captured.
+            break
+    return keywords
+
+
 def _match_token_creation(text: str) -> list[CreatureBody]:
     """Find token-creation patterns and return their bodies.
 
-    One entry per distinct "create N P/T … creature token" phrase. The
-    parent's `count` is implicit in the parent's effects — we record one
-    body per phrase, not N bodies for "create three 1/1 tokens."
+    One entry PER TOKEN, per the owner's revised §4 rule (Catharsis:
+    "create two 1/1 Kithkins" → two CreatureBody entries) — "create
+    three 1/1 tokens" emits three bodies. Fixed 2026-07-06; previously
+    one body per phrase (MSH Borough Backup et al. under-counted).
+
+    Any adjacent "with <keywords>" clause after a token phrase populates
+    that body's ``keywords`` (evergreen keywords only; see
+    :func:`_match_token_keywords`).
     """
     bodies: list[CreatureBody] = []
     for m in _CREATE_TOKEN_RE.finditer(text):
@@ -1088,15 +1271,24 @@ def _match_token_creation(text: str) -> list[CreatureBody]:
             if letter in ("W", "U", "B", "R", "G"):
                 colors.append(letter)
         subtypes = [w for w in subtypes_word.split() if w[:1].isupper()]
-        bodies.append(
-            CreatureBody(
-                power=power,
-                toughness=toughness,
-                colors=colors,  # type: ignore[arg-type]
-                subtypes=subtypes,
-                keywords=[],
+        # Keywords come from a "with …" clause adjacent to THIS token phrase
+        # (start scanning at the match's end, not anywhere in the chunk).
+        keywords = _match_token_keywords(text[m.end() :])
+        # Guide §4: one entry PER TOKEN, so "create two 3/2 Heroes" emits
+        # two bodies. The count word is capped defensively; variable-X
+        # phrases don't match the regex at all and stay with the LLM
+        # (which encodes X=1 per §4).
+        count = _COUNT_WORD_TO_N.get(m.group("count").lower(), 1)
+        for _ in range(count):
+            bodies.append(
+                CreatureBody(
+                    power=power,
+                    toughness=toughness,
+                    colors=list(colors),  # type: ignore[arg-type]
+                    subtypes=list(subtypes),
+                    keywords=list(keywords),
+                )
             )
-        )
     return bodies
 
 
@@ -1781,11 +1973,27 @@ def _build_activated_mode(
 ) -> tuple[Mode | None, str | None]:
     """If ``line`` is an activated ability "<cost>: <effect>", build a Mode.
 
-    When ``rf`` is supplied, the effect's role-features side-effects fire
+    When ``rf`` is supplied AND the activation is cheap enough to matter for
+    mulligan-relevant turns, the effect's role-features side-effects fire
     (e.g. "Sacrifice this: Destroy target creature." sets
-    ``removal_destroy_or_exile=True``). Activations are gated behind a
-    cost but they still represent the card "doing" the effect, so the
-    XGBoost stage benefits from counting them.
+    ``removal_destroy_or_exile=True``).
+
+    **Mulligan-relevance gate (owner convention 2026-07-06).** role_features
+    is credited only when the activation cost parses AND
+    ``cost.mana.cmc <= 3`` — i.e. an ability the player can plausibly turn
+    on inside the mulligan-relevant window:
+
+    * Agna Qel'a's ``{2}{U}, {T}: Draw a card, then discard a card.`` (cmc 3)
+      SHOULD credit its loot → gate passes, rf side-effects fire.
+    * MSH Bold Biochemist's ``Power-up — {5}{U}: … draw two cards`` (cmc 6)
+      should NOT credit → gate fails, ``rf=None`` is passed to
+      ``_match_spell_effect`` and the triggered-signal / token scans are
+      skipped, but the Mode is still built (the simulator gates by cost
+      itself).
+    * When the cost is unparseable we keep the (cheap, cost-agnostic)
+      token-creation scan but DROP the triggered-signal scan — an
+      activation whose cost we can't even parse must not credit draw/scry/
+      loot signals.
 
     Returns ``(mode, blocker_reason)``:
     * ``(Mode, None)`` if both cost and effect parse cleanly. If only the
@@ -1808,27 +2016,35 @@ def _build_activated_mode(
     if cost is None:
         # Cost we can't model (Blight N, exile-from-graveyard, behold,
         # etc.). Silently drop with no blocker — these activations are
-        # rarely mulligan-relevant. We still capture token creation /
-        # triggered-signal-style effects from the body for role_features.
+        # rarely mulligan-relevant. We still capture token creation from
+        # the body (a cost-agnostic body signal), but NOT the triggered
+        # signal: an activation whose cost we can't even parse must not
+        # credit draw/scry/loot into role_features.
         if rf is not None:
             for body in _match_token_creation(effect_str):
                 rf.creates_creatures.append(body)
-            _extract_triggered_signal(effect_str, rf)
+        _record_drop("activated_cost_unparsed", line)
         return None, None
+    # Mulligan-relevance gate: only credit role_features for activations the
+    # player can realistically turn on by turn ~3 (cmc <= 3). Pricier
+    # activations still get a Mode built (for the simulator's cost-based
+    # castability check) but contribute no role_features signal.
+    credit_rf = rf if cost.mana.cmc <= 3 else None
     # Activated abilities are not instant-speed for our purposes —
     # they're gated behind tapping / cost, so a pump on activation
     # doesn't make the parent card a combat trick.
-    effects = _match_spell_effect(effect_str, rf=rf, allow_combat_trick=False)
+    effects = _match_spell_effect(effect_str, rf=credit_rf, allow_combat_trick=False)
     if effects is None:
         # Cost parsed cleanly but we don't model the effect. Build a Mode
         # with a placeholder noop — the simulator can still evaluate
         # whether the player CAN activate the ability (cost-wise). For
-        # role_features we still scan the body for token creation and
-        # nested triggered signals.
-        if rf is not None:
+        # role_features we scan the body for token creation and nested
+        # triggered signals ONLY when the gate passed (credit_rf is set).
+        if credit_rf is not None:
             for body in _match_token_creation(effect_str):
-                rf.creates_creatures.append(body)
-            _extract_triggered_signal(effect_str, rf)
+                credit_rf.creates_creatures.append(body)
+            _extract_triggered_signal(effect_str, credit_rf)
+        _record_drop("activated_effect_unparsed", line)
         return Mode(
             kind="activated",
             cost=cost,
@@ -1924,6 +2140,8 @@ def _parse_land(
         # Triggered abilities on the land (ETB lifegain, scry, etc.) —
         # silently dropped per the v1 design rule.
         if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
+            if not _is_death_trigger(chunk):
+                _record_drop("land_trigger_ignored", chunk)
             _extract_triggered_signal(chunk, role_features)
             continue
         # Non-mana activated ability.
@@ -1938,6 +2156,8 @@ def _parse_land(
             continue
         # Static / passive prose on a land — silently drop.
         if _is_likely_static_or_triggered(chunk):
+            if not _is_death_trigger(chunk):
+                _record_drop("static_tolerated", chunk)
             _extract_triggered_signal(chunk, role_features)
             continue
         blockers.append(f"unrecognised land text: {chunk!r}")
@@ -2110,17 +2330,22 @@ def _parse_creature(
                 # extract embedded card-draw / bending signals via the
                 # static/triggered scanner.
                 _extract_triggered_signal(inner, role_features)
+                _record_drop("etb_unparsed", inner)
                 continue
             # ETB-shaped but for some other permanent — ignored triggered ability.
             continue
 
         # 5. Other triggered abilities — ignored per design rules. We do
-        # scan them for token creation, since cast-triggers / attack-
-        # triggers that create tokens (e.g. Sokka) are worth recording
-        # for role_features. Triggered card-draw is also captured.
+        # scan non-death triggers for token creation, since cast-triggers /
+        # attack-triggers that create tokens (e.g. Sokka) are worth
+        # recording for role_features; triggered card-draw is also captured.
+        # Death triggers ("… dies") are too conditional to credit (owner
+        # convention 2026-07-06) — skip their token scan entirely.
         if _OTHER_TRIGGERED_RE.match(chunk):
-            for body in _match_token_creation(chunk):
-                role_features.creates_creatures.append(body)
+            if not _is_death_trigger(chunk):
+                for body in _match_token_creation(chunk):
+                    role_features.creates_creatures.append(body)
+                _record_drop("trigger_ignored", chunk)
             _extract_triggered_signal(chunk, role_features)
             continue
 
@@ -2152,6 +2377,8 @@ def _parse_creature(
             _extract_triggered_signal(chunk, role_features)
             for body in _match_token_creation(chunk):
                 role_features.creates_creatures.append(body)
+            if not _is_death_trigger(chunk):
+                _record_drop("static_tolerated", chunk)
             continue
 
         # 8. Anything else — modal text, action verb we don't model. Bail.
@@ -2301,6 +2528,8 @@ def _parse_spell(
             # "Until end of turn, ..." enchanting effects can fall here.
             if _is_likely_static_or_triggered(chunk):
                 _extract_triggered_signal(chunk, role_features)
+                if not _is_death_trigger(chunk):
+                    _record_drop("static_tolerated", chunk)
                 continue
             blockers.append(f"unrecognised line: {chunk!r}")
         else:
@@ -2423,10 +2652,9 @@ def _parse_aura(
     # Aura categorization (sets role_features.is_removal_aura / is_pump_aura).
     _classify_aura(oracle_text, role_features)
 
-    # Token creation can fire on activation / ETB.
-    for body in _match_token_creation(cleaned):
-        role_features.creates_creatures.append(body)
-
+    # Token creation is captured per-chunk below (trigger / static / activated
+    # scans). The previous top-level ``_match_token_creation(cleaned)`` scan
+    # double-counted those bodies (removed 2026-07-06).
     extra_modes: list[Mode] = []
     blockers: list[str] = []
     for raw_chunk in chunks:
@@ -2454,15 +2682,20 @@ def _parse_aura(
             continue
         if _ACTIVATED_RE.match(chunk):
             continue
-        # Triggered abilities on the aura.
+        # Triggered abilities on the aura. Death triggers credit nothing
+        # (owner convention 2026-07-06) — skip their token scan.
         if _OTHER_TRIGGERED_RE.match(chunk) or _ETB_RE.match(chunk):
             _extract_triggered_signal(chunk, role_features)
-            for body in _match_token_creation(chunk):
-                role_features.creates_creatures.append(body)
+            if not _is_death_trigger(chunk):
+                for body in _match_token_creation(chunk):
+                    role_features.creates_creatures.append(body)
+                _record_drop("trigger_ignored", chunk)
             continue
         # Static / passive prose — silently drop.
         if _is_likely_static_or_triggered(chunk):
             _extract_triggered_signal(chunk, role_features)
+            if not _is_death_trigger(chunk):
+                _record_drop("static_tolerated", chunk)
             continue
         blockers.append(f"unrecognised aura line: {chunk!r}")
 
@@ -2512,11 +2745,13 @@ def _parse_artifact_typed(
     cast_mode = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
     modes: list[Mode] = [cast_mode] if cast_mode is not None else []
 
-    # Token creation (Vehicle ETB pilot, Equipment with a stapled body, …).
-    for body in _match_token_creation(cleaned):
-        role_features.creates_creatures.append(body)
-
+    # Token creation (Vehicle ETB pilot, Equipment with a stapled body, …)
+    # is captured per-chunk below. The previous top-level
+    # ``_match_token_creation(cleaned)`` scan double-counted bodies the
+    # trigger / static branches already record (removed 2026-07-06 —
+    # doubly important now that count words multiply bodies per §4).
     extra_modes: list[Mode] = []
+    mana_abilities: list[ManaAbility] = []
     blockers: list[str] = []
     for raw_chunk in chunks:
         chunk = _strip_label_prefix(raw_chunk)
@@ -2526,11 +2761,19 @@ def _parse_artifact_typed(
         # Crew N / Equip N.
         if _VEHICLE_EQUIPMENT_LINE_RE.match(chunk):
             continue
-        # Triggered abilities — ignored (dies-trigger Clue, etc.).
+        # Triggered abilities — ignored (dies-trigger Clue, etc.). Death
+        # triggers credit nothing (owner convention 2026-07-06) — skip
+        # their token scan.
         if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
-            for body in _match_token_creation(chunk):
-                role_features.creates_creatures.append(body)
+            if not _is_death_trigger(chunk):
+                for body in _match_token_creation(chunk):
+                    role_features.creates_creatures.append(body)
+                _record_drop("trigger_ignored", chunk)
             _extract_triggered_signal(chunk, role_features)
+            continue
+        # Direct-action token creation (a stapled body outside a trigger).
+        if direct_bodies := _match_token_creation(chunk):
+            role_features.creates_creatures.extend(direct_bodies)
             continue
         # Cycling / land-cycling / channel on the equipment / vehicle.
         if alt := _build_alt_play_mode(chunk):
@@ -2539,6 +2782,13 @@ def _parse_artifact_typed(
         # Waterbending activated mode (TLA).
         if wb := _try_build_waterbend_mode(chunk, role_features):
             extra_modes.append(wb)
+            continue
+        # Mana ability on the vehicle/equipment (MSH Dependable Quinjet's
+        # "{T}: Add one mana of any color." — a Manalith with wheels). The
+        # simulator needs it in ``mana_abilities``; note §1 deliberately
+        # does NOT set is_mana_rock on vehicles/equipment.
+        if ab := _extract_mana_ability(chunk):
+            mana_abilities.append(ab)
             continue
         # Activated abilities on artifact.
         act, blocker = _build_activated_mode(chunk, rf=role_features)
@@ -2555,6 +2805,8 @@ def _parse_artifact_typed(
             _extract_triggered_signal(chunk, role_features)
             for body in _match_token_creation(chunk):
                 role_features.creates_creatures.append(body)
+            if not _is_death_trigger(chunk):
+                _record_drop("static_tolerated", chunk)
             continue
         blockers.append(f"unrecognised line: {chunk!r}")
 
@@ -2565,6 +2817,7 @@ def _parse_artifact_typed(
         return ParsedCard(
             status=ParseStatus.NEEDS_LLM,
             modes=modes,
+            mana_abilities=mana_abilities,
             role_features=role_features,
             reasons=[f"{label}: " + r for r in blockers] or [f"{label} blockers"],
             **base,
@@ -2573,8 +2826,9 @@ def _parse_artifact_typed(
     return ParsedCard(
         status=ParseStatus.AUTO,
         modes=modes,
+        mana_abilities=mana_abilities,
         role_features=role_features,
-        reasons=[label],
+        reasons=[label] + (["mana ability detected"] if mana_abilities else []),
         **base,
     )
 
@@ -2623,6 +2877,7 @@ def _parse_other_permanent(
 
     cast_mode = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
     modes: list[Mode] = [cast_mode] if cast_mode is not None else []
+    name = str(base.get("name") or "")
 
     # Token creation is captured per-chunk below; the previous top-level
     # ``_match_token_creation(cleaned)`` call was removed because it
@@ -2651,9 +2906,30 @@ def _parse_other_permanent(
                 role_features.creates_creatures.append(body)
             _extract_triggered_signal(chunk, role_features)
             continue
+        # Self-ETB with a recognisable spell effect gets WIRED onto the cast
+        # mode (mirrors the creature branch — added 2026-07-06 for MSH
+        # Futurist Forge's "When this artifact enters, draw a card.").
+        # Previously these only credited role_features, so the simulator
+        # never saw a cheap artifact/enchantment cantrip's draw.
+        if (m := _ETB_RE.match(chunk)) and _is_self_etb(m.group("subject"), name):
+            inner = m.group("effect").strip()
+            effects = _match_spell_effect(inner, rf=role_features, allow_combat_trick=False)
+            if effects is not None:
+                if cast_mode is not None:
+                    cast_mode.effects.extend(effects)
+                continue
+            bodies = _match_token_creation(chunk)
+            if bodies:
+                role_features.creates_creatures.extend(bodies)
+                continue
+            _extract_triggered_signal(inner, role_features)
+            _record_drop("etb_unparsed", inner)
+            continue
         if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
-            for body in _match_token_creation(chunk):
-                role_features.creates_creatures.append(body)
+            if not _is_death_trigger(chunk):
+                for body in _match_token_creation(chunk):
+                    role_features.creates_creatures.append(body)
+                _record_drop("trigger_ignored", chunk)
             _extract_triggered_signal(chunk, role_features)
             continue
         # Direct-action token creation: a chunk whose first verb is "Create
@@ -2690,10 +2966,16 @@ def _parse_other_permanent(
             _extract_triggered_signal(chunk, role_features)
             for body in _match_token_creation(chunk):
                 role_features.creates_creatures.append(body)
+            if not _is_death_trigger(chunk):
+                _record_drop("static_tolerated", chunk)
             continue
         blockers.append(f"unrecognised line: {chunk!r}")
 
     modes.extend(extra_modes)
+
+    # Derive cards_drawn / cards_manipulated etc. from the wired cast-mode
+    # effects (same as the creature branch; only kind=="cast" contributes).
+    _populate_role_features_from_effects(role_features, modes)
 
     # Non-creature, non-equipment, non-vehicle artifact with at least one
     # mana ability = "mana rock" (Sol Ring, Springleaf Drum, etc.). Routing
@@ -2834,18 +3116,49 @@ _COST_REDUCTION_RE = re.compile(
 _DISCARD_SELF_ABILITY_RE = re.compile(r"discard this card\s*:", re.IGNORECASE)
 # Modal text — true modal cards offer the player a choice between bullet
 # options. We exclude "Choose up to one target X" because that's a target
-# specification, not a modal selection.
+# specification, not a modal selection. The modal word may be followed by a
+# dash ("Choose one —"), a period (MSH templates it "Choose one." — see MSH
+# "Atlantis Attacks"), or end-of-line — all three introduce bullet modes.
 _MODAL_RE = re.compile(
-    r"^choose\s+(?:one|two|three|one or both|one or more|any number)\s*[—\-]"
+    r"^choose\s+(?:one|two|three|one or both|one or more|any number)\s*(?:[—\-.]|$)"
     r"|"
     r"^modal\b",
     re.IGNORECASE | re.MULTILINE,
 )
 
 
+def _flag_unknown_keywords(card: dict[str, Any], parsed: ParsedCard) -> ParsedCard:
+    """Demote a card to NEEDS_LLM if it carries a keyword we don't know.
+
+    The card's structured Scryfall ``keywords`` list is checked
+    case-insensitively against :data:`_KNOWN_KEYWORDS_UNION` (the union of
+    every keyword the parser handles, bails on cleanly, tolerates, or has
+    grandfathered from the current sets). A keyword in none of those sets is
+    a brand-new mechanic (MSH's Connive, Teamwork) the deterministic parser
+    can't be trusted to have modelled — so we append an explicit blocker
+    reason and route the card to review. This is the tripwire that stops a
+    new mechanic from silently slipping through as a falsely-AUTO card.
+
+    Applies to every card-type branch (it runs post-dispatch in
+    :func:`parse_card`). An already-NEEDS_LLM card just gains the reason;
+    an AUTO card is demoted.
+    """
+    raw_keywords = [str(k).lower() for k in card.get("keywords") or []]
+    unknown = [k for k in raw_keywords if k not in _KNOWN_KEYWORDS_UNION]
+    if not unknown:
+        return parsed
+    for kw in unknown:
+        reason = f"unrecognised keyword {kw!r} — new mechanic, route to review"
+        if reason not in parsed.reasons:
+            parsed.reasons.append(reason)
+    if parsed.status is ParseStatus.AUTO:
+        parsed.status = ParseStatus.NEEDS_LLM
+    return parsed
+
+
 def _qualifies_for_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> bool:
     """True if the NEEDS_LLM card's MV is ≥ 4 and it has no alt-cost or
-    cost-reduction or modal text."""
+    cost-reduction or modal text or unrecognised keyword."""
     if parsed.mana_cost is None:
         return False
     if parsed.mana_cost.cmc < 4:
@@ -2854,6 +3167,11 @@ def _qualifies_for_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> bo
         return False  # variable cost — doesn't qualify
     raw_keywords = [str(k).lower() for k in card.get("keywords") or []]
     if any(k in ALT_COST_KEYWORDS for k in raw_keywords):
+        return False
+    # A brand-new mechanic (keyword not in any known set) must NOT be
+    # auto-promoted back to AUTO by the fast-path — it's exactly what the
+    # unknown-keyword tripwire (see _flag_unknown_keywords) wants reviewed.
+    if any(k not in _KNOWN_KEYWORDS_UNION for k in raw_keywords):
         return False
     oracle_text = str(card.get("oracle_text") or "")
     if _COST_REDUCTION_RE.search(oracle_text):
@@ -3232,6 +3550,11 @@ def parse_card(
             **base,
         )
 
+    # Unknown-keyword tripwire: demote any card carrying a keyword the
+    # parser doesn't recognise (a brand-new mechanic) to NEEDS_LLM before
+    # the fast-path runs — the fast-path itself also refuses to promote
+    # such cards, so they can't slip back to AUTO.
+    result = _flag_unknown_keywords(card, result)
     # MV >= 4 fast-path: promote NEEDS_LLM cards that can't realistically
     # affect mulligan-relevant turns 1-4 to AUTO.
     result = _maybe_apply_mv4_fast_path(card, result)

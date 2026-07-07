@@ -239,7 +239,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -768,7 +768,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
+      "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -784,7 +784,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -941,7 +941,22 @@
           "subtypes": [
             "Hero"
           ],
-          "keywords": []
+          "keywords": [
+            "vigilance"
+          ]
+        },
+        {
+          "power": "3",
+          "toughness": "2",
+          "colors": [
+            "W"
+          ],
+          "subtypes": [
+            "Hero"
+          ],
+          "keywords": [
+            "vigilance"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -1058,6 +1073,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{4}{W}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "W": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -1094,7 +1150,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: lifelink"
+      "evergreen keywords: lifelink",
+      "alternative modes: activated"
     ]
   },
   {
@@ -1484,6 +1541,53 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{W}{W}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {
+              "W": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -1520,7 +1624,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: flying, lifelink, flash"
+      "evergreen keywords: flying, lifelink, flash",
+      "alternative modes: activated"
     ]
   },
   {
@@ -1781,7 +1886,7 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 1
+      "cards_manipulated": 0
     },
     "status": "auto",
     "reasons": [
@@ -2159,7 +2264,9 @@
           "subtypes": [
             "Wall"
           ],
-          "keywords": []
+          "keywords": [
+            "defender"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -3310,6 +3417,69 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{W}{U}{B}{R}{G}",
+            "pips": [
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "W": 1,
+              "U": 1,
+              "B": 1,
+              "R": 1,
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -3345,7 +3515,8 @@
     },
     "status": "auto",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "alternative modes: activated"
     ]
   },
   {
@@ -3594,6 +3765,17 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [
+        {
+          "power": "1",
+          "toughness": "1",
+          "colors": [
+            "W"
+          ],
+          "subtypes": [
+            "Soldier"
+          ],
+          "keywords": []
+        },
         {
           "power": "1",
           "toughness": "1",
@@ -4145,7 +4327,7 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 1,
-      "cards_manipulated": 1
+      "cards_manipulated": 0
     },
     "status": "auto",
     "reasons": [
@@ -4822,7 +5004,7 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 1
+      "cards_manipulated": 0
     },
     "status": "auto",
     "reasons": [
@@ -4915,6 +5097,10 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "noop",
+            "role_tag": "removal_exile"
           }
         ]
       }
@@ -4931,9 +5117,9 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
       "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
@@ -5425,6 +5611,10 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "noop",
+            "role_tag": "removal_exile_nonland_permanent"
           }
         ]
       }
@@ -5441,9 +5631,9 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
       "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
@@ -5678,6 +5868,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{U}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 6,
+            "color_pips": {
+              "U": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -5714,7 +5945,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: flying"
+      "evergreen keywords: flying",
+      "alternative modes: activated"
     ]
   },
   {
@@ -5805,6 +6037,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       },
@@ -5874,12 +6114,14 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "alternative modes: land_cycle"
+      "alternative modes: land_cycle",
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: ETB connive = loot (guide \u00a72/\u00a719)"
     ]
   },
   {
@@ -6105,7 +6347,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "modal_token_or_bounce"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -6120,13 +6367,27 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
-      "creates_creatures": [],
+      "is_other": false,
+      "creates_creatures": [
+        {
+          "power": "6",
+          "toughness": "5",
+          "colors": [
+            "U"
+          ],
+          "subtypes": [
+            "Leviathan"
+          ],
+          "keywords": [
+            "hexproof"
+          ]
+        }
+      ],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
-      "is_bounce": false,
+      "is_bounce": true,
       "is_top_library": false,
       "combat_trick_power": null,
       "combat_trick_toughness": null,
@@ -6139,13 +6400,14 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "unrecognised line: 'Teamwork 4'",
       "unrecognised line: 'Choose one. If this spell was cast using teamwork, choose both instead.'",
       "unrecognised line: '\u2022 Target player creates a 6/5 blue Leviathan creature token with hexproof.'",
       "unrecognised line: \"\u2022 Return one or two target nonland permanents to their owners' hands.\"",
-      "MV>=7 fast-path: card unlikely to affect mulligan-relevant turns"
+      "unrecognised keyword 'teamwork' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: modal aggregation (\u00a712): 'Target player creates' is self-targetable (Shredder's Revenge precedent, \u00a718) \u2192 token body + is_bounce; teamwork chooses-both rider needs no extra flags"
     ]
   },
   {
@@ -6282,7 +6544,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -6379,6 +6641,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{U}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 6,
+            "color_pips": {
+              "U": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -6409,12 +6712,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 2,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "alternative modes: activated"
     ]
   },
   {
@@ -7343,6 +7647,10 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
           }
         ]
       },
@@ -8370,6 +8678,59 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{U}{U}{U}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 8,
+            "color_pips": {
+              "U": 3
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -8406,7 +8767,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: flying"
+      "evergreen keywords: flying",
+      "alternative modes: activated"
     ]
   },
   {
@@ -8661,12 +9023,14 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: recurring connive engine (replacement + begin-combat trigger) stays unencoded per \u00a716"
     ]
   },
   {
@@ -8791,7 +9155,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -8923,7 +9287,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -9573,7 +9937,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
+      "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -9590,7 +9954,7 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 1
+      "cards_manipulated": 0
     },
     "status": "auto",
     "reasons": [
@@ -10253,6 +10617,53 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{X}{U}{U}",
+            "pips": [
+              {
+                "kind": "x",
+                "color": null,
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 2,
+            "color_pips": {
+              "U": 2
+            },
+            "has_x": true,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -10288,7 +10699,8 @@
     },
     "status": "auto",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "alternative modes: activated"
     ]
   },
   {
@@ -10899,7 +11311,16 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -10914,14 +11335,14 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
       "is_bounce": false,
-      "is_top_library": false,
+      "is_top_library": true,
       "combat_trick_power": null,
       "combat_trick_toughness": null,
       "combat_trick_granted_keywords": [],
@@ -10931,12 +11352,13 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "unrecognised line: 'The owner of target creature an opponent controls puts it into their library second from the top or on the bottom. Then up to one target creature you control connives.'",
-      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: tuck ('second from the top or on the bottom' ~ Lost Days, \u00a71) + connive rider as loot ('up to one target creature you control' \u2014 Limited decks reliably have a creature by the time this casts)"
     ]
   },
   {
@@ -11436,19 +11858,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "1",
-          "colors": [
-            "B"
-          ],
-          "subtypes": [
-            "Villain"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -12152,7 +12562,9 @@
           "subtypes": [
             "Villain"
           ],
-          "keywords": []
+          "keywords": [
+            "menace"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -12808,6 +13220,16 @@
             "Villain"
           ],
           "keywords": []
+        },
+        {
+          "power": "3",
+          "toughness": "3",
+          "colors": [],
+          "subtypes": [
+            "Robot",
+            "Villain"
+          ],
+          "keywords": []
         }
       ],
       "removal_destroy_or_exile": false,
@@ -12824,7 +13246,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -14005,6 +14427,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -14032,7 +14462,9 @@
           "subtypes": [
             "Villain"
           ],
-          "keywords": []
+          "keywords": [
+            "menace"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -14050,11 +14482,13 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: ETB connive = loot; draw-two token trigger kept (recurring-trigger token, Sokka precedent)"
     ]
   },
   {
@@ -14332,6 +14766,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -14365,13 +14807,14 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
       "unrecognised line: 'Designed Only for Killing \u2014 Creatures your opponents control get -1/-1.'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: owner ruling: 'Pay 3 life: connives' assumed to fire once on arrival (pay-life is reliably payable, \u00a79); -1/-1 opponent static not modelled"
     ]
   },
   {
@@ -14599,6 +15042,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{4}{B}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "B": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -14635,7 +15119,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: deathtouch"
+      "evergreen keywords: deathtouch",
+      "alternative modes: activated"
     ]
   },
   {
@@ -14884,6 +15369,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -14917,11 +15410,13 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: ETB connive = loot (guide \u00a72/\u00a719)"
     ]
   },
   {
@@ -15037,6 +15532,26 @@
             "Villain"
           ],
           "keywords": []
+        },
+        {
+          "power": "2",
+          "toughness": "2",
+          "colors": [],
+          "subtypes": [
+            "Robot",
+            "Villain"
+          ],
+          "keywords": []
+        },
+        {
+          "power": "2",
+          "toughness": "2",
+          "colors": [],
+          "subtypes": [
+            "Robot",
+            "Villain"
+          ],
+          "keywords": []
         }
       ],
       "removal_destroy_or_exile": false,
@@ -15053,7 +15568,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -15792,7 +16307,9 @@
           "subtypes": [
             "Wall"
           ],
-          "keywords": []
+          "keywords": [
+            "defender"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -15944,9 +16461,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: attack-trigger connive stays unencoded per \u00a716"
     ]
   },
   {
@@ -16286,6 +16805,53 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{B}{B}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {
+              "B": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -16322,7 +16888,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: flying"
+      "evergreen keywords: flying",
+      "alternative modes: activated"
     ]
   },
   {
@@ -18100,7 +18667,9 @@
           "subtypes": [
             "Villain"
           ],
-          "keywords": []
+          "keywords": [
+            "menace"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -18343,6 +18912,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{6}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 6
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {
+              "R": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -18373,13 +18983,14 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: flying"
+      "evergreen keywords: flying",
+      "alternative modes: activated"
     ]
   },
   {
@@ -19317,6 +19928,47 @@
             "role_tag": "activated_unknown"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{4}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "R": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -19353,7 +20005,7 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "alternative modes: activated"
+      "alternative modes: activated, activated"
     ]
   },
   {
@@ -19609,7 +20261,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -20004,6 +20656,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{4}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "R": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -20040,7 +20733,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: haste"
+      "evergreen keywords: haste",
+      "alternative modes: activated"
     ]
   },
   {
@@ -20310,10 +21004,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "unrecognised line: 'Teamwork 2'",
-      "MV>=4 fast-path: card unlikely to affect mulligan-relevant turns"
+      "unrecognised keyword 'teamwork' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: 5 damage to target creature; teamwork rider adds face damage only, so the creature-burn value is unchanged (\u00a716 teamwork = encode paid outcome)"
     ]
   },
   {
@@ -21475,6 +22170,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 6,
+            "color_pips": {
+              "R": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -21511,7 +22247,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: haste"
+      "evergreen keywords: haste",
+      "alternative modes: activated"
     ]
   },
   {
@@ -21618,6 +22355,53 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          }
+        ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{R}{R}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {
+              "R": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
           }
         ]
       }
@@ -22282,7 +23066,12 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": []
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "battlefield_tutor"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -22316,11 +23105,12 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "unrecognised line: 'Teamwork 5'",
       "unrecognised line: 'Reveal the top eight cards of your library. You may put a creature card from among them onto the battlefield. If this spell was cast using teamwork, put any number of creature cards from among them onto the battlefield instead. Put the rest into your graveyard.'",
-      "MV>=6 fast-path: card unlikely to affect mulligan-relevant turns"
+      "unrecognised keyword 'teamwork' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: 6-mana reveal-8 battlefield tutor \u2014 outside the mulligan window; the revealed cards go to battlefield/graveyard, not hand, so no LookAtTopEffect (\u00a715 is hand-fetch only)"
     ]
   },
   {
@@ -23048,6 +23838,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{4}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 5,
+            "color_pips": {
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -23083,7 +23914,8 @@
     },
     "status": "auto",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "alternative modes: activated"
     ]
   },
   {
@@ -23969,6 +24801,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{6}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 6
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -23984,19 +24857,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "3",
-          "toughness": "2",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Hero"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -24017,7 +24878,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: reach"
+      "evergreen keywords: reach",
+      "alternative modes: activated"
     ]
   },
   {
@@ -25069,6 +25931,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{3}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 3
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 4,
+            "color_pips": {
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -25105,7 +26008,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: deathtouch"
+      "evergreen keywords: deathtouch",
+      "alternative modes: activated"
     ]
   },
   {
@@ -25359,6 +26263,53 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{4}{G}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 4
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 6,
+            "color_pips": {
+              "G": 2
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "removal_destroy_artifact"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -25395,7 +26346,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: reach, trample"
+      "evergreen keywords: reach, trample",
+      "alternative modes: activated"
     ]
   },
   {
@@ -26452,6 +27404,47 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 6,
+            "color_pips": {
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -26487,7 +27480,8 @@
     },
     "status": "auto",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "alternative modes: activated"
     ]
   },
   {
@@ -26725,6 +27719,57 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{5}{R/G}{R/G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 5
+              },
+              {
+                "kind": "hybrid",
+                "color": null,
+                "colors": [
+                  "R",
+                  "G"
+                ],
+                "amount": null
+              },
+              {
+                "kind": "hybrid",
+                "color": null,
+                "colors": [
+                  "R",
+                  "G"
+                ],
+                "amount": null
+              }
+            ],
+            "cmc": 7,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": true,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -26761,7 +27806,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: trample"
+      "evergreen keywords: trample",
+      "alternative modes: activated"
     ]
   },
   {
@@ -27049,7 +28095,9 @@
           "subtypes": [
             "Alien"
           ],
-          "keywords": []
+          "keywords": [
+            "haste"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -27643,7 +28691,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -27779,7 +28827,22 @@
           "subtypes": [
             "Villain"
           ],
-          "keywords": []
+          "keywords": [
+            "menace"
+          ]
+        },
+        {
+          "power": "2",
+          "toughness": "1",
+          "colors": [
+            "B"
+          ],
+          "subtypes": [
+            "Villain"
+          ],
+          "keywords": [
+            "menace"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -27930,7 +28993,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -29219,6 +30282,54 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{6}{R}{G}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 6
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 8,
+            "color_pips": {
+              "R": 1,
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -29399,7 +30510,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -29548,9 +30659,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: attack-trigger connive stays unencoded per \u00a716"
     ]
   },
   {
@@ -30140,7 +31253,9 @@
           "subtypes": [
             "Villain"
           ],
-          "keywords": []
+          "keywords": [
+            "menace"
+          ]
         }
       ],
       "removal_destroy_or_exile": false,
@@ -30304,7 +31419,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -30450,7 +31565,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -31852,6 +32967,75 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{C}{W}{U}{B}{R}{G}",
+            "pips": [
+              {
+                "kind": "colorless",
+                "color": "C",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "W",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "U",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "B",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "R",
+                "colors": null,
+                "amount": null
+              },
+              {
+                "kind": "color",
+                "color": "G",
+                "colors": null,
+                "amount": null
+              }
+            ],
+            "cmc": 6,
+            "color_pips": {
+              "W": 1,
+              "U": 1,
+              "B": 1,
+              "R": 1,
+              "G": 1
+            },
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": true,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -31888,7 +33072,8 @@
     "status": "auto",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: deathtouch, lifelink"
+      "evergreen keywords: deathtouch, lifelink",
+      "alternative modes: activated"
     ]
   },
   {
@@ -33592,9 +34777,10 @@
             "kind": "enters_battlefield"
           }
         ]
-      },
+      }
+    ],
+    "mana_abilities": [
       {
-        "kind": "activated",
         "cost": {
           "mana": {
             "raw": "",
@@ -33612,15 +34798,14 @@
           "sacrifice": null,
           "discard_self": false
         },
-        "effects": [
-          {
-            "kind": "noop",
-            "role_tag": "activated_unknown"
-          }
-        ]
+        "produces": [
+          [
+            "any"
+          ]
+        ],
+        "condition": null
       }
     ],
-    "mana_abilities": [],
     "enter_condition": null,
     "role_features": {
       "is_creature": false,
@@ -33653,7 +34838,8 @@
     },
     "status": "auto",
     "reasons": [
-      "vehicle"
+      "vehicle",
+      "mana ability detected"
     ]
   },
   {
@@ -34452,6 +35638,39 @@
             "kind": "enters_battlefield"
           }
         ]
+      },
+      {
+        "kind": "activated",
+        "cost": {
+          "mana": {
+            "raw": "{6}",
+            "pips": [
+              {
+                "kind": "generic",
+                "color": null,
+                "colors": null,
+                "amount": 6
+              }
+            ],
+            "cmc": 6,
+            "color_pips": {},
+            "has_x": false,
+            "has_hybrid": false,
+            "has_phyrexian": false,
+            "has_colorless": false,
+            "has_snow": false
+          },
+          "tap": false,
+          "untap": false,
+          "sacrifice": null,
+          "discard_self": false
+        },
+        "effects": [
+          {
+            "kind": "noop",
+            "role_tag": "activated_unknown"
+          }
+        ]
       }
     ],
     "mana_abilities": [],
@@ -34467,18 +35686,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [
-            "Robot",
-            "Villain"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -34498,7 +35706,8 @@
     },
     "status": "auto",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "alternative modes: activated"
     ]
   },
   {
@@ -36994,10 +38203,12 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "land taps for C",
-      "non-mana activated abilities: 2"
+      "non-mana activated abilities: 2",
+      "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
+      "tripwire encode 2026-07-06: owner ruling 2026-07-06: the {3},{T} connive activation is ignored \u2014 expensive land activations aren't modelled; mana abilities kept as parsed"
     ]
   },
   {
@@ -37497,7 +38708,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -37990,6 +39201,10 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "scry",
+            "n": 2
           }
         ]
       }
@@ -42772,7 +43987,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
+      "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -42788,7 +44003,7 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 1,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "auto",
@@ -43249,8 +44464,8 @@
         },
         "effects": [
           {
-            "kind": "draw_cards",
-            "n": 2
+            "kind": "noop",
+            "role_tag": "sac_gated_draw_unencoded"
           }
         ]
       }
@@ -43267,7 +44482,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
+      "is_other": true,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -43283,12 +44498,13 @@
       "aura_pump_power": null,
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
-      "cards_drawn": 2,
+      "cards_drawn": 0,
       "cards_manipulated": 0
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: Deadly Dispute \u2014 additional cost: sacrifice an artifact or creature; draw 2 + make a Treasure. The sac cost is far easier to pay than most 'sacrifice a permanent' costs (any spare token/dork qualifies), but it's still the same shape as the documented 'sac-or-activated draw with mana cost' precedent (Sewer-veillance Cam, CLAUDE \u00a72) \u2014 gated by a resource the opening hand doesn't guarantee, especially T1-2. Left at is_other for consistency; flagging here in case the owner wants to revisit given how trivially payable the cost usually is."
+      "llm: Deadly Dispute \u2014 additional cost: sacrifice an artifact or creature; draw 2 + make a Treasure. The sac cost is far easier to pay than most 'sacrifice a permanent' costs (any spare token/dork qualifies), but it's still the same shape as the documented 'sac-or-activated draw with mana cost' precedent (Sewer-veillance Cam, CLAUDE \u00a72) \u2014 gated by a resource the opening hand doesn't guarantee, especially T1-2. Left at is_other for consistency; flagging here in case the owner wants to revisit given how trivially payable the cost usually is.",
+      "tripwire encode 2026-07-06: fields aligned with the \u00a716 ruling the reason already recorded (is_other, no draw credit \u2014 sac additional cost not reliably payable)"
     ]
   },
   {

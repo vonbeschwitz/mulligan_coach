@@ -208,3 +208,86 @@ ALT_COST_KEYWORDS: Final[frozenset[str]] = frozenset(
         "warp",
     }
 )
+
+
+# Scryfall ``keywords`` entries the parser either handles elsewhere or
+# deliberately tolerates; any keyword on a card that is in none of the known
+# sets routes the card to LLM review — that's the tripwire that catches
+# brand-new mechanics.
+#
+# These are the residual keywords that appear on cards in the five current
+# Premier-Draft sets (TMT / ECL / TLA / SOS / MSH) but aren't already listed
+# in EVERGREEN_KEYWORDS / MODE_EMITTING_KEYWORDS / ALT_COST_KEYWORDS /
+# IGNORABLE_KEYWORD_LINES / SET_SPECIFIC_KEYWORDS. They were grandfathered in
+# by a full scan of those sets so the unknown-keyword tripwire in parser.py
+# only fires on genuinely new mechanics.
+#
+# Deliberately EXCLUDES "connive" and "teamwork" (both MSH): those are the
+# canonical examples the tripwire must catch, so they stay out of every known
+# set and route their cards to review.
+KNOWN_KEYWORDS_EXTRA: Final[frozenset[str]] = frozenset(
+    {
+        "prepared",
+        "surveil",
+        "mill",
+        "equip",
+        "enchant",
+        "scry",
+        "transform",
+        "treasure",
+        "food",
+        "vivid",
+        "behold",
+        "repartee",
+        "infusion",
+        "opus",
+        "increment",
+        "paradigm",
+        "fight",
+        "crew",
+        "converge",
+        "alliance",
+        "airbend",
+        "earthbend",
+        "waterbend",
+        "firebending",
+        "power-up",
+        "disappear",
+        "double",
+        "triple",
+        "exhaust",
+        "landfall",
+        "basic landcycling",
+        "affinity",
+        "enrage",
+        "spree",
+        "raid",
+        "storm",
+        "investigate",
+        "role token",
+        "champion",
+        "cascade",
+        "improvise",
+        "graft",
+        "wither",
+        "proliferate",
+        "partner",
+        "cumulative upkeep",
+        "grandeur",
+        "ferocious",
+        "magecraft",
+        "split second",
+        "extort",
+        "populate",
+        "shadow",
+        "devour",
+        "mine vibranium",
+        "survey the realm",
+        "throw ...",
+        "... catch",
+        "genius industrialist",
+        "ceaseless tempest",
+        "unrivaled lethality",
+        "blight",
+    }
+)

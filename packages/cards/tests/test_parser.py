@@ -24,7 +24,7 @@ from mulligan_coach_cards.models import (
     NoopEffect,
     ParseStatus,
 )
-from mulligan_coach_cards.parser import parse_card
+from mulligan_coach_cards.parser import collect_drops, parse_card
 
 
 def _scryfall(**overrides: Any) -> dict[str, Any]:
@@ -838,7 +838,8 @@ def test_fetch_land_to_battlefield_tapped_spell_auto() -> None:
 
 def test_token_creating_sorcery_auto() -> None:
     # Plain "create N tokens" sorceries auto-classify and populate
-    # role_features.creates_creatures.
+    # role_features.creates_creatures — one entry PER TOKEN per the
+    # revised guide §4 rule (2026-07-06).
     card = _scryfall(
         name="Raise the Alarm",
         type_line="Instant",
@@ -847,9 +848,9 @@ def test_token_creating_sorcery_auto() -> None:
     )
     p = parse_card(card)
     assert p.status is ParseStatus.AUTO
-    assert len(p.role_features.creates_creatures) == 1
-    body = p.role_features.creates_creatures[0]
-    assert body.power == "1" and body.toughness == "1" and body.colors == ["W"]
+    assert len(p.role_features.creates_creatures) == 2
+    for body in p.role_features.creates_creatures:
+        assert body.power == "1" and body.toughness == "1" and body.colors == ["W"]
 
 
 # ---------------------------------------------------------------------------
@@ -1163,7 +1164,9 @@ def test_creature_with_static_self_ref_auto() -> None:
     assert p.status is ParseStatus.AUTO
 
 
-def test_creature_with_triggered_draw_captures_role_feature() -> None:
+def test_creature_with_triggered_draw_no_longer_credited() -> None:
+    # §16 (enforced deterministically 2026-07-06): attack-trigger draw is
+    # a recurring trigger — never credited. The card still auto-classifies.
     card = _scryfall(
         name="Curious Tactician",
         type_line="Creature — Human",
@@ -1174,7 +1177,7 @@ def test_creature_with_triggered_draw_captures_role_feature() -> None:
     )
     p = parse_card(card)
     assert p.status is ParseStatus.AUTO
-    assert p.role_features.cards_drawn == 1
+    assert p.role_features.cards_drawn == 0
 
 
 def test_creature_with_triggered_mana_auto() -> None:
@@ -1234,10 +1237,12 @@ def test_airbend_spell_treated_as_bounce_auto() -> None:
 
 
 def test_earthbend_creates_creature_role_feature_auto() -> None:
+    # Non-death earthbend trigger still credits a body. (A *death*-trigger
+    # earthbend does NOT — see test_death_trigger_earthbend_not_credited.)
     card = _scryfall(
         name="Earth Village Ruffians",
         type_line="Creature — Human Warrior",
-        oracle_text="When this creature dies, earthbend 2.",
+        oracle_text="When this creature enters, earthbend 2.",
         mana_cost="{2}{G}",
         power="3",
         toughness="1",
@@ -1549,12 +1554,11 @@ def test_saga_chapter_one_token_creation_auto() -> None:
     p = parse_card(card)
     assert p.status is ParseStatus.AUTO
     assert p.role_features.is_saga is True
-    # Chapter I creates one token-shape (a 1/1 white Soldier); the count
-    # word "two" is recorded by the body's parent context (one body per
-    # distinct token shape, per the cards-package convention).
-    assert len(p.role_features.creates_creatures) == 1
-    body = p.role_features.creates_creatures[0]
-    assert body.power == "1" and body.toughness == "1"
+    # Chapter I creates two 1/1 Soldiers — one CreatureBody per token per
+    # the revised guide §4 rule (2026-07-06).
+    assert len(p.role_features.creates_creatures) == 2
+    for body in p.role_features.creates_creatures:
+        assert body.power == "1" and body.toughness == "1"
     # Chapter II / III effects are NOT carried — encoding chapter I only.
     assert p.role_features.cards_drawn == 0
 
@@ -1905,3 +1909,547 @@ def test_mode_with_look_at_top_round_trip_via_discriminator() -> None:
     assert reloaded.effects[0].n == 3
     assert reloaded.effects[0].accepts_land is True
     assert reloaded.effects[0].accepts_nonland is False
+
+
+# ---------------------------------------------------------------------------
+# Change 1 — token keywords captured from a trailing "with <keywords>" clause.
+# ---------------------------------------------------------------------------
+
+
+def test_token_keyword_single_menace() -> None:
+    card = _scryfall(
+        name="Villain Maker",
+        type_line="Sorcery",
+        oracle_text="Create a 2/1 black Villain creature token with menace.",
+        mana_cost="{1}{B}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    body = p.role_features.creates_creatures[0]
+    assert body.colors == ["B"]
+    assert body.subtypes == ["Villain"]
+    assert body.keywords == ["menace"]
+
+
+def test_token_keyword_multiple_flying_and_haste() -> None:
+    card = _scryfall(
+        name="Elemental Caller",
+        type_line="Sorcery",
+        oracle_text="Create a 1/1 white Soldier creature token with flying and haste.",
+        mana_cost="{2}{W}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.creates_creatures[0].keywords == ["flying", "haste"]
+
+
+def test_token_keyword_comma_list_vigilance_reach() -> None:
+    card = _scryfall(
+        name="Guardian Grove",
+        type_line="Sorcery",
+        oracle_text="Create a 2/2 green Bear creature token with vigilance, reach.",
+        mana_cost="{2}{G}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.creates_creatures[0].keywords == ["vigilance", "reach"]
+
+
+def test_token_keyword_stops_at_first_non_keyword() -> None:
+    # "with menace, then creatures you control get +1/+0" -> only ["menace"].
+    card = _scryfall(
+        name="Rally the Villains",
+        type_line="Sorcery",
+        oracle_text=(
+            "Create a 2/1 black Villain creature token with menace, "
+            "then creatures you control get +1/+0 until end of turn."
+        ),
+        mana_cost="{2}{B}",
+    )
+    p = parse_card(card)
+    assert p.role_features.creates_creatures[0].keywords == ["menace"]
+
+
+def test_token_keyword_stops_at_they_gain_prose() -> None:
+    # "with haste and they gain lifelink." -> only ["haste"] (the "and they
+    # gain ..." clause is prose, not a second keyword).
+    card = _scryfall(
+        name="Swift Recruits",
+        type_line="Sorcery",
+        oracle_text="Create a 1/1 white Soldier creature token with haste and they gain lifelink.",
+        mana_cost="{1}{W}",
+    )
+    p = parse_card(card)
+    assert p.role_features.creates_creatures[0].keywords == ["haste"]
+
+
+def test_token_without_with_clause_has_no_keywords() -> None:
+    card = _scryfall(
+        name="Plain Token",
+        type_line="Sorcery",
+        oracle_text="Create a 1/1 white Soldier creature token.",
+        mana_cost="{1}{W}",
+    )
+    p = parse_card(card)
+    assert p.role_features.creates_creatures[0].keywords == []
+
+
+# ---------------------------------------------------------------------------
+# Change 2 — death triggers ("... dies") credit nothing.
+# ---------------------------------------------------------------------------
+
+
+def test_death_trigger_token_not_credited() -> None:
+    # MSH "Agents of HYDRA" shape: a dies-trigger that creates a token must
+    # NOT record a creates_creatures entry (owner convention 2026-07-06).
+    card = _scryfall(
+        name="Agents of HYDRA",
+        type_line="Creature - Human Soldier",
+        oracle_text="When this creature dies, create a 2/1 black Villain creature token with menace.",
+        mana_cost="{2}{B}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.creates_creatures == []
+
+
+def test_death_trigger_earthbend_not_credited() -> None:
+    # TLA "When this dies, earthbend 2" - no creature body credited.
+    card = _scryfall(
+        name="Earth Village Ruffians",
+        type_line="Creature - Human Warrior",
+        oracle_text="When this creature dies, earthbend 2.",
+        mana_cost="{2}{G}",
+        power="3",
+        toughness="1",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.creates_creatures == []
+
+
+def test_death_trigger_draw_not_credited() -> None:
+    # A dies-trigger draw does not bump cards_drawn.
+    card = _scryfall(
+        name="Grim Bequest",
+        type_line="Creature - Zombie",
+        oracle_text="When this creature dies, draw a card.",
+        mana_cost="{2}{B}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.cards_drawn == 0
+
+
+def test_various_dies_phrasings_are_death_triggers() -> None:
+    # "Whenever another ... dies" and "Whenever one or more ... die" count.
+    for text in (
+        "Whenever another Villain you control dies, create a 1/1 white Soldier creature token.",
+        "Whenever one or more creatures die, draw a card.",
+    ):
+        card = _scryfall(
+            name="Death Watcher",
+            type_line="Creature - Cleric",
+            oracle_text=text,
+            mana_cost="{1}{B}",
+            power="1",
+            toughness="1",
+        )
+        p = parse_card(card)
+        assert p.role_features.creates_creatures == []
+        assert p.role_features.cards_drawn == 0
+
+
+def test_non_death_enter_trigger_still_credits() -> None:
+    # Contrast: an ETB (not a death trigger) still credits its token.
+    card = _scryfall(
+        name="Recruiter",
+        type_line="Creature - Human Soldier",
+        oracle_text="When this creature enters, create a 1/1 white Soldier creature token.",
+        mana_cost="{2}{W}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert len(p.role_features.creates_creatures) == 1
+
+
+# ---------------------------------------------------------------------------
+# Change 3 — _MODAL_RE recognises the period ("Choose one.") form.
+# ---------------------------------------------------------------------------
+
+
+def test_high_mv_modal_period_form_still_needs_llm() -> None:
+    # MSH "Atlantis Attacks" templates modal as "Choose one." (period).
+    # The MV>=4 fast-path must still exclude it.
+    card = _scryfall(
+        name="Atlantis Attacks",
+        type_line="Sorcery",
+        oracle_text="Choose one.\n* Some weird effect.\n* Some other weird effect.",
+        mana_cost="{3}{U}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert not any("fast-path" in r for r in p.reasons)
+
+
+def test_high_mv_modal_end_of_line_form_still_needs_llm() -> None:
+    card = _scryfall(
+        name="Bare Modal",
+        type_line="Sorcery",
+        oracle_text="Choose one\n* Some weird effect.\n* Some other weird effect.",
+        mana_cost="{3}{U}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+
+
+# ---------------------------------------------------------------------------
+# Change 4 — unknown-keyword tripwire routes new mechanics to review.
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_keyword_connive_demotes_to_needs_llm() -> None:
+    # A card that would otherwise be AUTO (vanilla body) is demoted because
+    # it carries a keyword the parser doesn't know.
+    card = _scryfall(
+        name="Conniving Rogue",
+        type_line="Creature - Human Rogue",
+        oracle_text="",
+        mana_cost="{1}{U}",
+        power="2",
+        toughness="1",
+        keywords=["Connive"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert any("unrecognised keyword 'connive'" in r for r in p.reasons)
+
+
+def test_unknown_keyword_teamwork_trips() -> None:
+    card = _scryfall(
+        name="Team Player",
+        type_line="Creature - Hero",
+        oracle_text="",
+        mana_cost="{2}{W}",
+        power="3",
+        toughness="3",
+        keywords=["Teamwork"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert any("unrecognised keyword 'teamwork'" in r for r in p.reasons)
+
+
+def test_known_extra_keyword_does_not_trip() -> None:
+    # "surveil" is grandfathered in KNOWN_KEYWORDS_EXTRA - no demotion.
+    card = _scryfall(
+        name="Quiet Watcher",
+        type_line="Creature - Human",
+        oracle_text="",
+        mana_cost="{1}{U}",
+        power="1",
+        toughness="3",
+        keywords=["Surveil"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert not any("unrecognised keyword" in r for r in p.reasons)
+
+
+def test_unknown_keyword_blocks_mv4_fast_path() -> None:
+    # A high-MV card that would normally be fast-pathed to AUTO must stay
+    # NEEDS_LLM when it carries an unknown keyword.
+    card = _scryfall(
+        name="Big Conniver",
+        type_line="Creature - Beast",
+        oracle_text="Some unrecognized effect.",
+        mana_cost="{4}{G}",
+        power="5",
+        toughness="5",
+        keywords=["Connive"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert not any("fast-path" in r for r in p.reasons)
+    assert any("unrecognised keyword 'connive'" in r for r in p.reasons)
+
+
+# ---------------------------------------------------------------------------
+# Change 5 / Change 6 — activated-ability mulligan-relevance (cmc) gate and
+# the "power-up" label prefix.
+# ---------------------------------------------------------------------------
+
+
+def test_cheap_activated_loot_credits_role_features() -> None:
+    # cmc <= 3 activation (Agna Qel'a precedent) credits its loot.
+    card = _scryfall(
+        name="Tidecaller",
+        type_line="Creature - Merfolk Wizard",
+        oracle_text="{1}{U}, {T}: Draw a card, then discard a card.",
+        mana_cost="{2}{U}",
+        power="1",
+        toughness="1",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.cards_manipulated == 1
+    assert any(m.kind == "activated" for m in p.modes)
+
+
+def test_expensive_activated_draw_not_credited_but_mode_built() -> None:
+    # cmc > 3 activation builds a Mode for the simulator but credits NO
+    # role_features (Bold Biochemist precedent, minus the label).
+    card = _scryfall(
+        name="Costly Cantripper",
+        type_line="Creature - Wizard",
+        oracle_text="{5}{U}: Draw two cards.",
+        mana_cost="{3}{U}",
+        power="3",
+        toughness="3",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.cards_drawn == 0
+    activated = [m for m in p.modes if m.kind == "activated"]
+    assert len(activated) == 1
+    assert activated[0].cost.mana.cmc == 6
+
+
+def test_power_up_label_strips_and_expensive_draw_not_credited() -> None:
+    # MSH Bold Biochemist: "Power-up - {5}{U}: ... draw two cards" (cmc 6).
+    # The label strips to a normal activated ability, the Mode is built, and
+    # the cmc>3 gate keeps the draw off role_features.
+    card = _scryfall(
+        name="Bold Biochemist",
+        type_line="Creature - Human Scientist",
+        oracle_text="Power-up — {5}{U}: Draw two cards.",
+        mana_cost="{3}{U}",
+        power="3",
+        toughness="3",
+        keywords=["Power-up"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.cards_drawn == 0
+    activated = [m for m in p.modes if m.kind == "activated"]
+    assert len(activated) == 1
+    assert activated[0].cost.mana.cmc == 6
+
+
+def test_unparseable_activated_cost_drops_draw_signal() -> None:
+    # An activation whose cost we can't parse ("Pay 3 life") must not credit
+    # its draw into role_features (the token scan is kept, but there's none).
+    card = _scryfall(
+        name="Blood Scholar",
+        type_line="Creature - Vampire Wizard",
+        oracle_text="{T}, Pay 3 life: Draw a card.",
+        mana_cost="{1}{B}",
+        power="1",
+        toughness="1",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert p.role_features.cards_drawn == 0
+
+
+# ---------------------------------------------------------------------------
+# Change 7 — silent-drop census collector.
+# ---------------------------------------------------------------------------
+
+
+def test_collect_drops_records_death_trigger() -> None:
+    card = _scryfall(
+        name="Agents of HYDRA",
+        type_line="Creature - Human Soldier",
+        oracle_text="When this creature dies, create a 2/1 black Villain creature token with menace.",
+        mana_cost="{2}{B}",
+        power="2",
+        toughness="2",
+    )
+    with collect_drops() as drops:
+        parse_card(card)
+    sites = [site for site, _ in drops]
+    assert "death_trigger" in sites
+
+
+def test_collect_drops_records_trigger_ignored() -> None:
+    card = _scryfall(
+        name="Aggressive Scout",
+        type_line="Creature - Human Scout",
+        oracle_text="Whenever this creature attacks, scry 1.",
+        mana_cost="{1}{W}",
+        power="2",
+        toughness="1",
+    )
+    with collect_drops() as drops:
+        parse_card(card)
+    sites = [site for site, _ in drops]
+    assert "trigger_ignored" in sites
+
+
+def test_collect_drops_records_activated_cost_unparsed() -> None:
+    card = _scryfall(
+        name="Blood Scholar",
+        type_line="Creature - Vampire Wizard",
+        oracle_text="{T}, Pay 3 life: Draw a card.",
+        mana_cost="{1}{B}",
+        power="1",
+        toughness="1",
+    )
+    with collect_drops() as drops:
+        parse_card(card)
+    sites = [site for site, _ in drops]
+    assert "activated_cost_unparsed" in sites
+
+
+def test_collect_drops_inactive_by_default() -> None:
+    # Outside a collector context, parsing records nothing (no crash).
+    card = _scryfall(
+        name="Aggressive Scout",
+        type_line="Creature - Human Scout",
+        oracle_text="Whenever this creature attacks, scry 1.",
+        mana_cost="{1}{W}",
+        power="2",
+        toughness="1",
+    )
+    # No collector installed - should simply parse without error.
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    # A freshly-installed collector starts empty.
+    with collect_drops() as drops:
+        assert drops == []
+        parse_card(card)
+        assert len(drops) >= 1
+
+
+# ---------------------------------------------------------------------------
+# 2026-07-06 batch-2 parser fixes: multi-token counts, recurring-trigger
+# draw skip, non-creature ETB effect wiring, vehicle mana abilities.
+# ---------------------------------------------------------------------------
+
+
+def test_multi_token_phrase_emits_one_body_per_token() -> None:
+    """Guide §4: 'create two … tokens' emits two CreatureBody entries."""
+    card = _scryfall(
+        name="Borough Backup",
+        type_line="Sorcery",
+        mana_cost="{4}{W}",
+        oracle_text="Create two 3/2 white Hero creature tokens with vigilance.",
+    )
+    parsed = parse_card(card)
+    bodies = parsed.role_features.creates_creatures
+    assert len(bodies) == 2
+    assert all(b.power == "3" and b.toughness == "2" for b in bodies)
+    assert all(b.keywords == ["vigilance"] for b in bodies)
+
+
+def test_single_token_phrase_still_emits_one_body() -> None:
+    card = _scryfall(
+        name="Lone Token Maker",
+        type_line="Sorcery",
+        mana_cost="{1}{W}",
+        oracle_text="Create a 1/1 white Soldier creature token.",
+    )
+    parsed = parse_card(card)
+    assert len(parsed.role_features.creates_creatures) == 1
+
+
+def test_recurring_trigger_draw_not_credited() -> None:
+    """Guide §16: 'Whenever …' draw/scry never credits role_features."""
+    card = _scryfall(
+        name="Engine Creature",
+        type_line="Creature — Human",
+        mana_cost="{2}{U}",
+        power="2",
+        toughness="2",
+        oracle_text="Whenever a creature you control enters, scry 1.",
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.cards_manipulated == 0
+    assert parsed.role_features.cards_drawn == 0
+
+
+def test_upkeep_trigger_draw_not_credited() -> None:
+    card = _scryfall(
+        name="Upkeep Engine",
+        type_line="Enchantment",
+        mana_cost="{1}{U}",
+        oracle_text="At the beginning of your upkeep, draw a card, then discard a card.",
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.cards_drawn == 0
+    assert parsed.role_features.cards_manipulated == 0
+
+
+def test_one_shot_etb_scry_still_credited() -> None:
+    """One-shot 'When … enters' triggers keep crediting (A.I.M. Synthoids)."""
+    card = _scryfall(
+        name="Scrying Golem",
+        type_line="Artifact Creature — Golem",
+        mana_cost="{2}",
+        power="1",
+        toughness="3",
+        oracle_text="When this creature enters, scry 2.",
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.cards_manipulated == 2
+
+
+def test_artifact_etb_draw_wired_onto_cast_mode() -> None:
+    """Non-creature permanents wire self-ETB effects (MSH Futurist Forge)."""
+    card = _scryfall(
+        name="Futurist Forge",
+        type_line="Artifact",
+        mana_cost="{1}{U}",
+        oracle_text="When this artifact enters, draw a card.",
+    )
+    parsed = parse_card(card)
+    assert parsed.status is ParseStatus.AUTO
+    cast = next(m for m in parsed.modes if m.kind == "cast")
+    kinds = [e.kind for e in cast.effects]
+    assert "enters_battlefield" in kinds
+    assert "draw_cards" in kinds
+    assert parsed.role_features.cards_drawn == 1
+
+
+def test_vehicle_mana_ability_recognised() -> None:
+    """Vehicles with '{T}: Add …' get mana_abilities (MSH Dependable Quinjet)."""
+    card = _scryfall(
+        name="Dependable Quinjet",
+        type_line="Artifact — Vehicle",
+        mana_cost="{3}",
+        power="3",
+        toughness="3",
+        keywords=["Flying", "Crew"],
+        oracle_text=(
+            "Flying\n{T}: Add one mana of any color.\n"
+            "Crew 4 (Tap any number of creatures you control with total power "
+            "4 or more: This Vehicle becomes an artifact creature until end of turn.)"
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.status is ParseStatus.AUTO
+    assert len(parsed.mana_abilities) == 1
+    assert parsed.mana_abilities[0].produces == [["any"]]
+    # §1: vehicles are excluded from is_mana_rock by definition.
+    assert parsed.role_features.is_mana_rock is False
+
+
+def test_equipment_trigger_token_not_double_counted() -> None:
+    """The removed top-level scan must not double-count trigger tokens."""
+    card = _scryfall(
+        name="Banner of Troops",
+        type_line="Artifact — Equipment",
+        mana_cost="{2}",
+        oracle_text=(
+            "When this Equipment enters, create a 1/1 white Soldier creature token.\nEquip {1}"
+        ),
+    )
+    parsed = parse_card(card)
+    assert len(parsed.role_features.creates_creatures) == 1

@@ -1035,7 +1035,140 @@ channel mode replaces itself — net hand change is 0, like cycling
 "look-at-top sets cards_drawn += 1" applies to *cast-mode*
 look-at-top (Sleight of Hand shapes), where the net really is +1.
 
-## 19. When to update this guide
+## 19. Parser hardening + owner rulings (2026-07-06)
+
+Settled during the pre-release MSH commons recheck (batch 1 findings in
+`scripts/audit/MSH_commons_recheck.md`; encodings applied by
+`scripts/audit/apply_tripwire_encodings_20260706.py`).
+
+### Death triggers are not encoded
+
+"When/Whenever … dies" triggers are too conditional on board state to
+credit `role_features` — no `creates_creatures`, no `cards_drawn`, no
+`cards_manipulated` from a death trigger. Canonical example: Agents of
+HYDRA (MSH #85, dies → 2/1 menace token) records **no** token body.
+Same for death-trigger draw (TMT Buzz Bots' "When this creature dies,
+draw a card" no longer credits `cards_drawn`).
+
+**Exception:** if the card itself carries an activated sacrifice outlet
+for the permanent (so the death trigger is effectively an activated
+ability), the LLM reviewer may encode the trigger's effect — judge
+case-by-case; the deterministic parser always skips.
+
+### Activated abilities credit role_features only when cmc ≤ 3
+
+The mulligan-relevance rule of §2's Gristle Glutton note is now a hard
+deterministic gate in `_build_activated_mode`:
+
+- Cost parses and `cmc <= 3` → role_features credited as before
+  (Agna Qel'a's `{2}{U}, {T}` loot keeps `cards_manipulated=1`).
+- Cost parses and `cmc > 3` → the Mode is still built (the simulator
+  gates by cost itself) but **no** role_features are credited: Bold
+  Biochemist's `{5}{U}` power-up draw, Everything Pizza's 7-mana burn,
+  Pet Avengers / Ultron Drone / Sun Warriors / Jasmine Dragon Tea
+  Shop's expensive token activations all cleared (Mouser Foundry /
+  Weather Maker conservatism, §1).
+- Cost doesn't parse (Blight N, remove-a-counter, pay-life,
+  discard-a-card, loyalty `+N:`) → draw/scry/loot signals are NOT
+  credited (token scan still runs). This also cleared Ice Cream Kitty
+  and Charging Strifeknight (sac-/discard-gated draw — consistent with
+  Sewer-veillance Cam, §2) and Professor Dellian Fel (loyalty draw).
+
+### Connive = loot
+
+- **ETB connive** ("When this creature enters, it connives.") → loot
+  per §2: `cards_manipulated=1`, `cards_drawn=0`, and
+  `DrawCardsEffect(1) + DiscardCardEffect(1)` on the cast mode.
+  A.I.M. Scientists (#44), Red Room Recruit (#110), Madame Masque
+  (#104).
+- **Cheap on-arrival activated connive**: M.O.D.O.K.'s "Pay 3 life:
+  connives" is assumed to fire **once when it arrives** (owner ruling —
+  pay-life is reliably payable, §9) → same loot encoding.
+- **Attack-trigger / recurring connives** stay unencoded per §16
+  (Swordsman #116, Kang #217, Leader Super-Genius #64).
+- **Expensive land activations are ignored** (owner ruling):
+  Villainous Hideout's `{3}, {T}: target Villain connives` gets no
+  credit — matches how the simulator never uses expensive utility-land
+  activations in the mulligan window.
+
+### Unknown-keyword tripwire + drop census
+
+The parser now bails to NEEDS_LLM when a card's structured Scryfall
+`keywords` list contains anything outside the known vocabulary
+(`keywords.py:KNOWN_KEYWORDS_EXTRA` holds the grandfathered
+residuals; `connive` and `teamwork` are deliberately excluded so their
+cards route to review). The MV≥4 fast-path also refuses such cards.
+**When a new set ships:** run
+`uv run mulligan-coach-cards census-drops --sets <SET>` after the
+detector and skim the report — it lists every silently-dropped oracle
+chunk by frequency (this is the report that would have caught connive
+on day one). Encode the flipped cards, then add the new keyword to
+`KNOWN_KEYWORDS_EXTRA` once its convention is settled here.
+
+### Smaller fixes in the same round
+
+- **Token keywords** are now parser-captured from "…creature token
+  with <keywords>" (evergreen keywords only, stops at the first
+  non-keyword word) — §4's rule no longer needs hand-patching.
+  Backfilled menace/vigilance/defender/haste/flying/deathtouch tokens
+  across MSH/SOS/ECL.
+- **"Choose one." (period form)** now counts as modal text for the
+  fast-path exclusion (MSH templating; caught Atlantis Attacks #46 and
+  SOS bonus-sheet Akroma's Will — the latter encoded `is_other` per
+  §16 mass-protection).
+- **Teamwork encodings** (§16 applied): Atlantis Attacks aggregates
+  per §12 (self-targetable "target player creates" → 6/5 Leviathan
+  body, plus `is_bounce`); Repulsor Blast keeps
+  `removal_burn_damage=5` (the teamwork rider is face damage);
+  Earth's Mightiest Heroes is a 6-mana battlefield tutor → `is_other`
+  (reveal-to-battlefield is not a §15 hand-fetch).
+- **ECL bonus-sheet stragglers** (5 cards that had sat `needs_llm`
+  since the set shipped) encoded: Heat Shimmer (copy token →
+  `is_other`), Manamorphose (`cards_drawn=1` + DrawCardsEffect; mana
+  production left unencoded), Dolmen Gate (`is_other`), Painter's
+  Servant (plain creature), Idyllic Tutor (`is_other`, §10).
+- **TMT Bebop / Rocksteady**: their typecycling reminder text trips
+  the discard-self fast-path guard, so they surfaced for review; the
+  parsed encoding (cast + land_cycle) was already correct and the
+  tribal-lord statics stay unmodelled.
+
+### Round 2 (same day, from the batch-2 commons review)
+
+Four more parser-vs-guide gaps found while reviewing MSH commons
+16–30, all now enforced deterministically:
+
+- **Multi-token counts** — `_match_token_creation` now emits one
+  CreatureBody **per token** ("create two 3/2 Heroes" → two bodies),
+  finally matching §4's revised rule (Borough Backup, Okoye, Robot
+  Domination, Empty the Warrens, Boggart Mischief, …). The aura and
+  vehicle/equipment branches' top-level token scans were removed at
+  the same time — they double-counted bodies the per-chunk scans
+  already record.
+- **Recurring-trigger draw is now skipped by the parser** — §16's
+  policy ("Whenever …" / "At the beginning of …" draw is never
+  credited) had only ever been enforced by one-off audit patches;
+  `_extract_triggered_signal` now skips draw/loot/scry for recurring
+  triggers directly. This cleared ~50 cards across the five sets
+  (Political Triumph, Reconnaissance Mission, Sword of Fire and Ice,
+  Agent of Treachery's end-step draw, …). One-shot "When … enters"
+  triggers still credit; attack-trigger earthbend token bodies are
+  unaffected (Sokka precedent, §4).
+- **Non-creature permanents wire self-ETB effects onto the cast
+  mode** — mirrors the creature branch, so cheap artifact/enchantment
+  cantrips are visible to the simulator (Futurist Forge's ETB draw,
+  Simulacrum Synthesizer's scry 2, Everything Pizza's basic-to-hand
+  fetch). Bonus: ETB-removal enchantments now set
+  `removal_destroy_or_exile` per §1 (Web Up, Super Villain Lockup).
+- **Vehicles/equipment can carry mana abilities** — Dependable
+  Quinjet's "{T}: Add one mana of any color." lands in
+  `mana_abilities` (a Manalith with wheels). §1's `is_mana_rock`
+  still deliberately excludes vehicles/equipment.
+- **Deadly Dispute field/ruling mismatch fixed** — the 2026-06-23
+  encode recorded the §16 "kept is_other, no draw credit" ruling in
+  its reasons but left the parser-populated `cards_drawn=2` +
+  DrawCardsEffect in place. Fields now match the ruling.
+
+## 20. When to update this guide
 
 Update when:
 

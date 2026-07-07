@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import random
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -21,7 +22,7 @@ import typer
 
 from .loader import filter_cards, load_all_cards, load_arena_id_index
 from .models import ParsedCard, ParseStatus
-from .parser import parse_card
+from .parser import collect_drops, parse_card
 from .seventeenlands_stats import load_premier_draft_stats
 from .store import (
     load_parsed_cards,
@@ -515,6 +516,131 @@ def run_detector(
             count = hist.get(status, 0)
             pct = (100 * count / total) if total else 0.0
             typer.echo(f"  {status.value:<13} {count:>5}  ({pct:5.1f}%)")
+
+
+OutOption = Annotated[
+    Path | None,
+    typer.Option(
+        "--out",
+        help="If given, also write the census report to this path.",
+    ),
+]
+
+
+@dataclass
+class _DropTally:
+    """Running tally for one ``(site_tag, normalized_chunk)`` census group."""
+
+    count: int = 0
+    examples: list[str] = field(default_factory=list)
+
+    def add(self, card_name: str) -> None:
+        self.count += 1
+        if card_name not in self.examples and len(self.examples) < 3:
+            self.examples.append(card_name)
+
+
+def _normalize_drop_chunk(chunk: str, limit: int = 100) -> str:
+    """Collapse whitespace and truncate a dropped chunk for grouping.
+
+    Reminder text is already stripped upstream (the parser removes it before
+    chunking), so we only normalize interior whitespace and cap the length
+    (~100 chars) so near-identical long chunks fall into the same group.
+    """
+    collapsed = " ".join(chunk.split())
+    if len(collapsed) > limit:
+        return collapsed[: limit - 1] + "…"
+    return collapsed
+
+
+@app.command("census-drops")
+def census_drops(
+    sets: SetsOption = "TMT,ECL,TLA,SOS,MSH",
+    data_root: DataRootOption = None,
+    out: OutOption = None,
+) -> None:
+    """Report the oracle chunks the parser silently drops, per set.
+
+    The parser's tolerance paths (unparseable ETB effects, ignored triggers,
+    death triggers, activated-cost/effect drops, static prose) discard
+    oracle text they don't model. That tolerance keeps the auto-rate high
+    but is also how a brand-new mechanic (MSH's Connive) can slip through
+    unnoticed. This command parses every card in each set with the drop
+    collector active, groups the dropped chunks by ``(site_tag, chunk)``,
+    and prints a per-set report sorted by descending frequency. Skim the
+    top entries after a new set's detector run to spot new mechanics worth
+    teaching the parser.
+
+    The card pool per set matches ``run-detector``: the primary Scryfall set
+    plus any 17Lands bonus-sheet reprints (when the ratings parquet exists).
+    """
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    log.info("Loading Scryfall snapshot…")
+    all_cards = load_all_cards(data_root)
+
+    # Name → Scryfall dict over normal-layout entries; reused by the
+    # bonus-sheet fallback (same construction as run-detector).
+    scryfall_by_name: dict[str, dict[str, Any]] = {}
+    for card in all_cards:
+        if str(card.get("layout", "normal")) != "normal":
+            continue
+        n = card.get("name")
+        if n is None:
+            continue
+        scryfall_by_name.setdefault(str(n), card)
+
+    set_codes = _parse_set_list(sets)
+    if not set_codes:
+        typer.echo("No set codes provided. Aborting.")
+        raise typer.Exit(code=1)
+
+    report_lines: list[str] = []
+    for code in set_codes:
+        pool = filter_cards(all_cards, set_code=code)
+        if not pool:
+            report_lines.append(f"[{code}] no cards found in Scryfall snapshot — skipping.")
+            continue
+        bonus_extras = _bonus_sheet_scryfall_entries(
+            code, pool, scryfall_by_name, data_root=data_root
+        )
+        if bonus_extras:
+            pool.extend(bonus_extras)
+
+        tallies: dict[tuple[str, str], _DropTally] = {}
+        total_drops = 0
+        # A single collector for the whole set; attribute each card's drops
+        # by slicing the tail the parse call appended.
+        with collect_drops() as drops:
+            for card in pool:
+                before = len(drops)
+                parse_card(card)
+                card_name = str(card.get("name", "?"))
+                for site, chunk in drops[before:]:
+                    key = (site, _normalize_drop_chunk(chunk))
+                    tallies.setdefault(key, _DropTally()).add(card_name)
+                    total_drops += 1
+
+        report_lines.append("")
+        report_lines.append("=" * 100)
+        report_lines.append(
+            f"[{code}] {len(pool)} cards parsed — {total_drops} dropped chunk(s), "
+            f"{len(tallies)} distinct (site, chunk) group(s)"
+        )
+        report_lines.append("=" * 100)
+        report_lines.append(f"{'count':>5}  {'site':<24} chunk  (e.g. cards)")
+        report_lines.append("-" * 100)
+        # Descending frequency; ties broken by site then chunk for stability.
+        for (site, chunk), tally in sorted(
+            tallies.items(), key=lambda kv: (-kv[1].count, kv[0][0], kv[0][1])
+        ):
+            examples = ", ".join(tally.examples)
+            report_lines.append(f"{tally.count:>5}  {site:<24} {chunk!r}  (e.g. {examples})")
+
+    report = "\n".join(report_lines)
+    typer.echo(report)
+    if out is not None:
+        out.write_text(report + "\n", encoding="utf-8")
+        typer.echo(f"\nWrote census report to {out}.")
 
 
 @app.command("list-needs-llm")
