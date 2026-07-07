@@ -5368,7 +5368,7 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": true,
+      "is_other": false,
       "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
@@ -5376,9 +5376,12 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": null,
-      "combat_trick_toughness": null,
-      "combat_trick_granted_keywords": [],
+      "combat_trick_power": 1,
+      "combat_trick_toughness": 1,
+      "combat_trick_granted_keywords": [
+        "lifelink",
+        "indestructible"
+      ],
       "is_removal_aura": false,
       "is_pump_aura": false,
       "aura_pump_power": null,
@@ -5387,9 +5390,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (counter_target)"
+      "effects: noop (counter_target)",
+      "batch6 fix 2026-07-07: counter + keyword grant on an instant = combat trick \u2014 the exact Saved by the Shell precedent (guide \u00a73)"
     ]
   },
   {
@@ -10932,8 +10936,8 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": null,
-      "combat_trick_toughness": null,
+      "combat_trick_power": 1,
+      "combat_trick_toughness": 2,
       "combat_trick_granted_keywords": [],
       "is_removal_aura": false,
       "is_pump_aura": false,
@@ -10943,9 +10947,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "equipment"
+      "equipment",
+      "batch6 fix 2026-07-07: flash Equipment with ETB auto-attach (+1/+2, untap) = combat trick per the flash ruling (\u00a73, owner-confirmed 2026-07-07)"
     ]
   },
   {
@@ -21543,22 +21548,25 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": null,
-      "combat_trick_toughness": null,
-      "combat_trick_granted_keywords": [],
+      "combat_trick_power": 1,
+      "combat_trick_toughness": 0,
+      "combat_trick_granted_keywords": [
+        "first strike"
+      ],
       "is_removal_aura": false,
       "is_pump_aura": true,
       "aura_pump_power": 1,
       "aura_pump_toughness": 0,
       "aura_pump_granted_keywords": [
-        "first strike"
+        "haste"
       ],
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "pump aura"
+      "pump aura",
+      "batch6 fix 2026-07-07: static grant corrected to haste; flash pump Aura also gets combat-trick fields (+1/+0, first strike EOT) per the \u00a73 flash ruling"
     ]
   },
   {
@@ -26488,13 +26496,17 @@
       "is_pump_aura": true,
       "aura_pump_power": 4,
       "aura_pump_toughness": 4,
-      "aura_pump_granted_keywords": [],
+      "aura_pump_granted_keywords": [
+        "trample",
+        "ward"
+      ],
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "pump aura"
+      "pump aura",
+      "batch6 fix 2026-07-07: dropped 'has trample and ward {1}' tail restored to the aura grants"
     ]
   },
   {
@@ -38337,13 +38349,16 @@
       "is_pump_aura": true,
       "aura_pump_power": 2,
       "aura_pump_toughness": 0,
-      "aura_pump_granted_keywords": [],
+      "aura_pump_granted_keywords": [
+        "trample"
+      ],
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "pump aura"
+      "pump aura",
+      "batch6 fix 2026-07-07: dropped 'and has trample' tail restored (out-of-batch rider \u2014 same scan as Super Strength)"
     ]
   },
   {
