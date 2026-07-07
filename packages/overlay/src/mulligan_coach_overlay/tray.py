@@ -101,7 +101,9 @@ class OverlayTray(QSystemTrayIcon):
         # headless context). Gives a user whose overlay stays silent —
         # Detailed Logs off, Arena in an odd install location — a way
         # back to the setup guide after the launch dialog is dismissed.
-        setup_action = self._menu.addAction("Setup & troubleshooting…")
+        # "&&" renders as a literal ampersand — a single "&" is Qt's
+        # mnemonic marker and would be swallowed on display.
+        setup_action = self._menu.addAction("Setup && troubleshooting…")
         assert setup_action is not None
         setup_action.setVisible(False)
         self._setup_action = setup_action

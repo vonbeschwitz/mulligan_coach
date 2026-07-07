@@ -84,6 +84,13 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+; Default-CHECKED (no "unchecked" flag): the overlay hides itself until
+; MTG Arena runs, so "always running, appears with Arena" is the whole
+; product experience — a fresh install should land with autostart on
+; without the user having to discover the gear-menu toggle. Unticking
+; here is respected by the app (see the [Code] marker below). Inno
+; remembers the choice for future upgrades of the same install.
+Name: "autostart"; Description: "Start {#MyAppName} when Windows starts (recommended; the overlay only appears while MTG Arena is running)"; GroupDescription: "Startup:"
 
 [Files]
 ; The launcher.
@@ -99,7 +106,40 @@ Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
+[Registry]
+; Same per-user Run entry the app's own gear-menu toggle manages
+; (overlay/autostart.py): value name "MulliganCoach", quoted EXE path,
+; --autostart flag so login launches identify themselves (no tray
+; balloon at every boot). Writing it at install time (rather than only
+; on the app's first launch) means autostart is on the moment the
+; install finishes, and an upgrade/reinstall re-points a stale entry
+; at the new location. uninsdeletevalue removes it on uninstall.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MulliganCoach"; ValueData: """{app}\{#MyAppExeName}"" --autostart"; Flags: uninsdeletevalue; Tasks: autostart
+
 [Run]
 ; Offer to launch after install; skipifsilent so an automated/silent
 ; install doesn't pop the overlay.
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+{ The app's first launch would otherwise default-enable autostart itself
+  (autostart.enable_default_if_first_run) — that behaviour remains for
+  zip-installed copies, and it's suppressed by a marker file once an
+  autostart decision has been made on this account. The installer just
+  made that decision (the "autostart" task, whether the user left it
+  ticked or not), so record the marker here. Without this, unticking
+  the task would be silently overridden on first launch.
+  Best-effort: a failed write is ignored — the worst case is the app
+  re-applying the default, which for a ticked task is a no-op anyway. }
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  StateDir: string;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    StateDir := ExpandConstant('{localappdata}') + '\MulliganCoach';
+    if ForceDirectories(StateDir) then
+      SaveStringToFile(StateDir + '\_autostart_seeded.txt',
+        ExpandConstant('{app}\{#MyAppExeName}'), False);
+  end;
+end;

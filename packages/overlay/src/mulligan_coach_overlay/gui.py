@@ -65,11 +65,13 @@ from PyQt6.QtCore import (
     Qt,
     QThread,
     QTimer,
+    QUrl,
     pyqtSignal,
     pyqtSlot,
 )
 from PyQt6.QtGui import (
     QColor,
+    QDesktopServices,
     QGuiApplication,
     QMouseEvent,
     QPainter,
@@ -86,7 +88,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from . import arena_window, autostart, first_run, user_data
+from . import arena_window, autostart, feedback, first_run, user_data
 from ._frozen import configure_bundle_paths, configure_frozen_logging, running_bundle_version
 from .arena_card_db import find_card_database_in
 from .arena_paths import default_log_path
@@ -500,25 +502,27 @@ class OverlayWindow(QWidget):
         self._collapse_btn.clicked.connect(self.toggle_compact)
         self._collapse_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         title_row.addWidget(self._collapse_btn)
-        # Settings (gear) button. Only present when the autostart
-        # registry helper is supported (Windows + frozen build); from
-        # source there's nothing useful to toggle, so we hide the
-        # whole control rather than offer a no-op. Adding a non-Windows
-        # / non-frozen settings surface is straightforward later — just
-        # drop the supported() guard and grow the menu.
-        self._settings_btn: QPushButton | None = None
-        if autostart.supported():
-            # GEAR (U+2699) as the glyph. Same visual register as the
-            # collapse / close buttons; the menu opens on click rather
-            # than hover so accidental triggers are rare.
-            self._settings_btn = QPushButton("⚙")
-            self._settings_btn.setFlat(True)
-            self._settings_btn.setFixedSize(18, 18)
-            self._settings_btn.setStyleSheet(_TITLE_BTN_STYLE)
-            self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            self._settings_btn.clicked.connect(self._open_settings_menu)
-            self._settings_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-            title_row.addWidget(self._settings_btn)
+        # Settings (gear) button. Always present: the menu mirrors the
+        # tray's entries ("Check for updates" / "Setup &
+        # troubleshooting…" / "Send feedback…"), so there's something
+        # useful behind it even from source, where the Windows-only
+        # autostart toggle is hidden. Callback-backed entries appear
+        # once main() wires them via enable_update_check /
+        # enable_setup — the menu is rebuilt on every open, so late
+        # wiring just works.
+        # GEAR (U+2699) as the glyph. Same visual register as the
+        # collapse / close buttons; the menu opens on click rather
+        # than hover so accidental triggers are rare.
+        self._on_check_updates: Callable[[], None] | None = None
+        self._on_open_setup: Callable[[], None] | None = None
+        self._settings_btn = QPushButton("⚙")
+        self._settings_btn.setFlat(True)
+        self._settings_btn.setFixedSize(18, 18)
+        self._settings_btn.setStyleSheet(_TITLE_BTN_STYLE)
+        self._settings_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._settings_btn.clicked.connect(self._open_settings_menu)
+        self._settings_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        title_row.addWidget(self._settings_btn)
         # MULTIPLICATION SIGN (U+00D7) as the close-button glyph. Ruff
         # flags it as ambiguous-vs-lowercase-x; visually it's a clear
         # close icon at the rendered size, so we keep it.
@@ -1051,36 +1055,61 @@ class OverlayWindow(QWidget):
     # Settings menu (gear button)
     # -----------------------------------------------------------------
 
+    def enable_update_check(self, on_check: Callable[[], None]) -> None:
+        """Reveal the gear menu's "Check for updates" entry.
+
+        Same contract as :meth:`tray.OverlayTray.enable_update_check`:
+        main() calls this only when an EXE update checker is
+        configured, and *on_check* kicks the network check onto a
+        worker thread. Until wired, the menu simply omits the entry.
+        """
+        self._on_check_updates = on_check
+
+    def enable_setup(self, on_open: Callable[[], None]) -> None:
+        """Reveal the gear menu's "Setup & troubleshooting…" entry.
+
+        Same contract as :meth:`tray.OverlayTray.enable_setup`:
+        *on_open* re-assesses the setup and shows the first-run
+        wizard dialog.
+        """
+        self._on_open_setup = on_open
+
     def _open_settings_menu(self) -> None:
         """Pop the title-bar settings menu under the gear button.
 
-        Currently the menu holds a single checkable entry — "Start
-        with Windows" — but we reach for :class:`QMenu` rather than
-        a bare ``QCheckBox`` so adding more options later (window
-        position lock, font size, debug overlay) is a one-line action
-        addition rather than a layout rewrite.
-
-        The checked state is read from :func:`autostart.is_enabled`
-        *each time the menu opens* rather than cached, so an external
-        change to the registry (a manual edit, or another launch
-        flipping the entry) is reflected without restarting the
-        overlay.
+        The menu mirrors the tray icon's entries so everything is
+        reachable from the overlay itself — users mid-draft shouldn't
+        have to hunt for the tray icon. It's rebuilt from scratch on
+        every open: the autostart checked state is re-read from
+        :func:`autostart.is_enabled` (so an external registry change
+        is reflected without restarting), and entries whose callbacks
+        aren't wired yet are simply absent.
         """
-        if self._settings_btn is None:
-            return
         menu = QMenu(self)
-        # Tool windows like ours need an explicit popup style or the
-        # menu inherits "no shadow / no border" from the parent's
-        # translucent background and looks broken. Standard Qt
-        # WindowType for menu popups handles this.
-        action = menu.addAction("Start with Windows")
         # ``QMenu.addAction(str)`` is typed as ``QAction | None`` in
         # PyQt6's stubs but never actually returns None for the
-        # text-only overload. Guard anyway so the type narrows.
-        assert action is not None
-        action.setCheckable(True)
-        action.setChecked(autostart.is_enabled())
-        action.triggered.connect(self._toggle_autostart)
+        # text-only overload — hence the asserts, which also narrow
+        # the type for mypy.
+        if self._on_check_updates is not None:
+            check_action = menu.addAction("Check for updates")
+            assert check_action is not None
+            on_check = self._on_check_updates
+            check_action.triggered.connect(lambda _checked=False: on_check())
+        if self._on_open_setup is not None:
+            setup_action = menu.addAction("Setup && troubleshooting…")
+            assert setup_action is not None
+            on_setup = self._on_open_setup
+            setup_action.triggered.connect(lambda _checked=False: on_setup())
+        feedback_action = menu.addAction("Send feedback…")
+        assert feedback_action is not None
+        feedback_action.triggered.connect(lambda _checked=False: self._open_feedback())
+        if autostart.supported():
+            menu.addSeparator()
+            action = menu.addAction("Start with Windows")
+            assert action is not None
+            action.setCheckable(True)
+            action.setChecked(autostart.is_enabled())
+            action.triggered.connect(self._toggle_autostart)
         # Anchor the menu's top-right corner under the gear button's
         # bottom-right corner so it opens "into" the panel rather than
         # off the right edge of the screen for top-right-anchored
@@ -1092,6 +1121,17 @@ class OverlayWindow(QWidget):
         # show. Computing the size pre-show requires ``sizeHint()``.
         menu_w = menu.sizeHint().width()
         menu.exec(QPoint(anchor.x() - menu_w, anchor.y()))
+
+    def _open_feedback(self) -> None:
+        """Open the feedback form (or Issues fallback) in the browser.
+
+        Mirrors ``tray.OverlayTray._open_feedback``: the URL is built
+        by the tested, Qt-free :mod:`feedback` module; only the
+        ``openUrl`` call lives here.
+        """
+        url = feedback.feedback_url()
+        log.info("opening feedback URL: %s", url)
+        QDesktopServices.openUrl(QUrl(url))
 
     @pyqtSlot(bool)
     def _toggle_autostart(self, checked: bool) -> None:
@@ -1297,16 +1337,22 @@ def main(argv: list[str] | None = None) -> int:
     # EXE update *notification* (notify-only): poll the exe_version.json
     # sidecar and, when a newer build is published, show a tray balloon
     # + "Download update" entry that open the release page. Needs the
-    # tray as its UI surface, so skipped on desktops without one.
+    # tray as its UI surface (balloons), so skipped on desktops without
+    # one. The overlay's gear menu gets a matching "Check for updates"
+    # entry driving the same controller.
     exe_update = _install_exe_update_check(tray) if tray is not None else None
+    if exe_update is not None:
+        controller = exe_update[0]
+        window.enable_update_check(lambda: controller.check_async(manual=True))
 
     # First-run wizard: assess the Detailed-Logs / Arena / card-database
     # setup and, only when something needs fixing and the user hasn't
     # been onboarded before, pop a guide dialog. Always wires the tray's
-    # "Setup & troubleshooting…" entry so it stays reachable later. Held
-    # in a local so the QDialog isn't garbage-collected.
+    # and the gear menu's "Setup & troubleshooting…" entries so it stays
+    # reachable later. Held in a local so the QDialog isn't
+    # garbage-collected.
     first_run_dialog = _install_first_run_wizard(  # noqa: F841 — keeps the dialog alive
-        tray, log_path=log_path, first_run_path=first_run_path, state=fr_state
+        tray, window, log_path=log_path, first_run_path=first_run_path, state=fr_state
     )
 
     def _on_app_quit() -> None:
@@ -1622,19 +1668,21 @@ def _install_exe_update_check(
 
 def _install_first_run_wizard(
     tray: OverlayTray | None,
+    window: OverlayWindow,
     *,
     log_path: Path,
     first_run_path: Path,
     state: first_run.FirstRunState,
 ) -> FirstRunDialog:
-    """Build the first-run wizard, wire the tray entry, auto-show if needed.
+    """Build the first-run wizard, wire the menu entries, auto-show if needed.
 
     Assesses the setup once here (Detailed Logs / Arena log / card DB),
     persists the "verified" flag on the first all-clear so the wizard
     stops auto-popping thereafter, and auto-shows the dialog only when
     something needs fixing *and* the user hasn't been onboarded before
-    (:func:`first_run.should_auto_show`). The tray "Setup &
-    troubleshooting…" entry re-assesses and re-shows on demand.
+    (:func:`first_run.should_auto_show`). The "Setup &
+    troubleshooting…" entries — tray menu and the overlay's gear menu —
+    re-assess and re-show on demand.
 
     Returns the dialog so ``main`` keeps a strong reference — a
     garbage-collected QDialog would silently disappear.
@@ -1655,14 +1703,14 @@ def _install_first_run_wizard(
         log_path=log_path,
     )
 
+    def _open_wizard() -> None:
+        dialog.refresh()
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    window.enable_setup(_open_wizard)
     if tray is not None:
-
-        def _open_wizard() -> None:
-            dialog.refresh()
-            dialog.show()
-            dialog.raise_()
-            dialog.activateWindow()
-
         tray.enable_setup(_open_wizard)
 
     if first_run.should_auto_show(status, reconciled):

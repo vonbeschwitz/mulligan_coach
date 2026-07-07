@@ -226,18 +226,35 @@ def test_ensure_entry_current_noop_when_already_current(
     assert enable_calls == []
 
 
-def test_ensure_entry_current_leaves_foreign_entry_alone(
-    monkeypatch: pytest.MonkeyPatch,
+def test_ensure_entry_current_leaves_living_foreign_entry_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """An entry pointing at a *different* EXE (older copy elsewhere)
-    belongs to that copy — migrating it would hijack the launch."""
+    """An entry pointing at a *different* EXE that still exists (a
+    second live copy elsewhere) belongs to that copy — migrating it
+    would hijack the launch."""
     enable_calls = _make_supported(monkeypatch, Path(_FAKE_EXE))
-    monkeypatch.setattr(
-        autostart, "_read_stored_value", lambda: '"C:\\elsewhere\\MulliganCoach.exe"'
-    )
+    other_exe = tmp_path / "elsewhere" / "MulliganCoach.exe"
+    other_exe.parent.mkdir()
+    other_exe.write_bytes(b"")
+    monkeypatch.setattr(autostart, "_read_stored_value", lambda: f'"{other_exe}"')
 
     autostart.ensure_entry_current()
     assert enable_calls == []
+
+
+def test_ensure_entry_current_adopts_dead_foreign_entry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An entry whose target EXE no longer exists gets re-pointed at
+    this copy. Left alone it would silently no-op at every login —
+    the invisible-breakage case (old zip folder deleted, or a manual
+    copy replaced by an installed one)."""
+    enable_calls = _make_supported(monkeypatch, Path(_FAKE_EXE))
+    dead_exe = tmp_path / "deleted-copy" / "MulliganCoach.exe"  # never created
+    monkeypatch.setattr(autostart, "_read_stored_value", lambda: f'"{dead_exe}" --autostart')
+
+    autostart.ensure_entry_current()
+    assert len(enable_calls) == 1
 
 
 def test_ensure_entry_current_noop_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:

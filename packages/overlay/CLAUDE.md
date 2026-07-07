@@ -275,6 +275,26 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   for the public data repo are staged (not pushed) under
   `packaging/data_repo_files/.github/ISSUE_TEMPLATE/` with copy
   instructions in that dir's README — a one-time owner action.
+* **Title-bar gear menu mirrors the tray menu.** The overlay window's
+  ⚙ button pops a menu with "Check for updates" (when the EXE update
+  checker is configured — wired by `main()` via
+  `window.enable_update_check`), "Setup & troubleshooting…" (wired via
+  `window.enable_setup`, same wizard the tray opens), "Send feedback…"
+  (always), and the Windows-only "Start with Windows" toggle. The menu
+  is rebuilt on every open, so unwired entries are simply absent and
+  the autostart checkbox re-reads the registry each time. Rationale:
+  everything should be reachable from the overlay itself; the tray is
+  easy to miss mid-draft.
+* **Autostart is default-on via the installer too.** The Inno Setup
+  installer's default-checked "Start when Windows starts" task writes
+  the same HKCU Run entry `autostart.py` manages and drops the
+  `_autostart_seeded.txt` marker so an install-time opt-out sticks
+  (the app's own first-launch default-enable remains for zip installs).
+  `ensure_entry_current()` additionally *adopts* a Run entry whose
+  target EXE no longer exists (deleted zip folder, replaced manual
+  copy) — a dead entry silently breaks autostart with no error
+  anywhere; an entry pointing at a different-but-existing copy is
+  still left alone.
 * The window has no `Qt.WindowStaysOnTopHint` flag at construction
   time. Topmost is set dynamically via Win32 `SetWindowPos` whenever
   the Arena watcher emits `foreground` / `background`. Setting it as

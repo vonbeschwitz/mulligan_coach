@@ -119,7 +119,12 @@ similar. Not worth it for friends-and-family.
 `mulligan_coach.iss` wraps `dist/MulliganCoach/` into a single
 `MulliganCoachSetup.exe` — a per-user install (no admin prompt) with a
 Start-menu shortcut, optional desktop icon, and a real
-Programs-and-Features uninstall entry. Build it after
+Programs-and-Features uninstall entry. A default-checked **"Start when
+Windows starts"** task writes the same per-user Run entry the app's
+gear-menu toggle manages (removed on uninstall), and the installer
+drops the app's `_autostart_seeded.txt` marker so an install-time
+opt-out isn't overridden by the app's own first-launch default-enable
+(which remains in place for zip installs). Build it after
 `build_distribution.py` has produced the bundle:
 
 ```
