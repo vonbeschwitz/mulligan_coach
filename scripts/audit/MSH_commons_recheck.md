@@ -109,6 +109,60 @@ Falcon/Ka-Zar (already llm_encoded above) and Dark Depths (TLA bonus,
 llm_encoded) are the only other named-token cards in the five sets, so
 after this the tripwire leaves 0 AUTO named-token cards.
 
+## Uncommons batch 3 (2026-07-07): cards 61–107 (final)
+
+**44 clean, 3 fixed.** Applied by
+`apply_msh_unc_batch3_fixes_20260707.py`. This completes the uncommons
+pass (all 107 checked across batches 1–3: 99 clean, 8 fixed).
+
+### Fixed (3)
+
+1. **Political Triumph (#31)** — `cards_drawn=1` came from the "draw a
+   card" on the FOURTH plan counter, gated behind 4 creature-ETBs →
+   outside the mulligan window (§16/§19). Cleared to `is_other`, matching
+   its three sibling "Plan" enchantments (Death to Our Enemies, Rewrite
+   History, Robot Domination all leave their plan-counter payoff
+   uncredited). The parser's recurring-trigger draw skip missed this
+   because the payoff is a one-shot "When … put" trigger, not a
+   "Whenever/At the beginning" recurring one.
+2. **Punishing Punch (#180)** — "target creature you control deals
+   damage equal to **twice its power** to target creature an opponent
+   controls" is a punch (§1), but the "twice its power" variable amount
+   dropped it into `is_other`. → `is_punch_fight=True`.
+3. **Thirst for Knowledge (#79)** — "Draw three cards. Then discard two
+   cards unless you discard an artifact card" is a loot, but the discard
+   sits in a separate "unless" sentence, so the loot matcher missed it
+   and recorded GROSS `cards_drawn=3`. Netted per §2 (Thirst for
+   Identity precedent): `cards_drawn=1`, `cards_manipulated=3`, plus
+   `DiscardCardEffect(2)` on the cast mode.
+
+### Clean highlights worth a note
+
+* **Rick Jones (#184)** — `{3}, {T}: mill 4, may take a Hero or
+  enchantment` left at `is_creature`: a repeatable activated engine with
+  a narrow (Hero/enchantment) filter that whiffs often; not credited as
+  a §15/§16 look-at-top hand-fetch (conservative, §2).
+* **Photon Blast Barrage (#147)** — X-spell copy; `removal_burn_damage=1`
+  kept (X=1 floor per §9; the base guaranteed hit is 1).
+* **Red Guardian (#34)** / **Super Villain Lockup (#37)** — self-ETB
+  destroy / O-Ring-style indefinite exile → `removal_destroy_or_exile`
+  (§1/§5, already correct).
+* **U.S.Agent (#236)** — self-ETB creates a *named Equipment* token
+  (Sturdy Shield), not a creature token → no `creates_creatures` and the
+  named-token tripwire correctly doesn't fire (it requires "creature
+  token").
+* **She-Hulk (#188)** — `{4}{G}{G}` power-up destroys an artifact/
+  enchantment (non-creature → not `removal_destroy_or_exile`, §1) and is
+  cmc>3 anyway (§19). `is_creature` only.
+* **Reconnaissance Mission (#153)** / **Rewrite History (#71)** /
+  **Robot Domination (#111)** — recurring-trigger draws/loots correctly
+  cleared to `is_other` (§16/§19).
+
+Status: **UNCOMMONS COMPLETE — all 107 checked (batches 1–3, 2026-07-07):
+99 clean, 8 fixed.** Rares/mythics have NOT had an equivalent pass
+(though the named-token tripwire swept all five sets, and the flash-trick
+/ dropped-aura-grant scans below cover the full set).
+
 ### Clean highlights worth a note
 
 * **Killmonger (#218)** — ETB "destroy target nonland permanent" is
