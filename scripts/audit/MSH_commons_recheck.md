@@ -53,6 +53,87 @@ carve-out). Guide §4 rewritten accordingly.
 
 Next uncommons batch starts at #21 Dark Deed.
 
+## Uncommons batch 2 (2026-07-07): cards 21–60
+
+**36 clean, 4 fixed.** Applied by
+`apply_msh_unc_batch2_fixes_20260707.py`. All four misses were
+deterministic-parser gaps, not encoding-guide judgment calls — the
+guide's conventions were already right; the text just slipped past a
+regex.
+
+### Fixed (4)
+
+1. **Falcon, Winged Wonder (#52)** — self-ETB *named* token "Redwing"
+   (1/1 U Bird Scout, flying). `_CREATE_TOKEN_RE` anchors on "create
+   a|an|one|… N/N …", so "create Redwing, a legendary 1/1 …" doesn't
+   match. → `creates_creatures=[1/1 U Bird Scout, flying]` (§4).
+2. **Justice, Vance Astrovik (#61)** — self-ETB bounce ("return up to
+   one target nonland, **nontoken** permanent to its owner's hand").
+   The "nonland, nontoken" qualifier breaks `_BOUNCE_RE` (allows
+   "nonland permanent" but not the nontoken form). → `is_bounce=True`.
+3. **Ka-Zar of the Savage Land (#174)** — self-ETB named token "Zabu"
+   (2/2 G Cat), same named-token gap as Falcon. →
+   `creates_creatures=[2/2 G Cat]`.
+4. **Monstrous Rage (#bonus-woe-142)** — instant, "+2/+0 EOT. Create a
+   Monster Role token attached (… +1/+1 and trample)." Parser caught
+   only the explicit "+2/+0 until end of turn" and missed the WOE Role
+   mechanic. Fold the Role in per the Saved-by-the-Shell
+   counter-as-pump logic (§3): total this combat is +3/+1 + trample →
+   `combat_trick 3/1 ['trample']`.
+
+**Parser follow-up:** two distinct gaps surfaced here — (a) *named*
+token creation ("create <Name>, a legendary N/N …") is invisible to
+`_CREATE_TOKEN_RE`, and (b) the "nonland, nontoken permanent" bounce
+target is invisible to `_BOUNCE_RE`. The bounce one stays a one-off
+hand-fix (Justice). The named-token gap is now handled in the parser
+(2026-07-07): rather than *recognise* named tokens — which would need
+self-ETB and flavor-word-label fixes broader than the token itself
+(Falcon's "Avian Telepathy —" label, Ka-Zar's no-comma short name) —
+a **tripwire** (`_flag_named_tokens` + `_NAMED_TOKEN_RE`) routes any
+"create <Name>, a … creature token" card to NEEDS_LLM, and the MV≥4
+fast-path refuses to promote it. This surfaced two more currently-AUTO
+cards for review, both resolved by
+`apply_named_token_reviews_20260707.py`:
+
+* **White Tiger, Ava Ayala (#196)** — named token in a `{5}{G}`
+  power-up (cmc>3) → no body (§19). `is_creature` only; marked
+  reviewed.
+* **The Coming of Galactus (#212, mythic)** — Saga. Chapter IV's named
+  token → no body (§6, later chapter). Chapter I ("destroy up to one
+  target nonland permanent") IS removal but was silently dropped — the
+  saga branch's `_parse_other_permanent` chunk loop doesn't run the
+  destroy matcher on a direct action line (a pre-existing gap, separate
+  from named tokens) — so `removal_destroy_or_exile` was added.
+
+Falcon/Ka-Zar (already llm_encoded above) and Dark Depths (TLA bonus,
+llm_encoded) are the only other named-token cards in the five sets, so
+after this the tripwire leaves 0 AUTO named-token cards.
+
+### Clean highlights worth a note
+
+* **Killmonger (#218)** — ETB "destroy target nonland permanent" is
+  gated on sacrificing another creature → kept off (General Traag
+  sac-gated-removal precedent, §1).
+* **Madame Hydra (#221)** / **Madame Masque (#104)** — recurring
+  cast-/draw-second-card token triggers correctly credit no body
+  (§4); Madame Masque's ETB connive keeps `cards_manipulated=1`.
+* **Light of Promise (#bonus-m21-25)** — lifegain-triggered
+  counter-engine aura → `is_other` (recurring value-engine aura, Super
+  Intelligence precedent §16; not forced into the pump/removal binary).
+* **Kang, Temporal Tyrant (#217)** — attack-trigger connive stays
+  unencoded (§19, listed there by name).
+* **Falcon's Wing Harness (#53)** — Equipment with ETB auto-attach
+  but NO flash → no combat trick (§3's flash-Equipment rule requires
+  flash; sorcery-speed equip gates past combat). `is_equipment` only.
+* **Dark Deed (#93)** — -4/-4 EOT instant → `removal_destroy_or_exile`
+  (the §16 canonical example, already correct).
+* **Evil's Thrall (#128)** — threaten → `is_other`, not combat trick
+  (§3). **Iron Lad (#59)** — conditional `{T}` reveal-top-if-artifact
+  draw kept at parser-set `cards_drawn=1` (repeatable cmc-0 activated
+  draw; borderline given the artifact condition, left as-is).
+
+Next uncommons batch starts at #61 Path to Exile.
+
 Status: **COMPLETE — all 94 commons checked (batches 1–6), all fixes
 applied (2026-07-07).** Totals: 76 clean, 18 fixed (plus the parser
 hardening the findings drove and one out-of-batch rider, Rancor).

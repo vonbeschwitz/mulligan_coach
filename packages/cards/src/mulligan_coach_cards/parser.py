@@ -1157,6 +1157,22 @@ _CREATE_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Named-token creation ("create Redwing, a legendary 1/1 blue Bird Scout
+# creature token …"). This is a TRIPWIRE, not a matcher: _CREATE_TOKEN_RE
+# anchors on a count word right after "create", so a *named* token (proper-noun
+# name + comma) slips past it silently — and fully parsing named tokens would
+# need self-ETB / flavor-word-label fixes well beyond the token itself
+# (Falcon's "Avian Telepathy —" label, Ka-Zar's no-comma short name). Rather
+# than risk that, any card carrying this shape is routed to NEEDS_LLM for
+# review (see :func:`_flag_named_tokens`). Case-sensitive on the name (no
+# IGNORECASE) so a genuine proper noun is required: a lowercase count word
+# ("create a 1/1 …", "create two 3/2 …") never matches, so the ordinary
+# _CREATE_TOKEN_RE cards are untouched.
+_NAMED_TOKEN_RE = re.compile(
+    r"[Cc]reate\s+[A-Z][\w'-]*(?:\s+[A-Z][\w'-]*)*,\s+an?\s+"
+    r"(?:legendary\s+)?[\dX*]+/[\dX*]+\b[^.]*?\bcreature tokens?\b"
+)
+
 # Land-fetch patterns. Three flavors: to-battlefield-tapped, to-battlefield-untapped,
 # and to-hand. Each accepts "basic land", "Forest" / specific basic, or just
 # "land" (any).
@@ -1279,6 +1295,11 @@ def _match_token_creation(text: str) -> list[CreatureBody]:
     "create two 1/1 Kithkins" → two CreatureBody entries) — "create
     three 1/1 tokens" emits three bodies. Fixed 2026-07-06; previously
     one body per phrase (MSH Borough Backup et al. under-counted).
+
+    *Named* tokens ("create Redwing, a legendary 1/1 …") are deliberately
+    NOT matched here — they carry a proper-noun prefix the count-anchored
+    regex can't consume, and the enclosing card is routed to NEEDS_LLM by
+    the :data:`_NAMED_TOKEN_RE` tripwire instead of being parsed here.
 
     Any adjacent "with <keywords>" clause after a token phrase populates
     that body's ``keywords`` (evergreen keywords only; see
@@ -3195,9 +3216,38 @@ def _flag_unknown_keywords(card: dict[str, Any], parsed: ParsedCard) -> ParsedCa
     return parsed
 
 
+def _flag_named_tokens(card: dict[str, Any], parsed: ParsedCard) -> ParsedCard:
+    """Demote a card to NEEDS_LLM if it creates a *named* token.
+
+    Named tokens ("create Redwing, a legendary 1/1 blue Bird Scout creature
+    token …") slip past the count-anchored :data:`_CREATE_TOKEN_RE` silently,
+    so the parser would otherwise record no body and — for a high-MV card —
+    fast-path the card to AUTO with the token invisible (MSH Falcon, Ka-Zar).
+    Fully parsing them deterministically would require self-ETB and
+    flavor-word-label fixes broader than the token itself, so instead we
+    detect the shape and route the card to review, where the reviewer records
+    the body (or confirms it's correctly excluded — an expensive activated
+    named token, White Tiger's {5}{G} power-up, or a later Saga chapter, The
+    Coming of Galactus, contribute no body per §4/§19).
+
+    Runs post-dispatch in :func:`parse_card`, like the unknown-keyword
+    tripwire. An already-NEEDS_LLM (or preserved LLM_ENCODED, via the store's
+    merge) card is unaffected in practice; an AUTO card is demoted.
+    """
+    oracle_text = str(card.get("oracle_text") or "")
+    if not _NAMED_TOKEN_RE.search(oracle_text):
+        return parsed
+    reason = "named token creation ('create <Name>, a … creature token') — route to review"
+    if reason not in parsed.reasons:
+        parsed.reasons.append(reason)
+    if parsed.status is ParseStatus.AUTO:
+        parsed.status = ParseStatus.NEEDS_LLM
+    return parsed
+
+
 def _qualifies_for_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> bool:
     """True if the NEEDS_LLM card's MV is ≥ 4 and it has no alt-cost or
-    cost-reduction or modal text or unrecognised keyword."""
+    cost-reduction or modal text or unrecognised keyword or named token."""
     if parsed.mana_cost is None:
         return False
     if parsed.mana_cost.cmc < 4:
@@ -3217,6 +3267,10 @@ def _qualifies_for_mv4_fast_path(card: dict[str, Any], parsed: ParsedCard) -> bo
         return False
     if _DISCARD_SELF_ABILITY_RE.search(oracle_text):
         return False  # cheap from-hand "Discard this card:" mode — review it
+    # A named token would otherwise be fast-pathed to AUTO invisibly — the
+    # _flag_named_tokens tripwire wants these reviewed (Falcon, Ka-Zar).
+    if _NAMED_TOKEN_RE.search(oracle_text):
+        return False
     return not _MODAL_RE.search(oracle_text)
 
 
@@ -3594,6 +3648,10 @@ def parse_card(
     # the fast-path runs — the fast-path itself also refuses to promote
     # such cards, so they can't slip back to AUTO.
     result = _flag_unknown_keywords(card, result)
+    # Named-token tripwire: a "create <Name>, a … creature token" phrase is
+    # invisible to the count-anchored token matcher, so route it to review
+    # rather than silently drop the body (the fast-path also refuses it).
+    result = _flag_named_tokens(card, result)
     # MV >= 4 fast-path: promote NEEDS_LLM cards that can't realistically
     # affect mulligan-relevant turns 1-4 to AUTO.
     result = _maybe_apply_mv4_fast_path(card, result)

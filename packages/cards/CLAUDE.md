@@ -339,6 +339,12 @@ Four ParseStatus outcomes:
   silently before it existed). After encoding a new set, run
   `census-drops` (below) and add the settled keyword to
   `KNOWN_KEYWORDS_EXTRA`.
+* **Named token** (the tripwire, added 2026-07-07): a "create <Name>,
+  a … creature token" phrase (proper-noun-named token) demotes the card
+  to NEEDS_LLM and the MV≥4 fast-path refuses to promote it back — the
+  count-anchored `_CREATE_TOKEN_RE` can't parse the named form and
+  recognising it would need self-ETB / flavor-label fixes broader than
+  the token. Reviewer records the body or confirms it's excluded (§4).
 * **Unrecognised oracle line**: anything the per-chunk matchers can't
   classify. The unrecognised text is recorded in `reasons`.
 
@@ -540,6 +546,13 @@ encode the chapter-I / level-1 effect.
 * The `_CREATE_TOKEN_RE` regex captures the FIRST token-creation phrase
   per chunk; multi-token effects ("create a 1/1 white Cat and a 1/1
   black Rat") need extension.
+* **Named tokens** ("create Redwing, a legendary 1/1 …") are not parsed:
+  the count-anchored `_CREATE_TOKEN_RE` can't consume the proper-noun
+  prefix, and recognising them would need self-ETB / flavor-word-label
+  fixes beyond the token. Instead the `_flag_named_tokens` tripwire
+  (`_NAMED_TOKEN_RE`) routes them to NEEDS_LLM (and the MV≥4 fast-path
+  refuses to promote them), the same design as the unknown-keyword
+  tripwire. See `CARD_ENCODING_GUIDE.md` §4.
 * `_match_etb_tapped_predicate` recognises Deathcap, check-land, and
   any-basic patterns; sea-gate-style "enters tapped unless you control
   X noncreature, nonland permanents" doesn't match yet — add a new

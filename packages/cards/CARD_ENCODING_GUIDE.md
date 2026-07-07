@@ -313,6 +313,24 @@ llm_encoded stragglers cleared by
 `scripts/audit/apply_etb_only_trigger_ruling_20260707.py` and
 `scripts/audit/apply_other_trigger_token_ruling_20260707.py`.
 
+### Named tokens route to review
+
+Named tokens ("create Redwing, a legendary 1/1 blue Bird Scout creature
+token …") carry a proper-noun prefix the count-anchored
+`_CREATE_TOKEN_RE` can't consume, so the deterministic parser can't size
+the body. Fully parsing them would need self-ETB and flavor-word-label
+fixes broader than the token itself (MSH Falcon's "Avian Telepathy —"
+label; Ka-Zar's no-comma short name "Ka-Zar of the Savage Land"), so
+instead a tripwire (`parser._flag_named_tokens` / `_NAMED_TOKEN_RE`,
+2026-07-07) demotes any such card to NEEDS_LLM and the MV≥4 fast-path
+refuses to promote it. When reviewing one, record the body per the rules
+above **or** confirm it's correctly excluded: a named token in an
+expensive activated ability (White Tiger's `{5}{G}` power-up, cmc>3 →
+no body per §19) or a later Saga chapter (The Coming of Galactus,
+ch IV → no body per §6) contributes nothing. The self-ETB named tokens
+that DO count: Falcon's Redwing (1/1 U Bird Scout, flying), Ka-Zar's
+Zabu (2/2 G Cat).
+
 ### Non-creature tokens
 
 Food / Clue / Treasure / Map tokens are NOT creature tokens — don't
