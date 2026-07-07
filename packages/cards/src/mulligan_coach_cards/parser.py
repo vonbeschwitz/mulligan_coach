@@ -792,6 +792,10 @@ def _is_likely_static_or_triggered(chunk: str) -> bool:
 # dies", "Whenever one or more creatures die") without straying into an
 # unrelated later sentence.
 _DEATH_TRIGGER_RE = re.compile(r"^when(?:ever)?\b.{0,80}?\bdie(?:s)?\b", re.IGNORECASE)
+# Recurring-trigger prefix — "Whenever …" / "At the beginning of …". Per
+# guide §16 these never credit draw / loot / scry (they fire repeatedly on
+# events we don't model), unlike one-shot "When … enters" triggers.
+_RECURRING_TRIGGER_RE = re.compile(r"^(?:whenever|at the beginning of)\b", re.IGNORECASE)
 
 
 def _is_death_trigger(chunk: str) -> bool:
@@ -842,51 +846,59 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
     if _is_death_trigger(chunk):
         _record_drop("death_trigger", chunk)
         return
+    # Recurring triggers ("Whenever …" / "At the beginning of …") never
+    # credit draw / loot / scry — guide §16's policy, previously enforced
+    # only by per-set audit patches (April O'Neil, Oroku Saki, Mystic
+    # Remora, Political Triumph). One-shot "When … enters" triggers still
+    # credit. Bending signals below stay unaffected: attack-trigger
+    # earthbend bodies are wanted per the Sokka token precedent (§4).
+    recurring = _RECURRING_TRIGGER_RE.match(chunk) is not None
     # Loot patterns take precedence over the plain draw matcher — both
     # orders ("discard then draw" and "draw then discard") count as
     # manipulated cards rather than as new draws.
     handled_draws = 0
     handled_discards = 0
-    for m in _INNER_LOOT_RE.finditer(chunk):
-        n_draw = _to_int(m.group("draw"))
-        n_discard = _to_int(m.group("discard"))
-        if n_draw is None or n_discard is None:
-            continue
-        rf.cards_manipulated += n_draw
-        net = max(0, n_draw - n_discard)
-        rf.cards_drawn += net
-        handled_draws += n_draw
-        handled_discards += n_discard
-    for m in _INNER_LOOT_DRAW_FIRST_RE.finditer(chunk):
-        n_draw = _to_int(m.group("draw"))
-        n_discard = _to_int(m.group("discard"))
-        if n_draw is None or n_discard is None:
-            continue
-        rf.cards_manipulated += n_draw
-        net = max(0, n_draw - n_discard)
-        rf.cards_drawn += net
-        handled_draws += n_draw
-        handled_discards += n_discard
-    # Plain "draw N cards" matches — only count any draws beyond the
-    # ones we already attributed to loot. Sum up all draw mentions and
-    # subtract the ones the loot matchers already consumed.
-    total_inner_draws = 0
-    for m in _INNER_DRAW_RE.finditer(chunk):
-        n = _to_int(m.group(1))
-        if n is not None:
-            total_inner_draws += n
-    remaining_draws = max(0, total_inner_draws - handled_draws)
-    if remaining_draws:
-        rf.cards_drawn += remaining_draws
-    # Surveil / scry inside a trigger.
-    for m in _INNER_SURVEIL_RE.finditer(chunk):
-        n = _to_int(m.group(1))
-        if n is not None:
-            rf.cards_manipulated += n
-    for m in _INNER_SCRY_RE.finditer(chunk):
-        n = _to_int(m.group(1))
-        if n is not None:
-            rf.cards_manipulated += n
+    if not recurring:
+        for m in _INNER_LOOT_RE.finditer(chunk):
+            n_draw = _to_int(m.group("draw"))
+            n_discard = _to_int(m.group("discard"))
+            if n_draw is None or n_discard is None:
+                continue
+            rf.cards_manipulated += n_draw
+            net = max(0, n_draw - n_discard)
+            rf.cards_drawn += net
+            handled_draws += n_draw
+            handled_discards += n_discard
+        for m in _INNER_LOOT_DRAW_FIRST_RE.finditer(chunk):
+            n_draw = _to_int(m.group("draw"))
+            n_discard = _to_int(m.group("discard"))
+            if n_draw is None or n_discard is None:
+                continue
+            rf.cards_manipulated += n_draw
+            net = max(0, n_draw - n_discard)
+            rf.cards_drawn += net
+            handled_draws += n_draw
+            handled_discards += n_discard
+        # Plain "draw N cards" matches — only count any draws beyond the
+        # ones we already attributed to loot. Sum up all draw mentions and
+        # subtract the ones the loot matchers already consumed.
+        total_inner_draws = 0
+        for m in _INNER_DRAW_RE.finditer(chunk):
+            n = _to_int(m.group(1))
+            if n is not None:
+                total_inner_draws += n
+        remaining_draws = max(0, total_inner_draws - handled_draws)
+        if remaining_draws:
+            rf.cards_drawn += remaining_draws
+        # Surveil / scry inside a trigger.
+        for m in _INNER_SURVEIL_RE.finditer(chunk):
+            n = _to_int(m.group(1))
+            if n is not None:
+                rf.cards_manipulated += n
+        for m in _INNER_SCRY_RE.finditer(chunk):
+            n = _to_int(m.group(1))
+            if n is not None:
+                rf.cards_manipulated += n
     # Mana production breadcrumb only — no role_features field today.
     _ = _INNER_ADD_MANA_RE.search(chunk)
     # Bending mechanics nested inside a triggered ability.
@@ -1099,6 +1111,19 @@ def _extract_granted_keywords(text: str) -> list[str]:
 # Token-creation pattern. We capture power, toughness, color, and subtype
 # words so we can build a CreatureBody. Plenty of variations exist; this
 # covers the most common "create a/N P/T <color> <type> creature token(s)".
+# Count words _CREATE_TOKEN_RE can capture, mapped to how many CreatureBody
+# entries to emit (guide §4: one entry per token). Digit counts are rare in
+# Limited-relevant text; cap at 5 to bound pathological inputs.
+_COUNT_WORD_TO_N: dict[str, int] = {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    **{str(i): min(i, 5) for i in range(1, 10)},
+}
 _CREATE_TOKEN_RE = re.compile(
     r"create (?P<count>a|an|one|two|three|four|five|\d+)\s+"
     r"(?P<power>\d+|\*)/(?P<toughness>\d+|\*)\s+"
@@ -1225,9 +1250,10 @@ def _match_token_keywords(trailing: str) -> list[str]:
 def _match_token_creation(text: str) -> list[CreatureBody]:
     """Find token-creation patterns and return their bodies.
 
-    One entry per distinct "create N P/T … creature token" phrase. The
-    parent's `count` is implicit in the parent's effects — we record one
-    body per phrase, not N bodies for "create three 1/1 tokens."
+    One entry PER TOKEN, per the owner's revised §4 rule (Catharsis:
+    "create two 1/1 Kithkins" → two CreatureBody entries) — "create
+    three 1/1 tokens" emits three bodies. Fixed 2026-07-06; previously
+    one body per phrase (MSH Borough Backup et al. under-counted).
 
     Any adjacent "with <keywords>" clause after a token phrase populates
     that body's ``keywords`` (evergreen keywords only; see
@@ -1248,15 +1274,21 @@ def _match_token_creation(text: str) -> list[CreatureBody]:
         # Keywords come from a "with …" clause adjacent to THIS token phrase
         # (start scanning at the match's end, not anywhere in the chunk).
         keywords = _match_token_keywords(text[m.end() :])
-        bodies.append(
-            CreatureBody(
-                power=power,
-                toughness=toughness,
-                colors=colors,  # type: ignore[arg-type]
-                subtypes=subtypes,
-                keywords=keywords,
+        # Guide §4: one entry PER TOKEN, so "create two 3/2 Heroes" emits
+        # two bodies. The count word is capped defensively; variable-X
+        # phrases don't match the regex at all and stay with the LLM
+        # (which encodes X=1 per §4).
+        count = _COUNT_WORD_TO_N.get(m.group("count").lower(), 1)
+        for _ in range(count):
+            bodies.append(
+                CreatureBody(
+                    power=power,
+                    toughness=toughness,
+                    colors=list(colors),  # type: ignore[arg-type]
+                    subtypes=list(subtypes),
+                    keywords=list(keywords),
+                )
             )
-        )
     return bodies
 
 
@@ -2620,10 +2652,9 @@ def _parse_aura(
     # Aura categorization (sets role_features.is_removal_aura / is_pump_aura).
     _classify_aura(oracle_text, role_features)
 
-    # Token creation can fire on activation / ETB.
-    for body in _match_token_creation(cleaned):
-        role_features.creates_creatures.append(body)
-
+    # Token creation is captured per-chunk below (trigger / static / activated
+    # scans). The previous top-level ``_match_token_creation(cleaned)`` scan
+    # double-counted those bodies (removed 2026-07-06).
     extra_modes: list[Mode] = []
     blockers: list[str] = []
     for raw_chunk in chunks:
@@ -2714,11 +2745,13 @@ def _parse_artifact_typed(
     cast_mode = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
     modes: list[Mode] = [cast_mode] if cast_mode is not None else []
 
-    # Token creation (Vehicle ETB pilot, Equipment with a stapled body, …).
-    for body in _match_token_creation(cleaned):
-        role_features.creates_creatures.append(body)
-
+    # Token creation (Vehicle ETB pilot, Equipment with a stapled body, …)
+    # is captured per-chunk below. The previous top-level
+    # ``_match_token_creation(cleaned)`` scan double-counted bodies the
+    # trigger / static branches already record (removed 2026-07-06 —
+    # doubly important now that count words multiply bodies per §4).
     extra_modes: list[Mode] = []
+    mana_abilities: list[ManaAbility] = []
     blockers: list[str] = []
     for raw_chunk in chunks:
         chunk = _strip_label_prefix(raw_chunk)
@@ -2738,6 +2771,10 @@ def _parse_artifact_typed(
                 _record_drop("trigger_ignored", chunk)
             _extract_triggered_signal(chunk, role_features)
             continue
+        # Direct-action token creation (a stapled body outside a trigger).
+        if direct_bodies := _match_token_creation(chunk):
+            role_features.creates_creatures.extend(direct_bodies)
+            continue
         # Cycling / land-cycling / channel on the equipment / vehicle.
         if alt := _build_alt_play_mode(chunk):
             extra_modes.append(alt)
@@ -2745,6 +2782,13 @@ def _parse_artifact_typed(
         # Waterbending activated mode (TLA).
         if wb := _try_build_waterbend_mode(chunk, role_features):
             extra_modes.append(wb)
+            continue
+        # Mana ability on the vehicle/equipment (MSH Dependable Quinjet's
+        # "{T}: Add one mana of any color." — a Manalith with wheels). The
+        # simulator needs it in ``mana_abilities``; note §1 deliberately
+        # does NOT set is_mana_rock on vehicles/equipment.
+        if ab := _extract_mana_ability(chunk):
+            mana_abilities.append(ab)
             continue
         # Activated abilities on artifact.
         act, blocker = _build_activated_mode(chunk, rf=role_features)
@@ -2773,6 +2817,7 @@ def _parse_artifact_typed(
         return ParsedCard(
             status=ParseStatus.NEEDS_LLM,
             modes=modes,
+            mana_abilities=mana_abilities,
             role_features=role_features,
             reasons=[f"{label}: " + r for r in blockers] or [f"{label} blockers"],
             **base,
@@ -2781,8 +2826,9 @@ def _parse_artifact_typed(
     return ParsedCard(
         status=ParseStatus.AUTO,
         modes=modes,
+        mana_abilities=mana_abilities,
         role_features=role_features,
-        reasons=[label],
+        reasons=[label] + (["mana ability detected"] if mana_abilities else []),
         **base,
     )
 
@@ -2831,6 +2877,7 @@ def _parse_other_permanent(
 
     cast_mode = _build_cast_mode(base.get("mana_cost"), [], is_permanent=True)
     modes: list[Mode] = [cast_mode] if cast_mode is not None else []
+    name = str(base.get("name") or "")
 
     # Token creation is captured per-chunk below; the previous top-level
     # ``_match_token_creation(cleaned)`` call was removed because it
@@ -2858,6 +2905,25 @@ def _parse_other_permanent(
             for body in _match_token_creation(chunk):
                 role_features.creates_creatures.append(body)
             _extract_triggered_signal(chunk, role_features)
+            continue
+        # Self-ETB with a recognisable spell effect gets WIRED onto the cast
+        # mode (mirrors the creature branch — added 2026-07-06 for MSH
+        # Futurist Forge's "When this artifact enters, draw a card.").
+        # Previously these only credited role_features, so the simulator
+        # never saw a cheap artifact/enchantment cantrip's draw.
+        if (m := _ETB_RE.match(chunk)) and _is_self_etb(m.group("subject"), name):
+            inner = m.group("effect").strip()
+            effects = _match_spell_effect(inner, rf=role_features, allow_combat_trick=False)
+            if effects is not None:
+                if cast_mode is not None:
+                    cast_mode.effects.extend(effects)
+                continue
+            bodies = _match_token_creation(chunk)
+            if bodies:
+                role_features.creates_creatures.extend(bodies)
+                continue
+            _extract_triggered_signal(inner, role_features)
+            _record_drop("etb_unparsed", inner)
             continue
         if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
             if not _is_death_trigger(chunk):
@@ -2906,6 +2972,10 @@ def _parse_other_permanent(
         blockers.append(f"unrecognised line: {chunk!r}")
 
     modes.extend(extra_modes)
+
+    # Derive cards_drawn / cards_manipulated etc. from the wired cast-mode
+    # effects (same as the creature branch; only kind=="cast" contributes).
+    _populate_role_features_from_effects(role_features, modes)
 
     # Non-creature, non-equipment, non-vehicle artifact with at least one
     # mana ability = "mana rock" (Sol Ring, Springleaf Drum, etc.). Routing

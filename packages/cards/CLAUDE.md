@@ -25,7 +25,8 @@ src/mulligan_coach_cards/
 ├── __init__.py                  # Re-exports the public surface
 ├── mana.py                      # ManaCost + Pip + parse_mana_cost
 ├── keywords.py                  # EVERGREEN_KEYWORDS, MODE_EMITTING_KEYWORDS, ALT_COST_KEYWORDS,
-│                                # IGNORABLE_KEYWORD_LINES, SET_SPECIFIC_KEYWORDS
+│                                # IGNORABLE_KEYWORD_LINES, SET_SPECIFIC_KEYWORDS,
+│                                # KNOWN_KEYWORDS_EXTRA (tripwire allowlist)
 ├── models.py                    # ParsedCard, Mode, Effect (discriminated union), Cost,
 │                                # ManaAbility, Predicate, RoleFeatures, CreatureBody
 ├── parser.py                    # Deterministic Scryfall → ParsedCard
@@ -35,7 +36,7 @@ src/mulligan_coach_cards/
 ├── seventeenlands_stats.py      # SeventeenLandsStats + StatsLookup + load_premier_draft_stats:
 │                                # parquet → typed per-card 17Lands aggregates with three-tier match
 └── cli.py                       # `mulligan-coach-cards` typer app: parse-demo, run-detector,
-                                 # list-needs-llm, mark
+                                 # list-needs-llm, mark, census-drops
 scripts/                         # Dev helpers: summarize_batch, apply_patches,
                                  # mark_layout_blocks
 ```
@@ -326,8 +327,27 @@ Four ParseStatus outcomes:
   `"set-specific keyword 'X' not modelled"` reason rather than a
   confusing "unrecognised line" trace. Add new entries when a new set
   ships a custom mechanic.
+* **Unknown Scryfall keyword** (the tripwire, added 2026-07-06): any
+  entry in the card's structured `keywords` list that is in none of the
+  known keyword sets (including the grandfathered
+  `KNOWN_KEYWORDS_EXTRA`) demotes the card to NEEDS_LLM with a clean
+  reason, and the MV≥4 fast-path refuses to promote it back. This is
+  what catches brand-new mechanics (MSH's Connive slipped through
+  silently before it existed). After encoding a new set, run
+  `census-drops` (below) and add the settled keyword to
+  `KNOWN_KEYWORDS_EXTRA`.
 * **Unrecognised oracle line**: anything the per-chunk matchers can't
   classify. The unrecognised text is recorded in `reasons`.
+
+### Silent-drop census
+
+The parser's tolerance paths deliberately drop text they don't model
+(ignored triggers, death triggers, unparseable activation costs,
+static prose). `uv run mulligan-coach-cards census-drops --sets <SET>
+[--out <path>]` re-parses a set with a collector active and reports
+every dropped chunk by frequency with example cards. Skim it after
+each new set's detector run — a high-frequency unfamiliar verb in the
+report is a new mechanic worth teaching the parser or the guide.
 
 ### Per-type sub-branches
 
@@ -436,11 +456,19 @@ including each set's bonus sheet where one exists:
 
 | Set | auto | llm_encoded | needs_human | needs_llm |
 |---|---|---|---|---|
-| TMT | 161 (84.7%) | 29 (15.3%) | 0 | 0 |
-| ECL | 218 (81.6%) | 49 (18.4%) | 0 | 0 |
-| TLA | 223 (79.4%) | 58 (20.6%) | 0 | 0 |
-| SOS | 188 (55.1%) | 153 (44.9%) | 0 | 0 |
-| MSH | 255 (76.3%) | 79 (23.7%) | 0 | 0 |
+| TMT | 144 (68.6%) | 66 (31.4%) | 0 | 0 |
+| ECL | 194 (67.4%) | 94 (32.6%) | 0 | 0 |
+| TLA | 216 (63.2%) | 126 (36.8%) | 0 | 0 |
+| SOS | 186 (54.5%) | 155 (45.5%) | 0 | 0 |
+| MSH | 243 (72.8%) | 91 (27.2%) | 0 | 0 |
+
+(Counts as of the 2026-07-06 detector rerun after the parser-hardening
+round — unknown-keyword tripwire, death-trigger skip, activated-ability
+cmc≤3 crediting gate, token-keyword capture, period-form modal text;
+see `CARD_ENCODING_GUIDE.md` §19. The auto rates are lower than the
+previous snapshot mostly because per-set audits keep converting `auto`
+cards to hand-checked `llm_encoded`, and totals now include each set's
+full bonus sheet.)
 
 SOS has a lower auto rate because the Prepare layout (36 cards) always
 bails to NEEDS_LLM, the bonus-sheet reprints add 75 cards from older
