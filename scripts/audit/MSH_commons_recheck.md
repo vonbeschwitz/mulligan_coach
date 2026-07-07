@@ -37,6 +37,20 @@ Island Temple (own ETB counts itself). Rule codified in guide §4;
 applied by `apply_other_trigger_token_ruling_20260707.py` (which
 supersedes `apply_msh_unc_batch1_fix_20260707.py`).
 
+**2026-07-07 follow-up — ETB-only trigger ruling.** The owner
+generalized the Black Panther/Sokka discussion: triggered abilities
+credit role_features only from the permanent's OWN entry (compound
+"enters or transforms/leaves/attacks" forms count their guaranteed ETB
+half); attack/cast/upkeep/counter/landfall triggers and death triggers
+(without a self-sac outlet) credit nothing. Enforced in the parser
+(`_is_self_etb_trigger`; `_is_self_etb` now accepts any "this <word>"
+subject) and rerun across all five sets: 30 auto cards corrected, 10
+llm_encoded/judgment cards patched by
+`apply_etb_only_trigger_ruling_20260707.py` (incl. Madame Masque's
+token — her connive loot stays — and Bitterblossom, cleared under the
+strict reading and flagged for a possible time-based-engine
+carve-out). Guide §4 rewritten accordingly.
+
 Next uncommons batch starts at #21 Dark Deed.
 
 Status: **COMPLETE — all 94 commons checked (batches 1–6), all fixes

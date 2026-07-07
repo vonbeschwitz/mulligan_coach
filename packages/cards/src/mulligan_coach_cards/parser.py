@@ -796,6 +796,24 @@ _DEATH_TRIGGER_RE = re.compile(r"^when(?:ever)?\b.{0,80}?\bdie(?:s)?\b", re.IGNO
 # guide §16 these never credit draw / loot / scry (they fire repeatedly on
 # events we don't model), unlike one-shot "When … enters" triggers.
 _RECURRING_TRIGGER_RE = re.compile(r"^(?:whenever|at the beginning of)\b", re.IGNORECASE)
+# A trigger whose subject is the permanent itself entering — either the
+# "When this creature enters, …" one-shot form or the rarer
+# "Whenever this creature enters or transforms into …" form (ECL Brigid).
+# Owner ruling 2026-07-07 (guide §4): ONLY the permanent's own ETB trigger
+# credits role_features — attack / cast / upkeep / counter-placement /
+# other-permanent triggers never do, and death triggers are excluded
+# separately (§19).
+_SELF_ETB_TRIGGER_RE = re.compile(
+    r"^when(?:ever)?\s+(?P<subject>.{1,60}?)\s+enters\b", re.IGNORECASE
+)
+
+
+def _is_self_etb_trigger(chunk: str, name: str = "") -> bool:
+    """True if ``chunk`` is a trigger on the permanent's OWN entry."""
+    m = _SELF_ETB_TRIGGER_RE.match(chunk.strip())
+    if m is None:
+        return False
+    return _is_self_etb(m.group("subject"), name)
 
 
 def _is_death_trigger(chunk: str) -> bool:
@@ -811,7 +829,7 @@ def _is_death_trigger(chunk: str) -> bool:
     return bool(_DEATH_TRIGGER_RE.match(chunk.strip()))
 
 
-def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
+def _extract_triggered_signal(chunk: str, rf: RoleFeatures, self_name: str = "") -> None:
     """Scan an ignorable static/triggered chunk for card-draw and mana
     production and reflect them in role_features.
 
@@ -823,6 +841,14 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
     that text never matches the death-trigger shape, so the early return
     only fires on full death-trigger chunks and those inner-effect calls
     are unaffected.
+
+    Recurring triggers ("Whenever …" / "At the beginning of …") also
+    return early UNLESS the trigger is the permanent's own entry
+    (``_is_self_etb_trigger`` — ECL Brigid's "Whenever this creature
+    enters or transforms" form). Owner ruling 2026-07-07 (guide §4):
+    only self-ETB triggers credit role_features; attack / cast / upkeep /
+    counter-placement triggers credit nothing (no draws, no bending
+    signals, no tokens).
 
     Mana production currently has nowhere to go on the simulator side
     (ManaAbility models permanent-resident activated abilities, not
@@ -846,59 +872,58 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures) -> None:
     if _is_death_trigger(chunk):
         _record_drop("death_trigger", chunk)
         return
-    # Recurring triggers ("Whenever …" / "At the beginning of …") never
-    # credit draw / loot / scry — guide §16's policy, previously enforced
-    # only by per-set audit patches (April O'Neil, Oroku Saki, Mystic
-    # Remora, Political Triumph). One-shot "When … enters" triggers still
-    # credit. Bending signals below stay unaffected: attack-trigger
-    # earthbend bodies are wanted per the Sokka token precedent (§4).
-    recurring = _RECURRING_TRIGGER_RE.match(chunk) is not None
+    # Recurring triggers credit nothing either (owner ruling 2026-07-07,
+    # guide §4/§16) — unless the "Whenever" is the permanent's own entry
+    # (Brigid's "Whenever this creature enters or transforms" form).
+    if _RECURRING_TRIGGER_RE.match(chunk) is not None and not _is_self_etb_trigger(
+        chunk, self_name
+    ):
+        return
     # Loot patterns take precedence over the plain draw matcher — both
     # orders ("discard then draw" and "draw then discard") count as
     # manipulated cards rather than as new draws.
     handled_draws = 0
     handled_discards = 0
-    if not recurring:
-        for m in _INNER_LOOT_RE.finditer(chunk):
-            n_draw = _to_int(m.group("draw"))
-            n_discard = _to_int(m.group("discard"))
-            if n_draw is None or n_discard is None:
-                continue
-            rf.cards_manipulated += n_draw
-            net = max(0, n_draw - n_discard)
-            rf.cards_drawn += net
-            handled_draws += n_draw
-            handled_discards += n_discard
-        for m in _INNER_LOOT_DRAW_FIRST_RE.finditer(chunk):
-            n_draw = _to_int(m.group("draw"))
-            n_discard = _to_int(m.group("discard"))
-            if n_draw is None or n_discard is None:
-                continue
-            rf.cards_manipulated += n_draw
-            net = max(0, n_draw - n_discard)
-            rf.cards_drawn += net
-            handled_draws += n_draw
-            handled_discards += n_discard
-        # Plain "draw N cards" matches — only count any draws beyond the
-        # ones we already attributed to loot. Sum up all draw mentions and
-        # subtract the ones the loot matchers already consumed.
-        total_inner_draws = 0
-        for m in _INNER_DRAW_RE.finditer(chunk):
-            n = _to_int(m.group(1))
-            if n is not None:
-                total_inner_draws += n
-        remaining_draws = max(0, total_inner_draws - handled_draws)
-        if remaining_draws:
-            rf.cards_drawn += remaining_draws
-        # Surveil / scry inside a trigger.
-        for m in _INNER_SURVEIL_RE.finditer(chunk):
-            n = _to_int(m.group(1))
-            if n is not None:
-                rf.cards_manipulated += n
-        for m in _INNER_SCRY_RE.finditer(chunk):
-            n = _to_int(m.group(1))
-            if n is not None:
-                rf.cards_manipulated += n
+    for m in _INNER_LOOT_RE.finditer(chunk):
+        n_draw = _to_int(m.group("draw"))
+        n_discard = _to_int(m.group("discard"))
+        if n_draw is None or n_discard is None:
+            continue
+        rf.cards_manipulated += n_draw
+        net = max(0, n_draw - n_discard)
+        rf.cards_drawn += net
+        handled_draws += n_draw
+        handled_discards += n_discard
+    for m in _INNER_LOOT_DRAW_FIRST_RE.finditer(chunk):
+        n_draw = _to_int(m.group("draw"))
+        n_discard = _to_int(m.group("discard"))
+        if n_draw is None or n_discard is None:
+            continue
+        rf.cards_manipulated += n_draw
+        net = max(0, n_draw - n_discard)
+        rf.cards_drawn += net
+        handled_draws += n_draw
+        handled_discards += n_discard
+    # Plain "draw N cards" matches — only count any draws beyond the
+    # ones we already attributed to loot. Sum up all draw mentions and
+    # subtract the ones the loot matchers already consumed.
+    total_inner_draws = 0
+    for m in _INNER_DRAW_RE.finditer(chunk):
+        n = _to_int(m.group(1))
+        if n is not None:
+            total_inner_draws += n
+    remaining_draws = max(0, total_inner_draws - handled_draws)
+    if remaining_draws:
+        rf.cards_drawn += remaining_draws
+    # Surveil / scry inside a trigger.
+    for m in _INNER_SURVEIL_RE.finditer(chunk):
+        n = _to_int(m.group(1))
+        if n is not None:
+            rf.cards_manipulated += n
+    for m in _INNER_SCRY_RE.finditer(chunk):
+        n = _to_int(m.group(1))
+        if n is not None:
+            rf.cards_manipulated += n
     # Mana production breadcrumb only — no role_features field today.
     _ = _INNER_ADD_MANA_RE.search(chunk)
     # Bending mechanics nested inside a triggered ability.
@@ -1848,17 +1873,15 @@ def _is_pure_keyword_line(chunk: str) -> bool:
 
 
 def _is_self_etb(subject: str, name: str) -> bool:
-    """True if ``subject`` refers to the card itself."""
+    """True if ``subject`` refers to the card itself.
+
+    Any "this <word>" subject refers to the source in oracle templating
+    ("this creature", "this Equipment", "this Class", "this Aura", …), so
+    a startswith check replaces the old fixed phrase list. Named
+    self-references ("When Madame Masque enters") match on the full or
+    pre-comma short name."""
     s = subject.strip().lower()
-    self_phrases = {
-        "this",
-        "this creature",
-        "this artifact",
-        "this enchantment",
-        "this land",
-        "this card",
-    }
-    if s in self_phrases:
+    if s == "this" or s.startswith("this "):
         return True
     full = name.lower()
     short = name.split(",", 1)[0].strip().lower()
@@ -2338,18 +2361,20 @@ def _parse_creature(
             # ETB-shaped but for some other permanent — ignored triggered ability.
             continue
 
-        # 5. Other triggered abilities — ignored per design rules. We do
-        # scan non-death triggers for token creation, since cast-triggers /
-        # attack-triggers that create tokens (e.g. Sokka) are worth
-        # recording for role_features; triggered card-draw is also captured.
-        # Death triggers ("… dies") are too conditional to credit (owner
-        # convention 2026-07-06) — skip their token scan entirely.
+        # 5. Other triggered abilities — ignored per design rules, and per
+        # the owner ruling 2026-07-07 (guide §4) they credit NOTHING:
+        # attack / cast / upkeep / counter-placement trigger tokens and
+        # draws are all too conditional. Self-ETB chunks were consumed by
+        # step 4, so everything here is a non-self trigger; the signal
+        # scanner still runs for the Brigid "Whenever this creature
+        # enters or transforms" form, which it detects by name.
         if _OTHER_TRIGGERED_RE.match(chunk):
             if not _is_death_trigger(chunk):
-                for body in _match_token_creation(chunk):
-                    role_features.creates_creatures.append(body)
+                if _is_self_etb_trigger(chunk, name):
+                    for body in _match_token_creation(chunk):
+                        role_features.creates_creatures.append(body)
                 _record_drop("trigger_ignored", chunk)
-            _extract_triggered_signal(chunk, role_features)
+            _extract_triggered_signal(chunk, role_features, name)
             continue
 
         # 6. Activated abilities. Try mana ability first (it's a special
@@ -2685,13 +2710,16 @@ def _parse_aura(
             continue
         if _ACTIVATED_RE.match(chunk):
             continue
-        # Triggered abilities on the aura. Death triggers credit nothing
-        # (owner convention 2026-07-06) — skip their token scan.
+        # Triggered abilities on the aura. Only the aura's OWN ETB trigger
+        # credits tokens/signals (owner ruling 2026-07-07, guide §4);
+        # death and non-self triggers credit nothing.
         if _OTHER_TRIGGERED_RE.match(chunk) or _ETB_RE.match(chunk):
-            _extract_triggered_signal(chunk, role_features)
+            aura_name = str(base.get("name") or "")
+            _extract_triggered_signal(chunk, role_features, aura_name)
             if not _is_death_trigger(chunk):
-                for body in _match_token_creation(chunk):
-                    role_features.creates_creatures.append(body)
+                if _is_self_etb_trigger(chunk, aura_name):
+                    for body in _match_token_creation(chunk):
+                        role_features.creates_creatures.append(body)
                 _record_drop("trigger_ignored", chunk)
             continue
         # Static / passive prose — silently drop.
@@ -2764,15 +2792,17 @@ def _parse_artifact_typed(
         # Crew N / Equip N.
         if _VEHICLE_EQUIPMENT_LINE_RE.match(chunk):
             continue
-        # Triggered abilities — ignored (dies-trigger Clue, etc.). Death
-        # triggers credit nothing (owner convention 2026-07-06) — skip
-        # their token scan.
+        # Triggered abilities — ignored (dies-trigger Clue, etc.). Only the
+        # permanent's OWN ETB trigger credits tokens/signals (owner ruling
+        # 2026-07-07, guide §4).
         if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
+            artifact_name = str(base.get("name") or "")
             if not _is_death_trigger(chunk):
-                for body in _match_token_creation(chunk):
-                    role_features.creates_creatures.append(body)
+                if _is_self_etb_trigger(chunk, artifact_name):
+                    for body in _match_token_creation(chunk):
+                        role_features.creates_creatures.append(body)
                 _record_drop("trigger_ignored", chunk)
-            _extract_triggered_signal(chunk, role_features)
+            _extract_triggered_signal(chunk, role_features, artifact_name)
             continue
         # Direct-action token creation (a stapled body outside a trigger).
         if direct_bodies := _match_token_creation(chunk):
@@ -2928,12 +2958,18 @@ def _parse_other_permanent(
             _extract_triggered_signal(inner, role_features)
             _record_drop("etb_unparsed", inner)
             continue
+        # Plain self-ETB chunks were consumed by the wiring block above, but
+        # compound forms slip past _ETB_RE ("When this artifact enters or
+        # leaves the battlefield, create …" — TMT Mouser Foundry), so the
+        # token scan still runs behind a self-ETB check. Non-self triggers
+        # credit nothing (owner ruling 2026-07-07, guide §4).
         if _ETB_RE.match(chunk) or _OTHER_TRIGGERED_RE.match(chunk):
             if not _is_death_trigger(chunk):
-                for body in _match_token_creation(chunk):
-                    role_features.creates_creatures.append(body)
+                if _is_self_etb_trigger(chunk, name):
+                    for body in _match_token_creation(chunk):
+                        role_features.creates_creatures.append(body)
                 _record_drop("trigger_ignored", chunk)
-            _extract_triggered_signal(chunk, role_features)
+            _extract_triggered_signal(chunk, role_features, name)
             continue
         # Direct-action token creation: a chunk whose first verb is "Create
         # … creature token" — typical for saga chapters and immediate

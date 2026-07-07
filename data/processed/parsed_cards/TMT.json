@@ -13997,19 +13997,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [
-            "R"
-          ],
-          "subtypes": [
-            "Mutant"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -15011,17 +14999,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [
-            "Robot"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -15292,19 +15270,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [
-            "R"
-          ],
-          "subtypes": [
-            "Mutant"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -20138,19 +20104,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "B"
-          ],
-          "subtypes": [
-            "Ninja"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -20170,7 +20124,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 2-mana 1/3 with Sneak {W}{B}. Static deathtouch for attacking ninjas + combat-damage trigger creates Ninja token (creates_creatures already captured)"
+      "llm: 2-mana 1/3 with Sneak {W}{B}. Static deathtouch for attacking ninjas + combat-damage trigger creates Ninja token (creates_creatures already captured)",
+      "etb-only ruling 2026-07-07: combat-damage trigger Ninja token cleared"
     ]
   },
   {

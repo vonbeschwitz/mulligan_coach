@@ -2256,19 +2256,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "0",
-          "toughness": "4",
-          "colors": [],
-          "subtypes": [
-            "Wall"
-          ],
-          "keywords": [
-            "defender"
-          ]
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -9690,19 +9678,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "U"
-          ],
-          "subtypes": [
-            "Merfolk"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -9722,7 +9698,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 'whenever you cast a noncreature spell with blue pips, create that many 1/1 Merfolk' \u2014 variable-X token creation, encoded as a single 1/1 Merfolk body per the X=1-minimum convention (CLAUDE \u00a74). Namor's own variable power (= Merfolk you control) is not a modeled stat."
+      "llm: 'whenever you cast a noncreature spell with blue pips, create that many 1/1 Merfolk' \u2014 variable-X token creation, encoded as a single 1/1 Merfolk body per the X=1-minimum convention (CLAUDE \u00a74). Namor's own variable power (= Merfolk you control) is not a modeled stat.",
+      "etb-only ruling 2026-07-07: cast-trigger Merfolk tokens cleared"
     ]
   },
   {
@@ -12559,22 +12536,8 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "1",
-          "colors": [
-            "B"
-          ],
-          "subtypes": [
-            "Villain"
-          ],
-          "keywords": [
-            "menace"
-          ]
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -14465,21 +14428,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "1",
-          "colors": [
-            "B"
-          ],
-          "subtypes": [
-            "Villain"
-          ],
-          "keywords": [
-            "menace"
-          ]
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -14501,7 +14450,8 @@
     "reasons": [
       "creature stats parsed",
       "unrecognised keyword 'connive' \u2014 new mechanic, route to review",
-      "tripwire encode 2026-07-06: ETB connive = loot; draw-two token trigger kept (recurring-trigger token, Sokka precedent)"
+      "tripwire encode 2026-07-06: ETB connive = loot; draw-two token trigger kept (recurring-trigger token, Sokka precedent)",
+      "etb-only ruling 2026-07-07: draw-second-card trigger token cleared; ETB connive loot stays"
     ]
   },
   {
@@ -15534,39 +15484,8 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [
-            "Robot",
-            "Villain"
-          ],
-          "keywords": []
-        },
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [
-            "Robot",
-            "Villain"
-          ],
-          "keywords": []
-        },
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [],
-          "subtypes": [
-            "Robot",
-            "Villain"
-          ],
-          "keywords": []
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -24700,19 +24619,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "G"
-          ],
-          "subtypes": [
-            "Minion"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -28117,22 +28024,8 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "R"
-          ],
-          "subtypes": [
-            "Alien"
-          ],
-          "keywords": [
-            "haste"
-          ]
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -28277,19 +28170,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "G"
-          ],
-          "subtypes": [
-            "Insect"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -31278,21 +31159,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "1",
-          "colors": [
-            "B"
-          ],
-          "subtypes": [
-            "Villain"
-          ],
-          "keywords": [
-            "menace"
-          ]
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,

@@ -2473,3 +2473,111 @@ def test_negative_phrasing_restricted_mana_dropped() -> None:
     parsed = parse_card(card)
     assert parsed.status is ParseStatus.AUTO
     assert parsed.mana_abilities == []
+
+
+def test_cast_trigger_token_not_credited() -> None:
+    """Owner ruling 2026-07-07 (guide §4): only self-ETB triggers credit
+    tokens — Sokka, Tenacious Tactician's cast trigger no longer counts."""
+    card = _scryfall(
+        name="Sokka, Tenacious Tactician",
+        type_line="Legendary Creature — Human Ally",
+        mana_cost="{2}{W}",
+        power="3",
+        toughness="3",
+        oracle_text="Whenever you cast a noncreature spell, create a 1/1 white Ally creature token.",
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.creates_creatures == []
+
+
+def test_attack_trigger_token_not_credited() -> None:
+    card = _scryfall(
+        name="Suki, Kyoshi Warrior",
+        type_line="Legendary Creature — Human Ally",
+        mana_cost="{1}{W}",
+        power="2",
+        toughness="2",
+        oracle_text=(
+            "Whenever Suki attacks, create a 1/1 white Ally creature token "
+            "that's tapped and attacking."
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.creates_creatures == []
+
+
+def test_upkeep_trigger_token_not_credited() -> None:
+    card = _scryfall(
+        name="Bitterblossom",
+        type_line="Tribal Enchantment — Faerie",
+        mana_cost="{1}{B}",
+        oracle_text=(
+            "At the beginning of your upkeep, you lose 1 life and create a "
+            "1/1 black Faerie Rogue creature token with flying."
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.creates_creatures == []
+
+
+def test_self_etb_whenever_form_still_credits() -> None:
+    """ECL Brigid templating: 'Whenever this creature enters or transforms
+    into …' is the permanent's OWN entry — tokens and draws still count."""
+    card = _scryfall(
+        name="Brigid, Clachan's Heart",
+        type_line="Creature — Kithkin",
+        mana_cost="{2}{W}",
+        power="2",
+        toughness="2",
+        oracle_text=(
+            "Whenever this creature enters or transforms into Brigid, Clachan's "
+            "Heart, create a 1/1 green and white Kithkin creature token."
+        ),
+    )
+    parsed = parse_card(card)
+    assert len(parsed.role_features.creates_creatures) == 1
+
+
+def test_plain_self_etb_token_still_credits() -> None:
+    card = _scryfall(
+        name="Drone Carrier",
+        type_line="Artifact Creature — Robot",
+        mana_cost="{2}{U}",
+        power="2",
+        toughness="2",
+        oracle_text="When this creature enters, create a 1/1 white Soldier creature token.",
+    )
+    parsed = parse_card(card)
+    assert len(parsed.role_features.creates_creatures) == 1
+
+
+def test_attack_trigger_earthbend_not_credited() -> None:
+    """Attack-trigger earthbend bodies no longer count either (the old
+    'Sokka precedent' carve-out is superseded by the 2026-07-07 ruling)."""
+    card = _scryfall(
+        name="Boulder Slinger",
+        type_line="Creature — Human",
+        mana_cost="{2}{G}",
+        power="2",
+        toughness="3",
+        oracle_text="Whenever this creature attacks, earthbend 2.",
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.creates_creatures == []
+
+
+def test_enters_or_leaves_compound_self_etb_token_credits() -> None:
+    """'When this artifact enters or leaves the battlefield, create …'
+    fires on the permanent's own entry (TMT Mouser Foundry) — the token
+    counts even though the plain _ETB_RE shape doesn't match."""
+    card = _scryfall(
+        name="Mouser Foundry",
+        type_line="Artifact",
+        mana_cost="{2}",
+        oracle_text=(
+            "When this artifact enters or leaves the battlefield, create a "
+            "1/1 colorless Robot artifact creature token."
+        ),
+    )
+    parsed = parse_card(card)
+    assert len(parsed.role_features.creates_creatures) == 1

@@ -15113,20 +15113,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [
-            "R",
-            "W"
-          ],
-          "subtypes": [
-            "Spirit"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -18366,20 +18353,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "0",
-          "toughness": "0",
-          "colors": [
-            "G",
-            "U"
-          ],
-          "subtypes": [
-            "Fractal"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -18399,7 +18373,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 1-mana 1/1 turtle with Increment + dies-trigger"
+      "llm: 1-mana 1/1 turtle with Increment + dies-trigger",
+      "etb-only ruling 2026-07-07: death-trigger token cleared (no self-sac outlet, \u00a719)"
     ]
   },
   {
@@ -25418,20 +25393,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "0",
-          "toughness": "0",
-          "colors": [
-            "G",
-            "U"
-          ],
-          "subtypes": [
-            "Fractal"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -31408,6 +31370,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -31441,11 +31411,12 @@
       "aura_pump_toughness": null,
       "aura_pump_granted_keywords": [],
       "cards_drawn": 0,
-      "cards_manipulated": 0
+      "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "etb-only ruling 2026-07-07: self-ETB 'may draw, if you do discard' = net-0 loot; wired per \u00a72 (the attack half of the trigger adds nothing at mulligan time)"
     ]
   },
   {
@@ -41792,22 +41763,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "U"
-          ],
-          "subtypes": [
-            "Bird",
-            "Illusion"
-          ],
-          "keywords": [
-            "flying"
-          ]
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,

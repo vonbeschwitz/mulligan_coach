@@ -204,8 +204,11 @@ Categories (per design):
 
 1. `is_creature` — already a structural property of the card.
 2. `creates_creatures: list[CreatureBody]` — token bodies created by
-   the card from any source (ETB, cast, equipment-with-body, cast-trigger,
-   activated ability, etc.).
+   the card. Sources that count: the permanent's OWN ETB trigger,
+   direct cast-resolution effects, stapled equipment/vehicle bodies,
+   and cheap (cmc ≤ 3) activated abilities. Attack / cast / upkeep /
+   other-permanent triggers and death triggers never count — see
+   `CARD_ENCODING_GUIDE.md` §4 (owner ruling 2026-07-07).
 3. `removal_destroy_or_exile`, `removal_burn_damage` (creature-targeted
    only — non-creature destroy/exile sets `is_other` instead).
 4. `is_punch_fight`.
