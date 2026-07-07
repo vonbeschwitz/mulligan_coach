@@ -8132,9 +8132,11 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": null,
-      "combat_trick_toughness": null,
-      "combat_trick_granted_keywords": [],
+      "combat_trick_power": 2,
+      "combat_trick_toughness": 2,
+      "combat_trick_granted_keywords": [
+        "flying"
+      ],
       "is_removal_aura": false,
       "is_pump_aura": false,
       "aura_pump_power": null,
@@ -8143,9 +8145,10 @@
       "cards_drawn": 1,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: draw_cards x1"
+      "effects: draw_cards x1",
+      "batch45 fix 2026-07-07: 4/4 base P/T until EOT = combat trick +2/+2 over a typical 2/2 (Quandrix Charm differential precedent, guide \u00a712) + flying grant; cards_drawn=1 unchanged"
     ]
   },
   {
@@ -15991,9 +15994,11 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": null,
-      "combat_trick_toughness": null,
-      "combat_trick_granted_keywords": [],
+      "combat_trick_power": 1,
+      "combat_trick_toughness": 0,
+      "combat_trick_granted_keywords": [
+        "indestructible"
+      ],
       "is_removal_aura": false,
       "is_pump_aura": false,
       "aura_pump_power": null,
@@ -16002,9 +16007,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "equipment"
+      "equipment",
+      "batch45 fix 2026-07-07: flash Equipment with ETB auto-attach + indestructible-EOT grant = combat trick per \u00a73's flash rule (flash in to save a blocker); +1/+0 static applies on attach"
     ]
   },
   {
@@ -19475,6 +19481,14 @@
         "effects": [
           {
             "kind": "enters_battlefield"
+          },
+          {
+            "kind": "draw_cards",
+            "n": 1
+          },
+          {
+            "kind": "discard_card",
+            "n": 1
           }
         ]
       }
@@ -19510,9 +19524,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 1
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "batch45 fix 2026-07-07: ETB 'discard a card: draw a card' loot wired per \u00a72 (discard is reliably payable, \u00a79; the sac-an-artifact alternative is ignored)"
     ]
   },
   {

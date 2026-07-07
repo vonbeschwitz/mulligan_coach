@@ -4,8 +4,55 @@ Working through all 94 MSH commons alphabetically, 15 per batch,
 judging each against `packages/cards/CARD_ENCODING_GUIDE.md`.
 Source: `data/processed/parsed_cards/MSH.json` (334 cards total).
 
-Status: **batches 1–3 done (cards 1–45), all fixes applied
-(2026-07-07)**. Next batch starts at #46 I Am Iron Man.
+Status: **batches 1–5 done (cards 1–75), all fixes applied
+(2026-07-07)**. Next batch starts at #76 Sundering Growth.
+
+## Batches 4–5 (2026-07-07): cards 46–75
+
+### Clean (27 of 30)
+
+Straightforward and correct: Kingpin's Enforcers (#102 — sac-gated
+activated draw correctly uncredited per §2, mode kept for the sim),
+Knight of Wundagore (#175), Kree Commandos (#19), Kree Sentinel
+(#141), Lightning Strike (#142), Machinesmith Automaton (#144),
+Murdock's Crusade (#24 — §12 teamwork-modal exile), Ninja of the Hand
+(#108), Panther Pounce (#29 — investigate ignored per the Deduce
+precedent), Pet Avengers (#178 — 7-mana power-up token uncredited per
+the cmc≤3 gate), Powerful Broker (#179), Raft Security Officer (#33),
+Rapid Rescue (#181 — §16 mill-as-LookAtTop), Red Room Recruit (#110 —
+tripwire loot encode), Repulsor Blast (#150 — tripwire burn-5 encode),
+Restorative Technique (#183 — FetchLandEffect), Roxxon Brutes (#113),
+S.H.I.E.L.D. Deployment Drone (#73), S.H.I.E.L.D. Spy Kit (#36 —
+recurring scry correctly uncredited), Savage Land Dinosaur (#185),
+Serpent Specialist (#186), Stark Industries Executive (#153 —
+Treasure token not encoded per §4), and the four tapped duals
+(Los Diablos Missile Base, Pym Technologies, Stark Industries,
+Subterranean Cavern).
+
+Noted, no change: **Project Deathlok Soldier (#109)** — its
+"{2}{B}: Return this card from your graveyard to your hand" is a
+graveyard-resident activation encoded as a generic activated Mode.
+The mode is inert (noop effect, no rf credit — the Stone Docent
+conservatism already holds), so it's left as parsed; if a sim
+consumer ever starts using activated modes by zone, revisit.
+
+### Fixed (3 of 30) — `apply_msh_batch45_fixes_20260707.py`
+
+1. **I Am Iron Man (#58)** — "becomes a 4/4 with flying until end of
+   turn" beside the draw is a combat trick per the Quandrix Charm
+   base-P/T differential precedent (§12): `combat_trick 2/2` +
+   `granted_keywords=['flying']`; draw unchanged.
+2. **K'un-Lun Warrior (#140)** — ETB "sacrifice an artifact or
+   discard a card: draw a card" had the loot *credited*
+   (`cards_manipulated=1`) but not *wired*; §2 wires
+   `DrawCardsEffect(1) + DiscardCardEffect(1)` on the cast mode
+   (discard is reliably payable per §9).
+3. **Stolen Stark Tech (#114)** — flash Equipment, ETB auto-attach +
+   indestructible until end of turn. §3's flash rule extended to a
+   flash equipment whose ETB is functionally "flash in to save a
+   blocker": `combat_trick 1/0` + `['indestructible']`.
+   *Judgment call — §3 literally says "flash creatures"; overrule if
+   you'd rather keep the combat-trick field creature-only.*
 
 ## Batch 3 (2026-07-07): cards 31–45
 
