@@ -24,13 +24,18 @@ Clean highlights worth a note:
   cost is reliably payable per §9); the repeatable {3},{T} version
   correctly adds nothing.
 
-Fixed: **Black Panther, Vanguard (#207)** — recurring-trigger modal
-("choose one — create a 1/1 Soldier / +1/+1 EOT") broke on the
-bullets and fast-pathed with no token. Sokka/Madame Masque
-recurring-trigger-token precedent (§4) + §12 aggregation →
-`creates_creatures=[1/1 W Soldier]`
-(`apply_msh_unc_batch1_fix_20260707.py`). Scan confirmed it's the
-only "• Create …" bullet card in the set without a body.
+Fixed, then **overruled by the owner**: **Black Panther, Vanguard
+(#207)** — I had credited the 1/1 Soldier from his "whenever another
+nontoken Hero enters, choose one —" trigger per the Sokka precedent.
+Owner ruling: a trigger the card can't generate BY ITSELF ("whenever
+ANOTHER … enters/leaves") doesn't count. Reverted, and the same
+ruling cleared **Simulacrum Synthesizer** (MSH bonus mythic) and
+**Suki, Courageous Rescuer** (TLA rare — one more card of train/serve
+drift until the next retrain). Self-generated triggers keep their
+tokens: Sokka, Madame Masque, Ant-Man Colony Commander, Crescent
+Island Temple (own ETB counts itself). Rule codified in guide §4;
+applied by `apply_other_trigger_token_ruling_20260707.py` (which
+supersedes `apply_msh_unc_batch1_fix_20260707.py`).
 
 Next uncommons batch starts at #21 Dark Deed.
 

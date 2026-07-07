@@ -4901,19 +4901,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Ally"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -4933,7 +4921,8 @@
     },
     "status": "llm_encoded",
     "reasons": [
-      "llm: 3-mana 2/4 ally lord (anthem +1/+0) with leaves-trigger Ally token creation (creates_creatures already populated)"
+      "llm: 3-mana 2/4 ally lord (anthem +1/+0) with leaves-trigger Ally token creation (creates_creatures already populated)",
+      "other-trigger token ruling 2026-07-07: token trigger requires ANOTHER permanent to enter/leave \u2014 the card can't generate it by itself, so the body isn't credited (guide \u00a74)"
     ]
   },
   {

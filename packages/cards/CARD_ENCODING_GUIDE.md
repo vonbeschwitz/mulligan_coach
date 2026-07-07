@@ -276,6 +276,26 @@ toughness: N}]`) even though no token is technically created — the
 owner's call is that the effect is "close enough" to a token for
 modeling purposes.
 
+### Recurring-trigger tokens need a SELF-generated trigger
+
+(Owner ruling 2026-07-07, on MSH Black Panther, Vanguard.) A token
+from a recurring trigger counts only when the card can fire the
+trigger **by itself**:
+
+- **Count**: Sokka (his own attack), Madame Masque (her own ETB
+  connive supplies the second draw of the turn), Ant-Man Colony
+  Commander (his own attack ability places the counter that feeds his
+  token trigger), Crescent Island Temple (its own ETB counts itself
+  for the "for each Shrine" body — minimum one).
+- **Don't count**: "whenever ANOTHER permanent you control
+  enters/leaves …" — the card is inert without outside help. Black
+  Panther Vanguard (another Hero enters), Simulacrum Synthesizer
+  (another MV3+ artifact enters), Suki, Courageous Rescuer (another
+  permanent leaves). Cleared by
+  `scripts/audit/apply_other_trigger_token_ruling_20260707.py`.
+
+Death triggers never count at all (§19).
+
 ### Non-creature tokens
 
 Food / Clue / Treasure / Map tokens are NOT creature tokens — don't
