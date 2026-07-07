@@ -1995,6 +1995,114 @@ def test_token_without_with_clause_has_no_keywords() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Named-token tripwire ("create Redwing, a legendary 1/1 …") — the
+# count-anchored token regex can't consume a proper-noun name, so instead of
+# silently dropping the body the card is routed to NEEDS_LLM for review.
+# Added 2026-07-07 (MSH Falcon / Ka-Zar were silently fast-pathed to AUTO
+# with the token invisible). The tripwire is precise: it requires a genuine
+# capitalized name + comma, so ordinary "create a/two N/N …" cards are
+# untouched.
+# ---------------------------------------------------------------------------
+
+
+def test_named_etb_token_routes_to_needs_llm() -> None:
+    # MSH Falcon, Winged Wonder shape: a self-ETB trigger creating a *named*
+    # legendary token, behind a flavor-word label. Would otherwise fast-path
+    # to AUTO (MV 5) with the token invisible — now routed to review.
+    card = _scryfall(
+        name="Falcon, Winged Wonder",
+        type_line="Legendary Creature — Human Hero",
+        oracle_text=(
+            "Flying\n"
+            "Avian Telepathy — When Falcon enters, create Redwing, a legendary 1/1 blue "
+            'Bird Scout creature token with flying and "Whenever Redwing attacks, surveil 1."'
+        ),
+        mana_cost="{4}{U}",
+        power="3",
+        toughness="3",
+        keywords=["Flying"],
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert any("named token" in r for r in p.reasons)
+    # The fast-path must NOT rescue it back to AUTO.
+    assert not any("fast-path" in r for r in p.reasons)
+
+
+def test_named_token_no_comma_short_name_routes_to_needs_llm() -> None:
+    # MSH Ka-Zar shape: a self-ETB named token where the card name has no
+    # comma ("Ka-Zar of the Savage Land"), which the self-ETB check also
+    # misses. The tripwire catches it regardless.
+    card = _scryfall(
+        name="Ka-Zar of the Savage Land",
+        type_line="Legendary Creature — Human Barbarian Hero",
+        oracle_text=(
+            "When Ka-Zar enters, create Zabu, a legendary 2/2 green Cat creature token with "
+            '"Landfall — Whenever a land you control enters, put a +1/+1 counter on Zabu."'
+        ),
+        mana_cost="{4}{G}",
+        power="3",
+        toughness="3",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert any("named token" in r for r in p.reasons)
+
+
+def test_named_token_in_expensive_activated_routes_to_needs_llm() -> None:
+    # MSH White Tiger shape: the named token is behind a {5}{G} power-up, so
+    # a reviewer would confirm NO body is credited (cmc>3 gate). The tripwire
+    # still routes it to review rather than leaving it silently AUTO.
+    card = _scryfall(
+        name="White Tiger, Ava Ayala",
+        type_line="Legendary Creature — Human Hero",
+        oracle_text=(
+            "Power-up — {5}{G}: Put a +1/+1 counter on White Tiger and create The Tiger God, "
+            "a legendary 4/4 green Cat God creature token with \"The Tiger God can't be blocked "
+            'by more than one creature."'
+        ),
+        mana_cost="{1}{G}",
+        power="2",
+        toughness="2",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.NEEDS_LLM
+    assert any("named token" in r for r in p.reasons)
+
+
+def test_standard_token_not_flagged_by_named_tripwire() -> None:
+    # Regression: the ordinary "create two 1/1 white Soldier" form has no
+    # proper-noun name, so the tripwire must NOT fire — it stays AUTO with
+    # both bodies recorded.
+    card = _scryfall(
+        name="Plain Maker",
+        type_line="Sorcery",
+        oracle_text="Create two 1/1 white Soldier creature tokens.",
+        mana_cost="{2}{W}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert len(p.role_features.creates_creatures) == 2
+    assert not any("named token" in r for r in p.reasons)
+
+
+def test_sentence_start_capitalized_create_not_flagged() -> None:
+    # "Create a 1/1 …" at sentence start (capital C, lowercase count word)
+    # must not be mistaken for a named token — the name requires a capital
+    # word followed by a comma, which "a 1/1" is not.
+    card = _scryfall(
+        name="Cap Maker",
+        type_line="Sorcery",
+        oracle_text="Create a 2/2 green Bear creature token.",
+        mana_cost="{1}{G}",
+    )
+    p = parse_card(card)
+    assert p.status is ParseStatus.AUTO
+    assert len(p.role_features.creates_creatures) == 1
+    assert not any("named token" in r for r in p.reasons)
+
+
+# ---------------------------------------------------------------------------
 # Change 2 — death triggers ("... dies") credit nothing.
 # ---------------------------------------------------------------------------
 

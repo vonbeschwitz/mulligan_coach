@@ -7278,7 +7278,22 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [],
+      "creates_creatures": [
+        {
+          "power": "1",
+          "toughness": "1",
+          "colors": [
+            "U"
+          ],
+          "subtypes": [
+            "Bird",
+            "Scout"
+          ],
+          "keywords": [
+            "flying"
+          ]
+        }
+      ],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -7296,11 +7311,12 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
       "unrecognised line: 'Avian Telepathy \u2014 When Falcon enters, create Redwing, a legendary 1/1 blue Bird Scout creature token with flying and \"Whenever Redwing attacks, surveil 1.\"'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns",
+      "unc-batch2 fix 2026-07-07: self-ETB token 'Redwing' (1/1 U Bird Scout, flying) recorded per \u00a74; named-token templating ('create Redwing, a legendary 1/1 \u2026') slips past _CREATE_TOKEN_RE. Redwing's attack-surveil is not an evergreen keyword."
     ]
   },
   {
@@ -8549,7 +8565,7 @@
       "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
-      "is_bounce": false,
+      "is_bounce": true,
       "is_top_library": false,
       "combat_trick_power": null,
       "combat_trick_toughness": null,
@@ -8562,10 +8578,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "evergreen keywords: flying"
+      "evergreen keywords: flying",
+      "unc-batch2 fix 2026-07-07: self-ETB bounce ('return up to one target nonland, nontoken permanent to its owner's hand') \u2192 is_bounce per \u00a71; the 'nonland, nontoken' qualifier breaks _BOUNCE_RE."
     ]
   },
   {
@@ -24230,7 +24247,19 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [],
+      "creates_creatures": [
+        {
+          "power": "2",
+          "toughness": "2",
+          "colors": [
+            "G"
+          ],
+          "subtypes": [
+            "Cat"
+          ],
+          "keywords": []
+        }
+      ],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -24248,9 +24277,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "unc-batch2 fix 2026-07-07: self-ETB token 'Zabu' (2/2 G Cat) recorded per \u00a74; named-token templating slips past _CREATE_TOKEN_RE. Zabu's landfall ability is not an evergreen keyword."
     ]
   },
   {
@@ -27418,10 +27448,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "alternative modes: activated"
+      "alternative modes: activated",
+      "named-token review 2026-07-07: named token 'The Tiger God' is created by a {5}{G} power-up (cmc>3) \u2192 no creates_creatures per \u00a719; is_creature only."
     ]
   },
   {
@@ -29780,7 +29811,7 @@
       "is_punch_fight": false,
       "is_other": false,
       "creates_creatures": [],
-      "removal_destroy_or_exile": false,
+      "removal_destroy_or_exile": true,
       "is_mass_removal": false,
       "removal_burn_damage": null,
       "is_counterspell": false,
@@ -29797,11 +29828,12 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "saga: encoded chapter I only",
       "saga: unrecognised line: 'Destroy up to one target nonland permanent.'",
-      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns"
+      "MV>=5 fast-path: card unlikely to affect mulligan-relevant turns",
+      "named-token review 2026-07-07: chapter I ('destroy up to one target nonland permanent') \u2192 removal_destroy_or_exile per \u00a76 (the saga chunk loop doesn't run the destroy matcher, so it was silently dropped); chapter IV named 'Galactus' token \u2192 no body (later chapter, \u00a76)."
     ]
   },
   {
@@ -46060,9 +46092,11 @@
       "is_counterspell": false,
       "is_bounce": false,
       "is_top_library": false,
-      "combat_trick_power": 2,
-      "combat_trick_toughness": 0,
-      "combat_trick_granted_keywords": [],
+      "combat_trick_power": 3,
+      "combat_trick_toughness": 1,
+      "combat_trick_granted_keywords": [
+        "trample"
+      ],
       "is_removal_aura": false,
       "is_pump_aura": false,
       "aura_pump_power": null,
@@ -46071,9 +46105,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "effects: noop (combat_trick)"
+      "effects: noop (combat_trick)",
+      "unc-batch2 fix 2026-07-07: fold the Monster Role token (+1/+1, trample) into the combat trick per the Saved-by-the-Shell counter-as-pump logic (\u00a73): +2/+0 (EOT) + Role +1/+1 trample \u2192 combat_trick 3/1 ['trample']. The WOE Role mechanic isn't parsed."
     ]
   }
 ]
