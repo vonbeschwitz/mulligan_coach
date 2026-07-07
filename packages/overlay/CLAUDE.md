@@ -195,6 +195,10 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   through a `QAbstractNativeEventFilter`). Avoid Ctrl-based
   combos here — Arena's full-control binds Ctrl, and a global
   hotkey on Ctrl+anything ate combos the player needed in-game.
+  The expanded panel's title row shows a tiny muted "Alt+E to
+  minimize" hint (revealed by `window.show_hotkey_hint()` only after
+  the hook installs successfully); the compact pill tooltips
+  "Alt+E to expand".
 * While the simulation runs, the worker emits a synthetic
   ``ComputingOutput`` (before the blocking ``recommend_choice``
   call) so the panel can flash a "Running simulation…" amber
@@ -240,12 +244,22 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   difference ⇒ update" fallback when a stamp can't be parsed. When a
   newer build is published the tray shows a balloon + a "Download
   update…" menu entry that open the **release page** (not a raw ZIP
-  download). The tray also gains a manual **"Check for updates"** entry.
-  Checks run on a daemon thread (`gui._ExeUpdateController`), ~8 s after
-  launch and every 6 h; any failure folds into an `unknown` result and
-  never disturbs the overlay (silent on auto-checks, gentle "couldn't
-  check" only on a manual one). Disable via
+  download). The tray also gains a manual **"Check for updates"** entry
+  (mirrored in the overlay's gear menu). Checks run on a daemon thread
+  (`gui._ExeUpdateController`), ~8 s after launch and every 6 h; any
+  failure folds into an `unknown` result and never disturbs the overlay.
+  Automatic checks stay silent except for the update-available balloon;
+  a **manual** check always answers with a `QMessageBox` ("up to date" /
+  "couldn't check" / update-available with an "Open download page"
+  button) — tray balloons alone proved invisible on Windows 11, which
+  diverts them to the notification centre. Disable via
   `MULLIGAN_COACH_EXE_VERSION_URL=""`.
+* **App lifetime is explicit-quit only.** `main()` sets
+  `setQuitOnLastWindowClosed(False)`: the overlay hides whenever Arena
+  isn't running, so a secondary window (setup wizard, update dialog) is
+  often the only *visible* window — under Qt's default, closing it
+  killed the whole app. Quit paths are the overlay's ✕ button and the
+  tray's "Quit Mulligan Coach", both calling `QApplication.quit()`.
 * **First-run wizard** (`first_run.py` + `first_run_dialog.py` + tray).
   The overlay is silent unless three prerequisites hold: Arena has run
   (Player.log exists), **Detailed Logs (Plugin Support)** is enabled
