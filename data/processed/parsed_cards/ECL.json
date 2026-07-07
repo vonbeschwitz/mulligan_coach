@@ -2585,21 +2585,8 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "G",
-            "W"
-          ],
-          "subtypes": [
-            "Kithkin"
-          ],
-          "keywords": []
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -8271,22 +8258,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "U",
-            "B"
-          ],
-          "subtypes": [
-            "Faerie"
-          ],
-          "keywords": [
-            "flying"
-          ]
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -10007,10 +9979,11 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
       "creature stats parsed",
-      "transform DFC: parsed front face only (back face has no cast cost)"
+      "transform DFC: parsed front face only (back face has no cast cost)",
+      "etb-only ruling 2026-07-07: the 'draw' is inside a granted combat-damage ability (\u00a72 April precedent)"
     ]
   },
   {
@@ -11531,22 +11504,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "U",
-            "B"
-          ],
-          "subtypes": [
-            "Faerie"
-          ],
-          "keywords": [
-            "flying"
-          ]
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -11817,9 +11775,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "etb-only ruling 2026-07-07: draw gated on 'you may blight 2' \u2014 cost not assumed payable (\u00a72/\u00a79)"
     ]
   },
   {
@@ -36231,23 +36190,8 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "B"
-          ],
-          "subtypes": [
-            "Faerie",
-            "Rogue"
-          ],
-          "keywords": [
-            "flying"
-          ]
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -36268,7 +36212,8 @@
     "status": "llm_encoded",
     "reasons": [
       "enchantment",
-      "fix: token keyword 'flying'"
+      "fix: token keyword 'flying'",
+      "etb-only ruling 2026-07-07: upkeep-engine token cleared under the strict ETB-only reading \u2014 flagged for a possible time-based-engine carve-out"
     ]
   },
   {

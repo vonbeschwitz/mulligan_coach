@@ -276,25 +276,42 @@ toughness: N}]`) even though no token is technically created — the
 owner's call is that the effect is "close enough" to a token for
 modeling purposes.
 
-### Recurring-trigger tokens need a SELF-generated trigger
+### Triggered abilities credit ONLY the permanent's own ETB
 
-(Owner ruling 2026-07-07, on MSH Black Panther, Vanguard.) A token
-from a recurring trigger counts only when the card can fire the
-trigger **by itself**:
+(Owner ruling 2026-07-07, refined the same day from the Black
+Panther / Sokka discussion into a general rule.) A triggered ability
+contributes tokens / draws / any role_features signal **only when the
+trigger is the permanent's own entry**:
 
-- **Count**: Sokka (his own attack), Madame Masque (her own ETB
-  connive supplies the second draw of the turn), Ant-Man Colony
-  Commander (his own attack ability places the counter that feeds his
-  token trigger), Crescent Island Temple (its own ETB counts itself
-  for the "for each Shrine" body — minimum one).
-- **Don't count**: "whenever ANOTHER permanent you control
-  enters/leaves …" — the card is inert without outside help. Black
-  Panther Vanguard (another Hero enters), Simulacrum Synthesizer
-  (another MV3+ artifact enters), Suki, Courageous Rescuer (another
-  permanent leaves). Cleared by
-  `scripts/audit/apply_other_trigger_token_ruling_20260707.py`.
+- **Count — self-ETB**: "When this creature enters, …" and compound
+  forms that include the own entry: ECL Brigid ("Whenever this
+  creature enters or transforms into …"), TMT Mouser Foundry ("When
+  this artifact enters or leaves the battlefield"), SOS Stadium
+  Tidalmage ("Whenever this creature enters or attacks" — the ETB
+  half fires guaranteed; nested conditions are still judged per §2,
+  so Tidalmage's "may draw, if you do discard" lands as a net-0
+  loot). Crescent Island Temple keeps its body (own ETB counts itself
+  for the "for each Shrine" scaling — minimum one).
+- **Don't count — everything else**: attack triggers (Suki Kyoshi
+  Warrior, Slash, Fire Navy Trebuchet, Cruel Administrator's
+  earthbend), cast triggers (Sokka Tenacious Tactician, Madame Hydra,
+  Ravenous Robots, Namor, Murmuring Mystic), upkeep / combat-start
+  engines (Bitterblossom, Bitterbloom Bearer, Koma, Old Hob,
+  Kinbinding, Alien Invasion — cleared under the strict reading;
+  revisit if the owner wants a carve-out for unconditional time-based
+  engines), counter-placement / draw-second / landfall / leaves-
+  the-battlefield triggers (Ant-Man Colony Commander, Madame Masque's
+  token — her ETB connive stays, Construct a Cosmic Cube, Mole Man,
+  Invisible Woman, Garrison Excavator, Tolls of War), and
+  "whenever ANOTHER permanent …" triggers (Black Panther Vanguard,
+  Simulacrum Synthesizer, Suki Courageous Rescuer).
+- **Death triggers never count** (§19) unless the permanent has its
+  own sacrifice outlet (LLM judgment).
 
-Death triggers never count at all (§19).
+Enforced deterministically in the parser (`_is_self_etb_trigger`);
+llm_encoded stragglers cleared by
+`scripts/audit/apply_etb_only_trigger_ruling_20260707.py` and
+`scripts/audit/apply_other_trigger_token_ruling_20260707.py`.
 
 ### Non-creature tokens
 

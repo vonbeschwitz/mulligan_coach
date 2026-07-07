@@ -1279,19 +1279,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Ally"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -4649,9 +4637,10 @@
       "cards_drawn": 0,
       "cards_manipulated": 0
     },
-    "status": "auto",
+    "status": "llm_encoded",
     "reasons": [
-      "creature stats parsed"
+      "creature stats parsed",
+      "etb-only ruling 2026-07-07: draw gated on the trigger resolving twice in a turn \u2014 too conditional"
     ]
   },
   {
@@ -13636,19 +13625,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [
-            "Construct"
-          ],
-          "keywords": [
-            "flying"
-          ]
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -13670,7 +13647,8 @@
     "reasons": [
       "creature stats parsed",
       "evergreen keywords: reach, defender",
-      "fix: token keyword 'flying'"
+      "fix: token keyword 'flying'",
+      "etb-only ruling 2026-07-07: attack-trigger Boulder token cleared"
     ]
   },
   {
@@ -29371,19 +29349,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "2",
-          "toughness": "2",
-          "colors": [
-            "R"
-          ],
-          "subtypes": [
-            "Soldier"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -30676,17 +30642,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [],
-          "subtypes": [
-            "Spirit"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -31654,19 +31610,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Ally"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -33834,19 +33778,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Ally"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -33998,19 +33930,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Ally"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -34315,20 +34235,8 @@
       "is_saga": false,
       "is_class": false,
       "is_punch_fight": false,
-      "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "1",
-          "toughness": "1",
-          "colors": [
-            "W"
-          ],
-          "subtypes": [
-            "Ally"
-          ],
-          "keywords": []
-        }
-      ],
+      "is_other": true,
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
@@ -44241,19 +44149,7 @@
       "is_class": false,
       "is_punch_fight": false,
       "is_other": false,
-      "creates_creatures": [
-        {
-          "power": "3",
-          "toughness": "3",
-          "colors": [
-            "U"
-          ],
-          "subtypes": [
-            "Serpent"
-          ],
-          "keywords": []
-        }
-      ],
+      "creates_creatures": [],
       "removal_destroy_or_exile": false,
       "is_mass_removal": false,
       "removal_burn_damage": null,
