@@ -92,6 +92,13 @@ class FirstRunDialog(QDialog):
 
         self.setWindowTitle("Mulligan Coach — Setup")
         self.setMinimumWidth(420)
+        # The labels below reuse the overlay's light-on-dark palette
+        # (_TEXT_PRIMARY / _TEXT_MUTED from stats_html), which is
+        # unreadable on the native light dialog background — so paint
+        # the dialog in the overlay's panel colour (same value as the
+        # tooltip / tray styling). Buttons keep their native style,
+        # which stays legible on the dark surface.
+        self.setStyleSheet("QDialog { background-color: #141418; }")
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 16, 16, 12)

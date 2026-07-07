@@ -82,6 +82,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMenu,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -490,6 +491,17 @@ class OverlayWindow(QWidget):
         title_row = QHBoxLayout(self._title_row_widget)
         title_row.setContentsMargins(0, 0, 0, 0)
         title_row.setSpacing(4)
+        # Tiny hotkey hint, left of the stretch so it hugs the panel's
+        # top-left corner. Teaches the collapse shortcut passively — the
+        # compact pill already tooltips "Alt+E to expand", but nothing
+        # advertised the hotkey while expanded. Hidden until main()
+        # confirms the Win32 hook actually installed
+        # (:meth:`show_hotkey_hint`), so we never advertise a shortcut
+        # that doesn't work (non-Windows, hook registration failure).
+        self._hotkey_hint = QLabel("Alt+E to minimize")
+        self._hotkey_hint.setStyleSheet(f"color: {_TEXT_MUTED}; font-size: 9px;")
+        self._hotkey_hint.setVisible(False)
+        title_row.addWidget(self._hotkey_hint)
         title_row.addStretch(1)
         # Collapse toggle. "-" when in normal (collapse-to-compact),
         # square when compact (expand-to-normal). Kept as text rather
@@ -1074,6 +1086,14 @@ class OverlayWindow(QWidget):
         """
         self._on_open_setup = on_open
 
+    def show_hotkey_hint(self) -> None:
+        """Reveal the "Alt+E to minimize" title-row hint.
+
+        Called by main() only after the global Win32 hotkey hook
+        reports a successful install.
+        """
+        self._hotkey_hint.setVisible(True)
+
     def _open_settings_menu(self) -> None:
         """Pop the title-bar settings menu under the gear button.
 
@@ -1238,6 +1258,13 @@ def main(argv: list[str] | None = None) -> int:
     qt_argv, autostart_launch = autostart.pop_autostart_flag(raw_argv)
 
     app = QApplication(qt_argv)
+    # Tray-app lifetime: Qt's default quits when the last visible window
+    # closes. The overlay hides itself whenever Arena isn't running, so
+    # with Arena closed a secondary window (the setup wizard, an update
+    # dialog) is often the ONLY visible window — closing it would kill
+    # the whole app. Quitting is explicit only: the overlay's ✕ button
+    # and the tray's "Quit Mulligan Coach" both call QApplication.quit().
+    app.setQuitOnLastWindowClosed(False)
     # Tooltip styling MUST live at the QApplication stylesheet level —
     # QToolTip is its own top-level window, not a child of the
     # OverlayWindow, so a widget-scoped stylesheet doesn't reach it.
@@ -1405,6 +1432,7 @@ def main(argv: list[str] | None = None) -> int:
         watcher.set_overlay_hwnd(hwnd)
         if hotkey_hook.install():
             log.info("global hotkey installed: Alt+E toggles compact mode")
+            window.show_hotkey_hint()
         else:
             log.warning(
                 "could not install Alt+E low-level keyboard hook; "
@@ -1620,18 +1648,46 @@ class _ExeUpdateController(QObject):
         if result.status == "update_available" and result.latest is not None:
             version = result.latest.bundle_version
             # Automatic checks notify once per new version per session;
-            # a manual check always shows the balloon.
+            # a manual check always gets feedback.
             if not manual and version == self._notified_version:
                 return
             self._notified_version = version
             title, body = update_available_message(result)
             self._tray.show_update_available(title, body, result.latest.release_page)
+            if manual:
+                self._show_manual_dialog(title, body, url=result.latest.release_page)
             return
         # up_to_date / unknown: silent on automatic checks, but a manual
-        # check told the user we'd look, so give an answer.
+        # check told the user we'd look, so give an answer. A message box
+        # rather than a tray balloon — Windows quietly diverts balloons
+        # to the notification centre often enough that a manual check
+        # looked like it did nothing at all (owner feedback 2026-07-07).
         if manual:
             title, body = manual_check_message(result)
-            self._tray.notify(title, body)
+            self._show_manual_dialog(title, body, url=None)
+
+    def _show_manual_dialog(self, title: str, body: str, *, url: str | None) -> None:
+        """Modal result box for a user-initiated check.
+
+        *url* (the release page) adds an "Open download page" button.
+        Parent is ``None`` on purpose: the overlay window is usually
+        hidden when the user is fiddling with menus outside a match,
+        and a message box parented to a hidden window can end up
+        stranded off-screen. Safe now that the application no longer
+        quits on last-window-close.
+        """
+        box = QMessageBox(
+            QMessageBox.Icon.Information,
+            title,
+            body,
+            QMessageBox.StandardButton.Close,
+        )
+        open_button = None
+        if url is not None:
+            open_button = box.addButton("Open download page", QMessageBox.ButtonRole.AcceptRole)
+        box.exec()
+        if open_button is not None and box.clickedButton() is open_button:
+            QDesktopServices.openUrl(QUrl(url))
 
 
 def _install_exe_update_check(
