@@ -212,8 +212,14 @@ def ensure_entry_current() -> None:
     so their login launches would look like manual launches and show
     the tray balloon every boot. When the entry exists, points at
     *this* EXE, and the stored text differs from :func:`_entry_value`,
-    rewrite it via :func:`enable`. Entries pointing at a different
-    EXE are left alone — that other copy owns them.
+    rewrite it via :func:`enable`.
+
+    Entries pointing at a different EXE that still *exists* are left
+    alone — that other copy owns them. But an entry whose target is
+    gone (the user unzipped a new copy elsewhere and deleted the old
+    folder, or installed over a previous manual copy) is adopted:
+    left as-is it would silently do nothing at every login, which
+    reads as "autostart is broken" with no error anywhere.
     """
     if not supported():
         return
@@ -221,7 +227,12 @@ def ensure_entry_current() -> None:
     if value is None:
         return
     stored = _parse_stored_command(value)
-    if stored is None or stored != _executable_path():
+    if stored is None:
+        return
+    if stored != _executable_path():
+        if not stored.exists():
+            log.info("autostart: Run entry targets missing %s; adopting for this EXE", stored)
+            enable()
         return
     if value.strip() != _entry_value():
         log.info("autostart: migrating Run entry to current format")
