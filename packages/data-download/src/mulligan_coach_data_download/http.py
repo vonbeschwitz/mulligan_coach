@@ -38,7 +38,8 @@ log = logging.getLogger(__name__)
 # themselves so they can reach out if we cause problems.
 USER_AGENT = (
     f"mulligan-coach-data-download/{__version__} "
-    "(+https://github.com/; bastian.vonbeschwitz@gmail.com)"
+    "(+https://github.com/vonbeschwitz/mulligan_coach_data; "
+    "bastian.vonbeschwitz@gmail.com)"
 )
 
 # Generous overall timeout — a multi-GB download over a slow link can take a

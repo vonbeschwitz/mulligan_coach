@@ -89,7 +89,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from . import arena_window, autostart, feedback, first_run, user_data
+from . import about, arena_window, autostart, feedback, first_run, user_data
 from ._frozen import configure_bundle_paths, configure_frozen_logging, running_bundle_version
 from .arena_card_db import find_card_database_in
 from .arena_paths import default_log_path
@@ -1123,6 +1123,9 @@ class OverlayWindow(QWidget):
         feedback_action = menu.addAction("Send feedback…")
         assert feedback_action is not None
         feedback_action.triggered.connect(lambda _checked=False: self._open_feedback())
+        about_action = menu.addAction("About Mulligan Coach")
+        assert about_action is not None
+        about_action.triggered.connect(lambda _checked=False: self._open_about())
         if autostart.supported():
             menu.addSeparator()
             action = menu.addAction("Start with Windows")
@@ -1152,6 +1155,15 @@ class OverlayWindow(QWidget):
         url = feedback.feedback_url()
         log.info("opening feedback URL: %s", url)
         QDesktopServices.openUrl(QUrl(url))
+
+    def _open_about(self) -> None:
+        """Show the About box (version + FCP disclaimer + data attributions).
+
+        Mirrors ``tray.OverlayTray._open_about``: the text is built by the
+        tested, Qt-free :mod:`about` module; only the ``QMessageBox`` lives
+        here. Parented to the overlay window so it centres over the panel.
+        """
+        QMessageBox.about(self, about.ABOUT_TITLE, about.about_text())
 
     @pyqtSlot(bool)
     def _toggle_autostart(self, checked: bool) -> None:

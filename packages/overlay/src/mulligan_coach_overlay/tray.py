@@ -45,9 +45,9 @@ from PyQt6.QtGui import (
     QPen,
     QPixmap,
 )
-from PyQt6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
-from . import autostart, feedback
+from . import about, autostart, feedback
 
 log = logging.getLogger(__name__)
 
@@ -115,6 +115,15 @@ class OverlayTray(QSystemTrayIcon):
         assert feedback_action is not None
         feedback_action.triggered.connect(lambda _checked=False: self._open_feedback())
         self._feedback_action = feedback_action
+
+        # "About Mulligan Coach" — always visible, self-contained. Carries
+        # the Fan Content Policy disclaimer + 17Lands/Scryfall/MTGJSON
+        # attributions the compliance position requires to be reachable
+        # in-app (see :mod:`about`).
+        about_action = self._menu.addAction("About Mulligan Coach")
+        assert about_action is not None
+        about_action.triggered.connect(lambda _checked=False: self._open_about())
+        self._about_action = about_action
 
         self._autostart_action: QAction | None = None
         if autostart.supported():
@@ -205,6 +214,16 @@ class OverlayTray(QSystemTrayIcon):
         url = feedback.feedback_url()
         log.info("opening feedback URL: %s", url)
         QDesktopServices.openUrl(QUrl(url))
+
+    def _open_about(self) -> None:
+        """Show the About box (version + FCP disclaimer + data attributions).
+
+        The text is built by the tested, Qt-free :mod:`about` module; only
+        the ``QMessageBox`` lives here. Parent is ``None`` — the tray has no
+        window, and the overlay hides itself whenever Arena isn't running, so
+        a top-level dialog is the only reliable anchor.
+        """
+        QMessageBox.about(None, about.ABOUT_TITLE, about.about_text())
 
     def show_started_message(self) -> None:
         """Balloon: the app is alive and will appear with Arena.
