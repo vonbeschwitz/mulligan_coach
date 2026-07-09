@@ -55,7 +55,7 @@ def _fail(returncode: int, stderr: str) -> subprocess.CompletedProcess[str]:
 
 
 _SAMPLE_ASSETS = [
-    {"name": "MulliganCoach.zip", "download_count": 42, "updated_at": "2026-07-01T00:00:00Z"},
+    {"name": "MulliganCoachSetup.exe", "download_count": 42, "updated_at": "2026-07-01T00:00:00Z"},
     {"name": "manifest.json", "download_count": 7, "updated_at": "2026-07-02T00:00:00Z"},
 ]
 
@@ -76,7 +76,7 @@ def test_records_each_asset(publisher: object, tmp_path: Path) -> None:
     first = rows[0]
     assert first["repo"] == "owner/repo"
     assert first["tag"] == "data-current"
-    assert first["name"] == "MulliganCoach.zip"
+    assert first["name"] == "MulliganCoachSetup.exe"
     assert first["download_count"] == 42
     assert first["updated_at"] == "2026-07-01T00:00:00Z"
     assert first["snapshot_at"].endswith("Z")  # timestamped

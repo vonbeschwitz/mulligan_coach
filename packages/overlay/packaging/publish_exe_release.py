@@ -1,59 +1,59 @@
-"""Publish the Mulligan Coach overlay EXE bundle to GitHub Releases.
+"""Publish the Mulligan Coach overlay installer to GitHub Releases.
 
 Companion to ``publish_data_release.py`` (which publishes the data
-auto-update feed). This one publishes the EXE itself so friends can
+auto-update feed). This one publishes the installer itself so users can
 download a fresh copy from a stable URL rather than getting a Discord
 DM with a Drive link every release.
 
 Workflow
 --------
 
-1. (Optional) Run ``build_distribution.py`` first to rebuild the bundle
-   from current source. Skipped with ``--skip-build`` if you've
-   already built and don't want the ~2 min rebuild cost.
-2. Zip ``dist/MulliganCoach/`` into a single ``MulliganCoach.zip``
-   (DEFLATE compression takes ~150 MB → ~150 MB. The bundle is
-   mostly already-compressed DLLs + a model JSON, so DEFLATE only
-   shaves a few percent — we still compress for tradition + so the
-   download is one file rather than a sprawling tree).
-3. Read the bundle's ``_internal/_bundle_version.txt`` stamp (written
-   by ``build_distribution.py``) and write a small ``exe_version.json``
-   sibling describing it. This is what a future in-app "update
-   available" notification (tier 2) will poll.
-4. Ensure the ``exe-latest`` release exists on the public
+1. **Build the distributable first — this script does NOT build.** Run
+   ``build_distribution.py`` to freeze the PyInstaller bundle, then
+   Inno Setup (``mulligan_coach.iss``) to wrap it into
+   ``dist/installer/MulliganCoachSetup.exe``. The publisher uploads that
+   pre-built installer *as-is* and never rebuilds, so the build stamp it
+   reads always matches the bundle actually inside the installer.
+2. Read the bundle's ``_internal/_bundle_version.txt`` stamp (written by
+   ``build_distribution.py``) and write a small ``exe_version.json``
+   sidecar describing the installer (build stamp + SHA256 + URL). This is
+   what the in-app "update available" notification polls.
+3. Ensure the ``exe-latest`` release exists on the public
    ``mulligan_coach_data`` repo, snapshot the existing assets' download
    counts to ``logs/download_counts.jsonl`` (``--clobber`` resets them),
-   then upload both files with ``gh release upload --clobber``.
+   then upload the installer + sidecar with ``gh release upload
+   --clobber`` so re-runs replace the assets in place.
+
+Why the installer and not a zip
+-------------------------------
+
+We ship a single per-user Inno Setup installer
+(``MulliganCoachSetup.exe``) as the one and only download: it needs no
+admin rights, gives a Start-menu entry + clean uninstall + upgrade in
+place, and is a *smaller* download than the raw bundle zip (lzma2 solid
+compression). Handing a non-technical MTG Arena player one file to run
+beats "extract this 325 MB folder and find the right .exe." (An earlier
+version of this script published a ``MulliganCoach.zip`` of the raw
+bundle; that was dropped when the installer became the distribution.)
 
 Why ``exe-latest`` and not ``exe-vN.M``
 ---------------------------------------
 
-For the friends-and-family scope, a floating tag is enough — friends
-download "the current version", not a specific historical build.
-Stable URL, no manifest-of-manifests, no "which version do I run?"
-question. The ``exe_version.json`` sidecar carries the actual build
-stamp for diagnostics + the future notification path. If we ever
-want true versioned releases, the upgrade path is per-release tags
-plus a ``latest`` redirect — not a blocker for now.
+For this scope, a floating tag is enough — users download "the current
+version," not a specific historical build. Stable URL, no
+manifest-of-manifests, no "which version do I run?" question. The
+``exe_version.json`` sidecar carries the actual build stamp for
+diagnostics + the update-notification path. If we ever want true
+versioned releases, the upgrade path is per-release tags plus a
+``latest`` redirect — not a blocker for now.
 
 Why a separate release from ``data-current``
 --------------------------------------------
 
-* Different cadences: data refreshes weekly+; the EXE only ships
+* Different cadences: data refreshes weekly+; the installer only ships
   on code-affecting changes (~3-4x / year for new mechanics).
-  Mixing them in one release would clutter the asset list and
-  confuse the lifecycle.
-* Different lifecycles: the data publisher re-clobbers each weekly
-  run. The EXE publisher runs maybe ten times a year. Separation
-  keeps each script focused and the GitHub Releases page readable.
-
-Why a separate Python script, not a CLI flag on the data publisher
------------------------------------------------------------------
-
-The two publishers share <30 lines of ``gh`` plumbing — duplicating
-that is cheaper than juggling a ``--what=data|exe|all`` flag. The
-EXE script also has a long build step that doesn't belong in the
-hot loop of the data publisher.
+* Different lifecycles: the data publisher re-clobbers each weekly run.
+  Separation keeps each script focused and the Releases page readable.
 
 Authentication
 --------------
@@ -66,41 +66,42 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
-import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DIST_DIR = REPO_ROOT / "dist" / "MulliganCoach"
+INSTALLER_PATH = REPO_ROOT / "dist" / "installer" / "MulliganCoachSetup.exe"
 
 _DEFAULT_REPO = "vonbeschwitz/mulligan_coach_data"
-"""Public companion repo that hosts both the data feed and the EXE.
+"""Public companion repo that hosts both the data feed and the installer.
 
-Same target as the data publisher — friends already trust one URL
-for updates; adding a second host would just add a place to break."""
+Same target as the data publisher — users already trust one URL for
+updates; adding a second host would just add a place to break."""
 
 _DEFAULT_TAG = "exe-latest"
-"""Floating release tag the EXE always lives at.
+"""Floating release tag the installer always lives at.
 
 The data publisher uses ``data-current``. Separate tags so the data
-release's frequent re-clobbers (potentially weekly) don't disturb
-the EXE release's stable URL — and so anyone browsing the Releases
-page sees a clear split."""
+release's frequent re-clobbers don't disturb the installer release's
+stable URL — and so anyone browsing the Releases page sees a clear
+split."""
 
-_ZIP_NAME = "MulliganCoach.zip"
-"""Asset name on the release. Matches the directory the user gets
-after extraction — keeps the rename invariant obvious."""
+_INSTALLER_NAME = "MulliganCoachSetup.exe"
+"""Asset name on the release. Matches the file the user downloads and
+runs — no version in the name, so the URL stays stable across builds."""
 
 _VERSION_JSON_NAME = "exe_version.json"
-"""Tiny JSON sidecar carrying the bundle stamp + zip SHA + URL.
+"""Tiny JSON sidecar carrying the bundle stamp + installer SHA + URL.
 
-This is the file a future "update available" notification (tier 2)
-will poll. Lightweight enough that fetching it every overlay launch
-is essentially free."""
+This is the file the "update available" notification polls. Lightweight
+enough that fetching it every overlay launch is essentially free."""
 
 
 def _run_gh(
@@ -139,7 +140,7 @@ def _ensure_release(repo: str, tag: str, *, dry_run: bool) -> None:
             "--repo",
             repo,
             "--title",
-            "Mulligan Coach EXE (latest)",
+            "Mulligan Coach installer (latest)",
             "--notes",
             _RELEASE_NOTES,
         ],
@@ -159,7 +160,7 @@ def _snapshot_download_counts(
 
     GitHub resets an asset's download counter when the asset is replaced,
     which every ``--clobber`` upload below does. Download counts are our
-    only install/usage signal (EXE-zip downloads ~ cumulative installs;
+    only install/usage signal (installer downloads ~ cumulative installs;
     see the going-public plan), so we append the current counts to an
     append-only log *before* clobbering, giving a reconstructable running
     total across publishes.
@@ -243,47 +244,29 @@ def _snapshot_download_counts(
 
 
 _RELEASE_NOTES = (
-    "Floating release for the Mulligan Coach overlay's shipped Windows binary.\n\n"
-    "Download `MulliganCoach.zip`, extract anywhere, and double-click "
-    "`MulliganCoach.exe`. The `exe_version.json` sidecar carries the bundle's "
-    "build stamp + SHA256 for an in-app update notification (future)."
+    "Floating release for the Mulligan Coach overlay installer.\n\n"
+    "Download `MulliganCoachSetup.exe` and run it (per-user install, no "
+    "admin prompt). The build is unsigned, so Windows SmartScreen shows a "
+    "warning on first run — click **More info -> Run anyway**. The "
+    "`exe_version.json` sidecar carries the build stamp + SHA256 for the "
+    "in-app update notification."
 )
-
-
-def _zip_bundle(dist_dir: Path, dest_zip: Path) -> None:
-    """Recursively zip *dist_dir* into *dest_zip*, paths relative to *dist_dir*.
-
-    Files inside the archive are stored under ``MulliganCoach/...``
-    (mirroring the directory the user gets after extraction), so
-    ``Compress-Archive``'s default "right-click → Extract All →
-    \\MulliganCoach\\MulliganCoach.exe" matches what the user expects.
-
-    ZIP_DEFLATED is used even though most of the bundle's bytes are
-    already-compressed DLLs — the small savings on the Python stdlib
-    + parsed-cards JSON files cumulatively shave a few MB.
-    """
-    parent = dist_dir.parent
-    with zipfile.ZipFile(dest_zip, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
-        for path in sorted(dist_dir.rglob("*")):
-            if not path.is_file():
-                continue
-            arcname = path.relative_to(parent).as_posix()
-            archive.write(path, arcname=arcname)
 
 
 def _read_bundle_version(dist_dir: Path) -> str:
     """Read ``_internal/_bundle_version.txt`` written by build_distribution.
 
     Returns the stamp string (UTC timestamp + short git hash). The
-    publisher refuses to ship a bundle without this stamp because
-    the future in-app update check needs a stable identifier to
-    compare against.
+    publisher refuses to ship a bundle without this stamp because the
+    in-app update check needs a stable identifier to compare against.
+    The stamp is read from the *bundle* (``dist/MulliganCoach/``) that
+    Inno Setup wrapped, so it always matches what's inside the installer.
     """
     stamp_file = dist_dir / "_internal" / "_bundle_version.txt"
     if not stamp_file.is_file():
         raise SystemExit(
-            f"!! {stamp_file} missing — rebuild via build_distribution.py "
-            "or pass --skip-build only when you're certain the bundle is current."
+            f"!! {stamp_file} missing — build the bundle first with "
+            "build_distribution.py (then Inno Setup to produce the installer)."
         )
     return stamp_file.read_text(encoding="utf-8").strip()
 
@@ -291,24 +274,21 @@ def _read_bundle_version(dist_dir: Path) -> str:
 def _build_version_sidecar(
     *,
     bundle_version: str,
-    zip_path: Path,
+    artifact_path: Path,
     repo: str,
     tag: str,
 ) -> dict[str, object]:
     """Return the JSON-ready dict written to ``exe_version.json``.
 
-    The fields are intentionally tier-2-ready: an in-app notifier
-    will fetch this URL, compare ``bundle_version`` to the running
-    EXE's stamp, and if they differ, surface ``download_url`` to
-    the user.
+    The fields are what the in-app notifier reads: it fetches this URL,
+    compares ``bundle_version`` to the running EXE's stamp, and if they
+    differ surfaces the release page to the user. ``download_url`` points
+    at the installer asset (the notifier opens the release *page* for the
+    install instructions, but the direct link is recorded here too).
 
-    Splitting it from the manifest used by the data updater so the
-    two evolve independently — the EXE doesn't need a "list of
-    artifacts", just "is there a newer build?".
+    ``artifact_path`` is the installer whose bytes we SHA + size.
     """
-    import hashlib
-
-    sha256 = hashlib.sha256(zip_path.read_bytes()).hexdigest()
+    sha256 = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
     base = f"https://github.com/{repo}/releases/download/{tag}"
     return {
         "schema_version": 1,
@@ -317,49 +297,59 @@ def _build_version_sidecar(
         .isoformat()
         .replace("+00:00", "Z"),
         "bundle_version": bundle_version,
-        "download_url": f"{base}/{_ZIP_NAME}",
+        "download_url": f"{base}/{_INSTALLER_NAME}",
         "sha256": sha256,
-        "size_bytes": zip_path.stat().st_size,
+        "size_bytes": artifact_path.stat().st_size,
         "release_page": f"https://github.com/{repo}/releases/tag/{tag}",
     }
 
 
-def _invoke_build() -> None:
-    """Run ``build_distribution.py`` from inside this script.
+def _require_installer(installer_path: Path) -> None:
+    """Fail early + helpfully if the pre-built installer is missing.
 
-    Subprocess rather than import so PyInstaller's clean-start
-    semantics aren't disturbed (PyInstaller mucks with sys.modules
-    during analysis; we'd rather isolate that).
+    The publisher never builds — building the bundle and wrapping it with
+    Inno Setup are separate, explicit steps. A missing installer almost
+    always means the user forgot the ISCC step, so say exactly that.
     """
-    script = REPO_ROOT / "packages" / "overlay" / "packaging" / "build_distribution.py"
-    python = REPO_ROOT / ".venv" / "Scripts" / "python.exe"
-    print(f">>> {python} {script}", flush=True)
-    subprocess.run([str(python), str(script)], check=True, cwd=REPO_ROOT)
+    if not installer_path.is_file():
+        raise SystemExit(
+            f"!! installer not found at {installer_path}.\n"
+            "   Build it first:\n"
+            "     .venv/Scripts/python.exe packages/overlay/packaging/build_distribution.py\n"
+            "     ISCC /DMyAppVersion=<x.y.z> packages/overlay/packaging/mulligan_coach.iss\n"
+            "   (the publisher uploads the existing installer; it does not build one)."
+        )
 
 
-def stage_artifacts(dist_dir: Path, out_dir: Path, *, repo: str, tag: str) -> tuple[Path, Path]:
-    """Zip the bundle + write ``exe_version.json`` into *out_dir*.
+def stage_artifacts(
+    dist_dir: Path,
+    installer_path: Path,
+    out_dir: Path,
+    *,
+    repo: str,
+    tag: str,
+) -> tuple[Path, Path]:
+    """Write ``exe_version.json`` for *installer_path* into *out_dir*.
 
-    The "produce the release artifacts" half of the publish flow, with
-    the "upload to GitHub" half omitted. Shared by :func:`main`'s upload
-    path (staging into a temp dir before ``gh release upload``) and by
-    the CI build workflow, which calls this via ``--stage-dir`` to grab
-    the same zip + sidecar as build outputs *without* touching any
-    release. Reusing one function keeps the zip layout and the sidecar
-    schema identical between a local publish and a CI build.
+    The "produce the release metadata" half of the publish flow, with the
+    "upload to GitHub" half omitted. Shared by :func:`main`'s upload path
+    (staging the sidecar into a temp dir before ``gh release upload``) and
+    by the CI build workflow, which calls this via ``--stage-dir`` to grab
+    the same sidecar as a build output *without* touching any release.
 
-    Returns ``(zip_path, version_json_path)``.
+    The installer itself is not copied — it's already at
+    ``installer_path`` and gets uploaded (or artifact-collected) from
+    there. Returns ``(installer_path, version_json_path)``.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
+    _require_installer(installer_path)
     bundle_version = _read_bundle_version(dist_dir)
-    zip_path = out_dir / _ZIP_NAME
-    _zip_bundle(dist_dir, zip_path)
     version_payload = _build_version_sidecar(
-        bundle_version=bundle_version, zip_path=zip_path, repo=repo, tag=tag
+        bundle_version=bundle_version, artifact_path=installer_path, repo=repo, tag=tag
     )
     version_json = out_dir / _VERSION_JSON_NAME
     version_json.write_text(json.dumps(version_payload, indent=2), encoding="utf-8")
-    return zip_path, version_json
+    return installer_path, version_json
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -367,57 +357,51 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", default=_DEFAULT_REPO, help="Public release host.")
     parser.add_argument("--tag", default=_DEFAULT_TAG, help="Release tag to (re)use.")
     parser.add_argument(
-        "--skip-build",
-        action="store_true",
-        help="Use the existing dist/MulliganCoach (skip the ~2 min rebuild).",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Build the zip + version JSON locally but skip every gh call.",
+        help="Build the version JSON locally but skip every gh call.",
     )
     parser.add_argument(
         "--stage-dir",
         default=None,
         help=(
-            "Write MulliganCoach.zip + exe_version.json into this directory and "
-            "stop — no gh calls, no release touched. Used by the CI build workflow "
-            "to collect the same artifacts a publish would, without publishing."
+            "Write exe_version.json into this directory and stop — no gh calls, "
+            "no release touched. Used by the CI build workflow to collect the "
+            "same sidecar a publish would, without publishing."
         ),
     )
     args = parser.parse_args(argv)
 
-    if not args.skip_build:
-        _invoke_build()
     if not DIST_DIR.exists():
         raise SystemExit(
-            f"!! {DIST_DIR} missing — run without --skip-build, or "
-            "build_distribution.py failed (check its output)."
+            f"!! {DIST_DIR} missing — run build_distribution.py first "
+            "(the sidecar's build stamp is read from the bundle)."
         )
+    _require_installer(INSTALLER_PATH)
 
-    # Non-publishing path: stage the artifacts to a durable directory and
+    # Non-publishing path: stage the sidecar to a durable directory and
     # return. Everything below this branch is GitHub-release plumbing the
     # CI build deliberately avoids (it uploads via actions/upload-artifact
     # and never creates a release).
     if args.stage_dir is not None:
-        zip_path, version_json = stage_artifacts(
-            DIST_DIR, Path(args.stage_dir), repo=args.repo, tag=args.tag
+        installer_path, version_json = stage_artifacts(
+            DIST_DIR, INSTALLER_PATH, Path(args.stage_dir), repo=args.repo, tag=args.tag
         )
         print(
-            f"staged {zip_path.name} ({zip_path.stat().st_size / 1e6:.1f} MB) + "
-            f"{version_json.name} to {args.stage_dir} (no upload)."
+            f"staged {version_json.name} to {args.stage_dir} "
+            f"(installer stays at {installer_path}; no upload)."
         )
         return 0
 
     bundle_version = _read_bundle_version(DIST_DIR)
     print(f"bundle_version = {bundle_version}")
+    print(f"installer: {INSTALLER_PATH} ({INSTALLER_PATH.stat().st_size / 1e6:.1f} MB)")
 
     with tempfile.TemporaryDirectory(prefix="mulligan-coach-exe-publish-") as tmp:
         staging = Path(tmp)
-
-        print(f"zipping {DIST_DIR} -> {staging / _ZIP_NAME}")
-        zip_path, version_json = stage_artifacts(DIST_DIR, staging, repo=args.repo, tag=args.tag)
-        print(f"zip size: {zip_path.stat().st_size / 1e6:.1f} MB")
+        _, version_json = stage_artifacts(
+            DIST_DIR, INSTALLER_PATH, staging, repo=args.repo, tag=args.tag
+        )
 
         if args.dry_run:
             print("\n----- exe_version.json (dry-run) -----")
@@ -429,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
         # them). Best-effort — never blocks the publish.
         _snapshot_download_counts(args.repo, args.tag, dry_run=args.dry_run)
         _run_gh(
-            ["release", "upload", args.tag, str(zip_path), "--repo", args.repo, "--clobber"],
+            ["release", "upload", args.tag, str(INSTALLER_PATH), "--repo", args.repo, "--clobber"],
             dry_run=args.dry_run,
         )
         _run_gh(
@@ -437,14 +421,14 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
         )
 
-        # Snapshot the published metadata for offline inspection —
-        # same convention the data publisher uses. The zip itself
-        # isn't snapshotted (it's ~150 MB; pulling it from the live
-        # release is cheaper if you actually need a copy).
+        # Snapshot the published metadata for offline inspection — same
+        # convention the data publisher uses. The installer itself isn't
+        # snapshotted (it's ~90 MB; pulling it from the live release is
+        # cheaper if you actually need a copy).
         logs_dir = REPO_ROOT / "logs"
         logs_dir.mkdir(parents=True, exist_ok=True)
         snapshot = logs_dir / "last_published_exe_version.json"
-        snapshot.write_text(version_json.read_text(encoding="utf-8"), encoding="utf-8")
+        shutil.copy(version_json, snapshot)
         print(f"\nversion snapshot saved to {snapshot}")
 
     return 0
