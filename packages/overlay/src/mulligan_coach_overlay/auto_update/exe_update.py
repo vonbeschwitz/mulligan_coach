@@ -26,9 +26,9 @@ Its shape (schema_version=1)::
       "schema_version": 1,
       "generated_at": "2026-05-25T23:59:06Z",
       "bundle_version": "20260525T235826Z+177d370",
-      "download_url": "https://github.com/.../exe-latest/MulliganCoach.zip",
+      "download_url": "https://github.com/.../exe-latest/MulliganCoachSetup.exe",
       "sha256": "81ee80dd...",
-      "size_bytes": 127355710,
+      "size_bytes": 88926638,
       "release_page": "https://github.com/.../releases/tag/exe-latest"
     }
 
@@ -127,13 +127,13 @@ class ExeVersionParseError(ValueError):
 class ExeVersionInfo:
     """Parsed ``exe_version.json`` sidecar.
 
-    ``download_url`` is the direct ZIP; ``release_page`` is the
+    ``download_url`` is the direct installer link; ``release_page`` is the
     human-facing GitHub release (notes + SmartScreen context). The GUI
     opens ``release_page`` by default so the user lands somewhere that
     explains the SmartScreen prompt rather than triggering a raw
-    ~130 MB download on click. ``sha256`` / ``size_bytes`` are carried
+    ~90 MB download on click. ``sha256`` / ``size_bytes`` are carried
     for display / diagnostics only — notify-only means we never fetch
-    the ZIP, so we never verify them here.
+    the installer, so we never verify them here.
     """
 
     bundle_version: str

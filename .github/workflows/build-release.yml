@@ -1,6 +1,6 @@
 # Build the Windows distribution: PyInstaller bundle -> Inno Setup
-# installer, plus the same zip + version sidecar the local publisher
-# produces. Uploads everything as *workflow build artifacts*.
+# installer, plus the version sidecar the local publisher produces.
+# Uploads everything as *workflow build artifacts*.
 #
 # What this workflow does NOT do (by design):
 #   * It never creates or modifies a GitHub Release, and never uploads
@@ -18,8 +18,7 @@
 #      pick the branch, optionally set a version (e.g. 1.0.0), Run.
 #   2. When it finishes, open the run and download the
 #      "mulligan-coach-windows-build" artifact. It contains
-#      MulliganCoachSetup.exe, MulliganCoach.zip, exe_version.json,
-#      and SHA256SUMS.txt.
+#      MulliganCoachSetup.exe, exe_version.json, and SHA256SUMS.txt.
 #   3. Install from MulliganCoachSetup.exe on a Windows box and confirm
 #      the overlay launches. Only then publish via the local scripts.
 #
@@ -144,26 +143,21 @@ jobs:
             packages\overlay\packaging\mulligan_coach.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
 
-      # Produce MulliganCoach.zip + exe_version.json via the SAME code
-      # the publisher uses (stage-only mode: no gh, no release). Keeps
-      # the CI artifacts byte-for-byte shaped like a real publish.
-      - name: Stage zip + version sidecar
+      # Produce exe_version.json via the SAME code the publisher uses
+      # (stage-only mode: no gh, no release). Keeps the CI sidecar
+      # byte-for-byte shaped like a real publish. The installer's SHA in
+      # the sidecar is computed from dist/installer/MulliganCoachSetup.exe.
+      - name: Stage version sidecar
         run: >
           uv run python packages/overlay/packaging/publish_exe_release.py
-          --skip-build --stage-dir artifacts
+          --stage-dir artifacts
 
-      - name: Compute SHA256 checksums
+      - name: Compute SHA256 checksum
         shell: pwsh
         run: |
-          $targets = @(
-            "dist/installer/MulliganCoachSetup.exe",
-            "artifacts/MulliganCoach.zip"
-          )
-          $lines = foreach ($t in $targets) {
-            $hash = (Get-FileHash -Algorithm SHA256 -Path $t).Hash.ToLower()
-            "$hash  $(Split-Path $t -Leaf)"
-          }
-          $lines | Out-File -FilePath artifacts/SHA256SUMS.txt -Encoding ascii
+          $t = "dist/installer/MulliganCoachSetup.exe"
+          $hash = (Get-FileHash -Algorithm SHA256 -Path $t).Hash.ToLower()
+          "$hash  $(Split-Path $t -Leaf)" | Out-File -FilePath artifacts/SHA256SUMS.txt -Encoding ascii
           Get-Content artifacts/SHA256SUMS.txt
 
       - name: Upload build artifacts
@@ -174,6 +168,5 @@ jobs:
           retention-days: 14
           path: |
             dist/installer/MulliganCoachSetup.exe
-            artifacts/MulliganCoach.zip
             artifacts/exe_version.json
             artifacts/SHA256SUMS.txt
