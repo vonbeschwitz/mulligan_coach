@@ -16,6 +16,10 @@ Design choices fixed in the plan:
   matters.
 * Filter outputs are encoded as the literal color ``"any"`` and treated
   as a wildcard that satisfies any pip.
+* A permanent activates at most ONE of its mana abilities per payment.
+  Every encoded mana ability requires ``{T}``, so a land with two
+  abilities ("{T}: Add {C}." plus "{T}: Add {W} or {U}.") offers a
+  choice, not two mana.
 * The dedicated colorless symbol ``{C}`` is not yet supported; if a
   cost contains one, :func:`can_pay_cost` raises ``NotImplementedError``
   rather than silently mis-counting. Add support when a real card
@@ -228,14 +232,23 @@ _EXPAND_COST_CACHE: dict[int, tuple[ManaCost, list[_Requirement]]] = {}
 # Key: ``(id(cost), tuple(id(ref.ability) for ref in sorted_abilities))``
 # where ``sorted_abilities`` is the cmc-sorted list the DFS walks. Two
 # calls with the same key present the DFS with position-for-position
-# identical inputs — ``_search`` reads abilities only through
-# ``ability.cost.mana`` and ``ability.produces``, never through the
-# source ``Card`` — so the winning activation pattern and option
-# choices are the same. The key is deliberately the exact post-sort
-# *sequence* (not a canonicalised multiset): a canonical key would let
-# two states with different DFS walk orders share an entry, and a
-# position-pattern from one order can select different abilities in
-# the other.
+# identical inputs: ``_search`` reads abilities only through
+# ``ability.cost.mana`` and ``ability.produces``, plus the *source
+# grouping* (which positions belong to the same permanent — used to
+# enforce one activation per source). The grouping is itself a
+# deterministic function of the key sequence: copies of the same card
+# share one ``ParsedCard``, so an ability id identifies (card name,
+# ability index); every untapped copy contributes its full ability
+# sublist in parsed order (condition predicates take only ``state``,
+# never the owning copy, so per-copy filtering can't differ); and the
+# cmc sort is stable — hence the j-th occurrence of each of a name's
+# ability ids always belongs to the j-th copy in battlefield walk
+# order. Same key therefore means same grouping, and the winning
+# activation pattern and option choices are the same. The key is
+# deliberately the exact post-sort *sequence* (not a canonicalised
+# multiset): a canonical key would let two states with different DFS
+# walk orders share an entry, and a position-pattern from one order
+# can select different abilities in the other.
 #
 # Value: ``(cost, abilities, payment_positions | None)``. The payment
 # is stored as ``(position_in_sorted_abilities, chosen_option)`` pairs
@@ -500,7 +513,17 @@ def can_pay_cost(
         if positions is None:
             return None
         return [(sorted_abilities[pos], option) for pos, option in positions]
-    result = _search(reqs, sorted_abilities, 0, [0] * _N_BUCKETS, [])
+    # One activation per permanent: every encoded mana ability taps its
+    # source, so the DFS must never activate two abilities of the same
+    # land/dork in one payment. Positions sharing a source permanent are
+    # assigned the same *group id* (the first position with that
+    # source); ``_search`` tracks activated groups as a bitmask.
+    # Computed only on a cache miss — the hit path never searches.
+    source_groups: list[int] = []
+    first_pos_by_source: dict[int, int] = {}
+    for pos, ref in enumerate(sorted_abilities):
+        source_groups.append(first_pos_by_source.setdefault(ref.source.instance_id, pos))
+    result = _search(reqs, sorted_abilities, 0, [0] * _N_BUCKETS, [], source_groups, 0)
     _CSP_CACHE[key] = (
         cost,
         tuple(ref.ability for ref in sorted_abilities),
@@ -517,12 +540,22 @@ def _search(
     idx: int,
     counts: list[int],
     payment: list[tuple[int, list[ManaOption]]],
+    source_groups: list[int],
+    used_sources: int,
 ) -> list[tuple[int, list[ManaOption]]] | None:
     """DFS over skip/activate decisions. The payment is built as
     ``(position_in_abilities, chosen_option)`` pairs so the caller can
     cache it independently of which ``Card`` instances own the
     abilities this time around; :func:`can_pay_cost` rebinds positions
-    to live :class:`AbilityRef`\\ s."""
+    to live :class:`AbilityRef`\\ s.
+
+    ``source_groups[i]`` is the group id of position *i*'s source
+    permanent (see :func:`can_pay_cost`); ``used_sources`` is a bitmask
+    of group ids already activated on this branch. Together they
+    enforce one activation per permanent — every encoded mana ability
+    taps its source, so a land with two mana abilities (Gleaming
+    Bastion: "{T}: Add {C}." plus "{T}: Add {W} or {U}.") offers a
+    *choice* of abilities, never both in the same payment."""
     # Goal check first: with the current pool, can we pay everything?
     if _try_satisfy(reqs, counts):
         return payment
@@ -530,10 +563,15 @@ def _search(
         return None
     head = abilities[idx]
     # Branch 1: skip this ability.
-    result = _search(reqs, abilities, idx + 1, counts, payment)
+    result = _search(reqs, abilities, idx + 1, counts, payment, source_groups, used_sources)
     if result is not None:
         return result
-    # Branch 2: activate. Only legal if its own cost is payable now.
+    # Branch 2: activate. Only legal if the source permanent hasn't
+    # already been tapped for another of its abilities on this branch,
+    # and if the ability's own cost is payable now.
+    group_bit = 1 << source_groups[idx]
+    if used_sources & group_bit:
+        return None
     head_cost = head.ability.cost.mana
     if head.cmc > 0 and not _try_satisfy(_expand_cost(head_cost), counts):
         return None
@@ -546,7 +584,15 @@ def _search(
             assert _try_satisfy_inplace(_expand_cost(head_cost), new_counts)
         for color in option:
             new_counts[_BUCKET_IDX[color]] += 1
-        result = _search(reqs, abilities, idx + 1, new_counts, [*payment, (idx, option)])
+        result = _search(
+            reqs,
+            abilities,
+            idx + 1,
+            new_counts,
+            [*payment, (idx, option)],
+            source_groups,
+            used_sources | group_bit,
+        )
         if result is not None:
             return result
     return None

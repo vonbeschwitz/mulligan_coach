@@ -159,6 +159,57 @@ def filter_land(name: str = "Filter Land") -> ParsedCard:
     )
 
 
+def two_ability_land(name: str = "Two-Ability Land") -> ParsedCard:
+    """Gleaming Bastion (MSH) shape: one land with two separate {T}
+    mana abilities — "{T}: Add {C}." and "{T}: Add {W} or {U}.". Only
+    one can be activated per turn; the solver must never use both in
+    a single payment."""
+    return ParsedCard(
+        name=name,
+        set_code="TST",
+        collector_number=name,
+        oracle_id=_oid(),
+        rarity="rare",
+        raw_oracle_text="{T}: Add {C}.\n{T}: Add {W} or {U}.",
+        type_line="Land",
+        types=["Land"],
+        mana_cost=None,
+        mana_abilities=[
+            ManaAbility(cost=Cost(tap=True), produces=[["C"]]),
+            ManaAbility(cost=Cost(tap=True), produces=[["W"], ["U"]]),
+        ],
+        enter_condition=None,
+        status=ParseStatus.AUTO,
+    )
+
+
+def colorless_plus_filter_land(name: str = "Colorless Filter Land") -> ParsedCard:
+    """Surveillance Room (MSH) shape: "{T}: Add {C}." plus the filter
+    ability "{1}, {T}: Add one mana of any color." on the same land.
+    The {C} ability must not feed the filter's {1} — that would need
+    two taps of one land."""
+    return ParsedCard(
+        name=name,
+        set_code="TST",
+        collector_number=name,
+        oracle_id=_oid(),
+        rarity="common",
+        raw_oracle_text="{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
+        type_line="Land",
+        types=["Land"],
+        mana_cost=None,
+        mana_abilities=[
+            ManaAbility(cost=Cost(tap=True), produces=[["C"]]),
+            ManaAbility(
+                cost=Cost(mana=parse_mana_cost("{1}"), tap=True),
+                produces=[["any"]],
+            ),
+        ],
+        enter_condition=None,
+        status=ParseStatus.AUTO,
+    )
+
+
 # ----------------------------------------------------------------------
 # Creatures and spells
 # ----------------------------------------------------------------------
