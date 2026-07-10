@@ -45,7 +45,12 @@ from .validate import DeckEncodingError, check_deck_encodings
 # (see ``mulligan_coach_model.versioning``) so a training run can refuse to
 # stitch two simulator semantics into one model, and warned about at bundle
 # load when the running code no longer matches the trained model.
-SIMULATION_SEMANTICS_VERSION: int = 1
+# Version history:
+#   1 — initial versioned semantics.
+#   2 — mana solver enforces one activation per source permanent; a
+#       land with two mana abilities (Gleaming Bastion, Surveillance
+#       Room) can no longer "double-tap" for two mana in one payment.
+SIMULATION_SEMANTICS_VERSION: int = 2
 
 __all__ = [
     "SIMULATION_SEMANTICS_VERSION",

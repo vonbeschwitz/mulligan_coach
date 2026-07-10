@@ -132,6 +132,63 @@ def test_filter_land_alone_cannot_pay_anything() -> None:
     assert can_pay_cost(parse_mana_cost("{U}"), abilities, state) is None
 
 
+def test_two_ability_land_activates_only_one_ability() -> None:
+    """A land with two separate {T} mana abilities ("{T}: Add {C}."
+    plus "{T}: Add {W} or {U}.") is still one land — a single copy
+    must not pay a two-mana cost by activating both abilities.
+
+    Regression: the DFS used to branch per-ability without tracking
+    the source permanent, so one Gleaming Bastion "double-tapped" for
+    C+W and the simulator reported 2-drops as turn-1 castable whenever
+    the land was drawn."""
+    land = Card(instance_id=1, parsed=f.two_ability_land())
+    state = _state_with_battlefield(lands=[land])
+    abilities = available_mana_abilities(state)
+    assert len(abilities) == 2  # both abilities are individually on offer
+    assert can_pay_cost(parse_mana_cost("{1}{W}"), abilities, state) is None
+    # Any single one-mana cost the land covers is still payable.
+    assert can_pay_cost(parse_mana_cost("{W}"), abilities, state) is not None
+    assert can_pay_cost(parse_mana_cost("{U}"), abilities, state) is not None
+    assert can_pay_cost(parse_mana_cost("{1}"), abilities, state) is not None
+
+
+def test_two_copies_of_two_ability_land_are_distinct_sources() -> None:
+    """Two copies of the same two-ability land share ``ManaAbility``
+    objects (one ParsedCard per name in a real deck), but they are
+    distinct permanents — the one-activation-per-source rule must key
+    on the permanent, not the ability object."""
+    parsed = f.two_ability_land()
+    l1 = Card(instance_id=1, parsed=parsed)
+    l2 = Card(instance_id=2, parsed=parsed)
+    state = _state_with_battlefield(lands=[l1, l2])
+    abilities = available_mana_abilities(state)
+    payment = can_pay_cost(parse_mana_cost("{1}{W}"), abilities, state)
+    assert payment is not None
+    # One activation from each copy, never two from the same one.
+    assert {ref.source.instance_id for ref, _ in payment} == {1, 2}
+
+
+def test_colorless_plus_filter_land_cannot_feed_its_own_filter() -> None:
+    """Surveillance Room shape next to a Plains: the land may tap for
+    {C}, OR filter the Plains' {W} into any color — but its {C} ability
+    must not pay its own filter's {1} (two taps of one land).
+
+    With the pre-fix double-tap, Plains + this land paid {1}{U}
+    (C feeds the filter, filter makes U, W pays generic), which made
+    the land count as a phantom blue source in castability stats."""
+    plains = Card(instance_id=1, parsed=f.plains())
+    room = Card(instance_id=2, parsed=f.colorless_plus_filter_land())
+    state = _state_with_battlefield(lands=[plains, room])
+    abilities = available_mana_abilities(state)
+    assert can_pay_cost(parse_mana_cost("{1}{U}"), abilities, state) is None
+    # The legitimate filter line still works: Plains pays the {1},
+    # the filter's "any" output covers {U}.
+    payment = can_pay_cost(parse_mana_cost("{U}"), abilities, state)
+    assert payment is not None
+    # Plain two-mana costs are also fine (W + C, one tap each).
+    assert can_pay_cost(parse_mana_cost("{1}{W}"), abilities, state) is not None
+
+
 def test_hybrid_pip_pays_with_either_color() -> None:
     """{W/U} should accept a Plains alone, or an Island alone."""
     plains = Card(instance_id=1, parsed=f.plains())
