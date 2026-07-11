@@ -447,3 +447,79 @@ prod backed up to `models/choice_prod_pre_v9_backup/`). Verified: the
 promoted bundle loads with no version warning and `recommend_choice`
 returns zero degradations — the pipeline-version caveat both surfaces
 showed since Step 5 is cleared.
+
+# choice_v10 (simulation-semantics v2 caches) — runs 2026-07-10
+
+`models/choice_v10` = the v9 methodology re-run on the 2026-07-09/10
+re-materialisation of all six choice caches under
+`SIMULATION_SEMANTICS_VERSION = 2` (the PR #112 mana-solver
+double-tap fix) — see `packages/model/scripts/tune_choice_v10.py`
+(PR #113) and `logs/retrain_v2_20260709_210433/`. Same winning config
+as v9 (depth 6, lr 0.02, mcw 5, subsample 0.8); the draftid-hash
+split reproduced v9's train/val/test rows exactly, so the held-out
+comparison is apples-to-apples.
+
+**These runs use the post-2026-07-06 eval semantics** (5-band verdict,
+borderline excluded from judged denominators), so per-cell numbers are
+NOT comparable to the v6–v9 tables above. The fair v9 reference is the
+pooled judged agreement from the borderline-adoption study: **96.38%**
+(n=8,243, borderline 3.8%).
+
+## Full elite sets — v10 (judged-only semantics)
+
+| Set | Event | n | judged | borderline % | v10 agree | actual mull % | pred mull % | not-complete-disagree |
+|-----|-------|---|--------|--------------|-----------|---------------|-------------|-----------------------|
+| TLA | Premier | 4,392 | 4,218 | 3.96% | **96.75%** | 9.15%  | 5.65%  | 98.79% |
+| TLA | Trad    | 979   | 941   | 3.88% | **96.60%** | 21.25% | 19.61% | 98.62% |
+| TMT | Premier | 296   | 286   | 3.38% | **96.50%** | 7.09%  | 5.41%  | 98.95% |
+| TMT | Trad    | 253   | 243   | 3.95% | **95.47%** | 24.51% | 19.76% | 98.77% |
+| SOS | Premier | 1,546 | 1,493 | 3.43% | **95.85%** | 10.74% | 7.12%  | 98.73% |
+| SOS | Trad    | 777   | 742   | 4.50% | **95.55%** | 15.83% | 16.09% | 98.11% |
+
+Pooled: **7,638 / 7,923 = 96.40%** judged agreement (borderline
+320/8,243 = 3.88%) vs choice_v9's pooled 96.38% under identical
+semantics — a tie. Hard disagreements: 67 clear_keep+mulled +
+36 clear_mulligan+kept (v9: 70 + 35). (Logs:
+`logs/elite_v10_{TLA,TMT,SOS}.log`. Replay snapshot 2026-06-27, same
+as the v8/v9 runs, so the n's match exactly.)
+
+## Mull recall / precision (v10, judged only)
+
+| Set | Event | Mull recall | Mull precision |
+|-----|-------|-------------|----------------|
+| TLA | Premier | 68% (214/317) | 86% (214/248) |
+| TLA | Trad    | 91% (177/194) | 92% (177/192) |
+| TMT | Premier | 69% (11/16)   | 69% (11/16)   |
+| TMT | Trad    | 85% (47/55)   | 94% (47/50)   |
+| SOS | Premier | 68% (92/136)  | 84% (92/110)  |
+| SOS | Trad    | 90% (103/114) | 82% (103/125) |
+
+## Honest held-out (identical draftid_hash_v1 split, identical rows)
+
+| Model | test log-loss | brier | acc | n |
+|-------|---------------|-------|-----|---|
+| choice_v9  | 0.1745 | 0.0524 | 0.9284 | 139,087 |
+| choice_v10 | 0.1735 | 0.0523 | 0.9281 | 139,087 |
+
+Unlike the cross-version rows above, this pair IS row-comparable —
+same split scheme, same rows, only the simulation semantics differ.
+
+## Headline read (v10)
+
+- **Elite agreement ties v9** (96.40% vs 96.38% pooled) with slightly
+  better held-out fit on identical rows. The sim fix (PR #112) mostly
+  affects multi-ability-land decks, a small slice of hands — a wash on
+  aggregate elite agreement is the expected outcome.
+- **Zero simulator-unsafe decks** across all six cells (v7-era runs
+  dropped a few per set) — the encoding fixes + semantics v2 have
+  cleaned up the parse path.
+- **Eval wall-clock roughly halved** vs the v9 runs (Step-6 simulator
+  speedups) — ~6 min for TLA Premier's 4,392 rows at 10 workers.
+- **v10 is the promotion candidate**: it carries the semantics-v2
+  simulator (what the shipping code now runs — serving v9 on v2 sims
+  is a train/serve mismatch), the MSH commons encoding fixes, and full
+  lineage stamps ({simulation: 2, features: 3}; bundle loads with
+  version_warning=None).
+
+**choice_v10 was promoted to `models/choice_prod` 2026-07-10** (old
+prod backed up to `models/choice_prod_pre_v10_backup/`).
