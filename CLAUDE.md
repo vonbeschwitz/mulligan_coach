@@ -1,6 +1,6 @@
 # Mulligan Coach
 
-A real-time mulligan decision helper for Magic: The Gathering Arena Limited (Premier Draft, Sealed). Given an opening hand and decklist, it estimates the win probability of keeping vs. mulliganing and recommends a decision.
+A real-time mulligan decision helper for Magic: The Gathering Arena Limited (Premier Draft, Sealed). Given an opening hand and decklist, it estimates the probability of a good player keeping the hand and recommends a decision.
 
 ## Project owner context
 
@@ -12,9 +12,9 @@ The recommendation pipeline has three stages:
 
 1. **Card representation.** Each card in the format is converted into a structured representation capturing what it does mechanically (creature, removal, mana dork, card draw, land that ETBs tapped, etc.), its mana cost and color requirements, its 17Lands aggregate stats (GIH WR, OH WR, drawn WR), and any other features useful for simulation or modeling.
 
-2. **Monte Carlo simulation.** Given a hand and the rest of the deck, simulate thousands of games' worth of draws to estimate playability statistics — e.g., probability of making land drops 1–4, probability of casting your 2-drop on turn 2, expected mana available each turn. This produces a vector of "playability features" that summarizes how the hand is likely to play out.
+2. **Monte Carlo simulation.** Given a hand and the rest of the deck, simulate hundreds of games' worth of draws to estimate playability statistics — e.g., probability of making land drops 1–4, probability of casting your 2-drop on turn 2, expected mana available each turn. This produces a vector of "playability features" that summarizes how the hand is likely to play out.
 
-3. **XGBoost model.** Trained on 17Lands public game data, this model takes the playability features from the Monte Carlo simulation, plus hand- and deck-level features derived from card stats (sum of GIH WR, "earliness score" from OH WR vs. drawn WR differential, role counts, etc.), plus context (on play/draw, mulligan number, hand size), and predicts P(win | this hand). The recommendation compares P(win | keep current hand) vs. P(win | mulligan to N-1).
+3. **XGBoost model.** The production **choice model** is trained on 17Lands public replay data — every candidate opening hand (kept or mulliganed), filtered to competent players. It takes the playability features from the Monte Carlo simulation, plus hand- and deck-level features derived from card stats (sum of GIH WR, "earliness score" from OH WR vs. drawn WR differential, role counts, etc.), plus context (on play/draw, mulligan number, hand size), and predicts P(a skilled player would keep this hand). The recommendation maps that keep probability onto a five-band verdict (clear keep / marginal keep / borderline / marginal mulligan / clear mulligan). A parallel legacy **win model** predicting P(win | this hand) still lives in the repo (see `model` below) but is no longer what the UIs display.
 
 ## Sub-projects
 
@@ -113,20 +113,23 @@ Monte Carlo engine. Pure function: `(hand, deck, on_play) -> playability_feature
 XGBoost training and inference. Two parallel models share the
 upstream `simulate -> build_feature_row` pipeline:
 
-- **Win model** — trains on 17Lands game data (kept hands only); each row is a game, label is win/loss, features are derived from the opening hand, decklist, and on-play/draw. Inference: `(hand, deck, on_play, mulligan_number) -> P(win)`. Calling it twice (current hand vs. simulated mulligan to N-1) gives the comparison needed for a recommendation.
-- **Choice model** — trains on 17Lands replay data (every candidate hand, kept or mulled) filtered to competent players; label is `was_kept`. Inference: `(hand, deck, on_play, mulligan_number) -> P(skilled player would keep)`. Useful as a sanity check or ensemble component beside the win model. Reuses kept-hand simulations from the win-model cache so only mulled-away hands require fresh sims.
+- **Choice model (production)** — trains on 17Lands replay data (every candidate hand, kept or mulled) filtered to competent players; label is `was_kept`. Inference: `(hand, deck, on_play, mulligan_number) -> P(skilled player would keep)`. This is the model behind the verdict both the website and the overlay display. Reuses kept-hand simulations from the win-model cache so only mulled-away hands require fresh sims.
+- **Win model (legacy)** — trains on 17Lands game data (kept hands only); each row is a game, label is win/loss. Inference: `(hand, deck, on_play, mulligan_number) -> P(win)`; calling it twice (current hand vs. simulated mulligan to N-1) gave the original keep-vs-mull comparison. No shipped surface displays it and it is no longer retrained, but its feature caches are still materialised — the choice pipeline reuses them as its kept-hand simulation donor.
 
-Both train across multiple recent formats to mitigate the ~4-week 17Lands data lag for new sets. Feature set combines simulation outputs (playability) with hand/deck statistics (GIH WR sums, earliness scores, role counts, curve shape) and context (mulligan number, hand size, on play/draw).
+The choice model trains across multiple recent formats to mitigate the ~4-week 17Lands data lag for new sets. Feature set combines simulation outputs (playability) with hand/deck statistics (GIH WR sums, earliness scores, role counts, curve shape) and context (mulligan number, hand size, on play/draw).
 
 ### 6. recommend
 
 Shared keep/mulligan service used by both the website and the overlay.
-Composes `cards` + `features` + `simulation` + `model` into a single
-`RecommendationService.recommend_asymmetric(hand, deck, ...)` entry
-point with the asymmetric sim budget, mulligan-arm prefetch cache,
-+4 pp mulligan bias, and deeper-mulligan floor heuristic. Pure
-Python — no FastAPI, no Qt — so the overlay can depend on it
-without dragging in web framework code.
+Composes `cards` + `features` + `simulation` + `model` into the
+production `RecommendationService.recommend_choice(hand, deck, ...)`
+entry point, which runs the choice model and maps its keep
+probability onto the five-band verdict. The legacy
+`recommend_asymmetric` win-model path (asymmetric sim budget,
+mulligan-arm prefetch cache, +4 pp mulligan bias, deeper-mulligan
+floor heuristic) is retained for analysis scripts but is not what
+the UIs display. Pure Python — no FastAPI, no Qt — so the overlay
+can depend on it without dragging in web framework code.
 
 ### 7. website
 
@@ -135,7 +138,7 @@ FastAPI backend + HTMX frontend. Lightweight and easy to iterate on. Lets the us
 - Paste or upload an Arena decklist.
 - Specify their hand (card pickers).
 - Toggle on play / on draw and mulligan number.
-- See the playability statistics, the model's win probability for keep vs. mulligan, and the recommendation.
+- See the playability statistics, the model's keep probability, and the recommendation.
 
 This is the primary testing/validation surface for the simulation and model. It exists before the overlay because it isolates the recommendation pipeline from all the Arena-specific complexity (log parsing, transparent windows, fullscreen handling). Once the website produces good recommendations, the overlay just replaces the manual input step with automatic log-tailing.
 
@@ -146,7 +149,7 @@ PyQt6 transparent always-on-top window over MTG Arena.
 - Tails Arena's `Player.log` and parses GameStateMessage events to detect mulligan decisions, opening hands, decklists, on play/draw, and mulligan count.
 - Resolves card grpIds via Arena's local `Raw_CardDatabase` SQLite (MTGJSON's arena_id index lags weeks behind a freshly-rotated format; Arena's own DB is always current).
 - Calls into the shared `recommend` service — same logic the website uses.
-- Renders a small overlay panel near the mulligan UI showing keep vs. mulligan win probabilities and the recommendation.
+- Renders a small overlay panel near the mulligan UI showing the verdict and the mulligan probability.
 - Read-only log parsing only — no game memory access, no client interaction. This is the line WotC tolerates.
 
 ## Tech stack
@@ -221,7 +224,7 @@ all-format lifetime stat.
 
 ## Scope and non-goals
 
-- **In scope:** Limited only (Premier Draft, Sealed). London mulligan rules. Win probability estimation and keep/mull recommendation.
+- **In scope:** Limited only (Premier Draft, Sealed). London mulligan rules. Keep-probability estimation and keep/mull recommendation.
 - **Out of scope (for now):** Constructed formats, suggesting which card to bottom on a mulligan (could be a future feature), in-game advice after mulligan decision, deck building advice, opponent modeling.
 - **Out of scope permanently:** Anything that reads Arena's memory, modifies the client, or interacts with the game beyond reading the log file. WotC tolerates read-only log parsing; we will not cross that line.
 
