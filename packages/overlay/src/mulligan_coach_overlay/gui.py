@@ -89,7 +89,15 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from . import about, arena_window, autostart, feedback, first_run, user_data
+from . import (
+    about,
+    arena_window,
+    autostart,
+    feedback,
+    first_run,
+    how_it_works_dialog,
+    user_data,
+)
 from ._frozen import configure_bundle_paths, configure_frozen_logging, running_bundle_version
 from .arena_card_db import find_card_database_in
 from .arena_paths import default_log_path
@@ -1123,6 +1131,9 @@ class OverlayWindow(QWidget):
         feedback_action = menu.addAction("Send feedback…")
         assert feedback_action is not None
         feedback_action.triggered.connect(lambda _checked=False: self._open_feedback())
+        how_action = menu.addAction("How Mulligan Coach works…")
+        assert how_action is not None
+        how_action.triggered.connect(lambda _checked=False: self._open_how_it_works())
         about_action = menu.addAction("About Mulligan Coach")
         assert about_action is not None
         about_action.triggered.connect(lambda _checked=False: self._open_about())
@@ -1164,6 +1175,14 @@ class OverlayWindow(QWidget):
         here. Parented to the overlay window so it centres over the panel.
         """
         QMessageBox.about(self, about.ABOUT_TITLE, about.about_text())
+
+    def _open_how_it_works(self) -> None:
+        """Show the bundled how-it-works document.
+
+        Mirrors ``tray.OverlayTray._open_how_it_works``; parented to
+        the overlay window so it centres over the panel.
+        """
+        how_it_works_dialog.show_how_it_works(self)
 
     @pyqtSlot(bool)
     def _toggle_autostart(self, checked: bool) -> None:

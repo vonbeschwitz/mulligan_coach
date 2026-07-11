@@ -34,6 +34,8 @@ src/mulligan_coach_overlay/
 ├── feedback.py          # Build the "Send feedback" URL (Google Form pre-fill or Issues fallback)
 ├── first_run.py         # Setup assessment (Arena / Detailed Logs / card DB) + onboarded-state
 ├── first_run_dialog.py  # Thin Qt wizard dialog over first_run
+├── how_it_works.py      # Locate/load the bundled "How Mulligan Coach works" doc
+├── how_it_works_dialog.py  # Thin Qt dialog rendering that doc as scrollable markdown
 ├── log_tailer.py        # Poll-based tail + block / JSON parsing + event extraction
 ├── card_index.py        # arena_id -> ParsedCard (MTGJSON + Arena DB merged)
 ├── coordinator.py       # State machine: events -> CoordinatorOutput
@@ -294,7 +296,10 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   checker is configured — wired by `main()` via
   `window.enable_update_check`), "Setup & troubleshooting…" (wired via
   `window.enable_setup`, same wizard the tray opens), "Send feedback…"
-  (always), and the Windows-only "Start with Windows" toggle. The menu
+  (always), "How Mulligan Coach works…" (always; opens the bundled
+  `docs/how_it_works.md` — the repo is private, so the doc ships in
+  the bundle; see `how_it_works.py`), "About Mulligan Coach" (always),
+  and the Windows-only "Start with Windows" toggle. The menu
   is rebuilt on every open, so unwired entries are simply absent and
   the autostart checkbox re-reads the registry each time. Rationale:
   everything should be reachable from the overlay itself; the tray is

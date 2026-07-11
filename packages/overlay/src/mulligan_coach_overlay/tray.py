@@ -47,7 +47,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
-from . import about, autostart, feedback
+from . import about, autostart, feedback, how_it_works_dialog
 
 log = logging.getLogger(__name__)
 
@@ -115,6 +115,14 @@ class OverlayTray(QSystemTrayIcon):
         assert feedback_action is not None
         feedback_action.triggered.connect(lambda _checked=False: self._open_feedback())
         self._feedback_action = feedback_action
+
+        # "How Mulligan Coach works…" — always visible, self-contained.
+        # Opens the bundled algorithm/limitations document in a
+        # scrollable dialog (see :mod:`how_it_works`).
+        how_action = self._menu.addAction("How Mulligan Coach works…")
+        assert how_action is not None
+        how_action.triggered.connect(lambda _checked=False: self._open_how_it_works())
+        self._how_it_works_action = how_action
 
         # "About Mulligan Coach" — always visible, self-contained. Carries
         # the Fan Content Policy disclaimer + 17Lands/Scryfall/MTGJSON
@@ -224,6 +232,15 @@ class OverlayTray(QSystemTrayIcon):
         a top-level dialog is the only reliable anchor.
         """
         QMessageBox.about(None, about.ABOUT_TITLE, about.about_text())
+
+    def _open_how_it_works(self) -> None:
+        """Show the bundled how-it-works document.
+
+        Same split as the About box: document loading lives in the
+        tested :mod:`how_it_works`; only the dialog call lives here.
+        Parent is ``None`` for the same reason as :meth:`_open_about`.
+        """
+        how_it_works_dialog.show_how_it_works(None)
 
     def show_started_message(self) -> None:
         """Balloon: the app is alive and will appear with Arena.
