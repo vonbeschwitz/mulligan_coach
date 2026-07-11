@@ -34,7 +34,7 @@ Three stages (the user-facing explanation ships in the app — see
    card draw, land properties — built from Scryfall data plus reviewed
    LLM classification of oracle text.
 2. **Monte Carlo simulation.** Given the hand and the rest of the deck,
-   ~200 simulated games estimate how the hand actually plays out:
+   ~200 simulated games estimate how the hand actually plays out for the first 4 turns:
    land drops, on-curve casts, mana available each turn.
 3. **Model.** An XGBoost model trained on 17Lands public game and replay
    data combines the simulation output with card-quality statistics and
