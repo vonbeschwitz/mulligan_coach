@@ -5,18 +5,25 @@
 XGBoost mulligan-recommendation model. Two parallel models share most of
 the upstream pipeline:
 
-* **Win model** — predicts P(win | this hand, context) from 17Lands
-  game-data rows; labels are game outcomes.
-* **Choice model** — predicts P(skilled player would keep | this hand,
-  context) from 17Lands replay-data mulligan decisions, filtered to
-  competent players; labels are keep/mull choices.
+* **Choice model (production)** — predicts P(skilled player would keep
+  | this hand, context) from 17Lands replay-data mulligan decisions,
+  filtered to competent players; labels are keep/mull choices. This is
+  the model behind the verdict both UIs display (via
+  `packages/recommend`'s `recommend_choice`).
+* **Win model (legacy)** — predicts P(win | this hand, context) from
+  17Lands game-data rows; labels are game outcomes. Not displayed by
+  any shipped surface and no longer retrained; its feature cache is
+  still materialised as the choice pipeline's kept-hand simulation
+  donor.
 
 Both flow through `packages/features` and the simulator's per-row
 castability aggregates. The choice pipeline reuses kept-hand
 simulations from the win pipeline's cache so only mulled-away hands
 need fresh sims.
 
-Win-model layers (PRs 1-5):
+Win-model layers (PRs 1-5; legacy verdict path — but
+`feature_matrix.py`'s cache is still the kept-hand sim donor for
+choice training):
 
 ```
 src/mulligan_coach_model/
@@ -285,8 +292,11 @@ baseline coefficients (~70% of the rows instead of 100%) — at
 
 ## PR 5 — `inference.py`
 
-The single model-side interface that the website (PR 6) and
-overlay (PR 7) consume.
+The win-model inference interface. Historically the single
+model-side interface the website (PR 6) and overlay (PR 7)
+consumed; production surfaces now go through the choice model
+(`choice_inference.py`, via `packages/recommend`), so this is
+legacy-path machinery.
 
 * `ModelBundle.load(model_dir)` — load the three artifacts from a
   saved directory. `ModelBundle.from_train_result(result)` for
@@ -347,13 +357,12 @@ than "what is the win probability if we keep?"
 
 The two probabilities are independent signals:
 
+* **P(keep)** — the production verdict signal. Trained on the
+  *decisions* of skilled-enough players, so it captures human intuition
+  about keepability that the win model would have to derive indirectly.
 * **P(win)** — useful for raw expected-value reasoning. Calibrated on
   game outcomes across all players (after baseline residualisation).
-* **P(keep)** — useful as a sanity check or ensemble component, and as
-  the primary signal when callers care about decision similarity rather
-  than absolute outcome quality. Trained on the *decisions* of
-  skilled-enough players, so it captures human intuition about
-  keepability that the win model would have to derive indirectly.
+  Legacy: kept for analysis / sanity checks, not shown to users.
 
 Both share the same upstream `simulate -> build_feature_row` chain, so
 running them together costs one sim per hand (call
@@ -610,6 +619,11 @@ runs: each sub-step logs to a timestamped directory under
 steps whose output directory already exists (so a mid-chain
 crash can be picked up). `--overwrite-caches` forces re-
 materialisation (use after a simulator-semantics change).
+
+Current practice (owner ruling 2026-07-09): retrains target the
+**choice model only** — the win-model *training* step is skipped;
+the win-*cache* materialisation still runs because the choice
+materialiser reuses it as the kept-hand sim donor.
 
 Typical use:
 

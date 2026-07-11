@@ -12,8 +12,8 @@ Behaves like untapped.gg's overlay: topmost only when Arena (or the
 overlay itself) is the foreground window, follows Arena when it
 minimises, hides when Arena exits, and remembers the last submitted
 deck across restarts so a launch mid-match doesn't end up with "no
-deck loaded". Can be collapsed to a compact pill (verdict + keep% /
-mull% only) via a global hotkey or the title bar.
+deck loaded". Can be collapsed to a compact pill (verdict +
+mulligan-% only) via a global hotkey or the title bar.
 
 Pure read-only: only reads `Player.log`, never touches the Arena
 client, never reads Arena's memory. This is the line WotC tolerates
@@ -182,15 +182,16 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
 ## GUI surface
 
 * Two layouts on the same widget:
-  * **Expanded panel** — verdict, keep% / mull% (bias-adjusted),
-    resolved hand, a "Why this hand plays out the way it does"
+  * **Expanded panel** — verdict + mulligan probability (the
+    choice model's `mulligan_percent`; labelled "Mull X%" rather
+    than the imperative "Should mulligan", which invited
+    misreading), resolved hand, a
+    "Why this hand plays out the way it does"
     block mirroring the website's playability panel
     (mana base, curve hits, per-card playability table), and a
     debug footer.
-  * **Compact pill** — single line: ``verdict · keep% vs mull%``
-    at 12 px font (e.g. "Clear keep · 62.5% vs 47.3%"). No labels
-    on the percentages — context conveys which is which once the
-    user has seen the expanded panel.
+  * **Compact pill** — single line: ``verdict · mull X%``
+    at 12 px font (e.g. "CLEAR KEEP · mull 1%").
   Toggle via the title-bar collapse button, a left double-click
   anywhere on the panel, or the global hotkey **Alt+E** (Win32
   `RegisterHotKey`; registered under the overlay's HWND and routed
