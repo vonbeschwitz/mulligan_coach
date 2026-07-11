@@ -3,8 +3,10 @@
 Builds the Windows distribution of Mulligan Coach: a single folder
 containing `MulliganCoach.exe` plus the bundled Python runtime,
 PyQt6, XGBoost, the choice_prod model, parsed-cards JSON, and 17Lands
-ratings parquets. The folder is what gets zipped and sent to a
-friend.
+ratings parquets. The folder is wrapped into the Inno Setup installer
+(`MulliganCoachSetup.exe`) that `publish_exe_release.py` uploads to
+the public `exe-latest` release — installer-only distribution since
+2026-07-08.
 
 ## Build
 
@@ -57,18 +59,17 @@ the bundled copies without any source-code changes.
 
 ## Sharing the result
 
-```
-cd dist
-powershell Compress-Archive -Path MulliganCoach -DestinationPath MulliganCoach.zip
-```
-
-Send the ZIP. The recipient extracts it and runs `MulliganCoach.exe`.
-No installer, no Python install, no virtualenv on their machine.
+Build the Inno Setup installer (see "Installer (Inno Setup)" below)
+and publish it with `publish_exe_release.py` — that's the only
+supported distribution channel. A raw `Compress-Archive` zip of
+`dist/MulliganCoach/` still works for local testing, but we stopped
+shipping zips (owner decision 2026-07-08: the per-user installer
+covers the audience and the zip only added download-page confusion).
 
 On first launch Windows SmartScreen will warn that the binary is
-unrecognised — "More info" → "Run anyway". A real code-signing
-certificate would silence this; not worth it for a friends-and-
-family drop.
+unrecognised — "More info" → "Run anyway". Code signing would silence
+this; deliberately deferred until the tool gets traction (the install
+instructions on the public release walk users through the prompt).
 
 ## Runtime logs
 

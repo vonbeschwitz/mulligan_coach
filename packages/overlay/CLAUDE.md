@@ -298,8 +298,8 @@ too (anonymised — strip `clientMetadata` block, screen names, etc.).
   `window.enable_update_check`), "Setup & troubleshooting…" (wired via
   `window.enable_setup`, same wizard the tray opens), "Send feedback…"
   (always), "How Mulligan Coach works…" (always; opens the bundled
-  `docs/how_it_works.md` — the repo is private, so the doc ships in
-  the bundle; see `how_it_works.py`), "About Mulligan Coach" (always),
+  `docs/how_it_works.md` — frozen installs have no repo checkout, so
+  the doc ships in the bundle; see `how_it_works.py`), "About Mulligan Coach" (always),
   and the Windows-only "Start with Windows" toggle. The menu
   is rebuilt on every open, so unwired entries are simply absent and
   the autostart checkbox re-reads the registry each time. Rationale:

@@ -6,9 +6,10 @@ package), turns each card into a `ParsedCard`, and reports which cards
 the deterministic parser fully understood vs. which need LLM-based
 classification of their oracle text.
 
-This is the **first pass** — only deterministic parsing. The LLM
-classifier and 17Lands stat join come in later stages. The strategy is
-documented at `<repo>/.claude/plans/we-successfully-downloaded-the-noble-pancake.md`.
+Cards the deterministic parser can't fully encode go through an
+LLM-based encoding pass (hand-reviewed per set, persisted as
+`LLM_ENCODED`); 17Lands per-card stats are joined in by folded card
+name. See `CLAUDE.md` for design details.
 
 ## Quick start
 

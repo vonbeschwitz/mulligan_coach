@@ -2,7 +2,7 @@
 
 Derived per-card and hand-level features for the Mulligan Coach
 project. Consumes `ParsedCard` and `SeventeenLandsStats` from the
-`cards` package; produces feature vectors for the future XGBoost model.
+`cards` package; produces feature vectors for the XGBoost models.
 
 The first inhabitant is `seventeenlands_shrinkage` — sample-size-aware
 shrinkage of per-card OH/GD/GIH win rates toward a play-rate-conditional

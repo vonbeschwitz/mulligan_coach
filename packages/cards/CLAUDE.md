@@ -586,11 +586,13 @@ encode the chapter-I / level-1 effect.
 * Modal cards (Adventure, MDFC, Split, Saga) all bail on the layout
   check today. The Mode list could in principle express them; not
   worth it until the simulator wants to consume them.
-* The LLM classifier doesn't exist yet. `NEEDS_LLM` cards have empty
-  or partially-populated Modes / `mana_abilities` — downstream code
-  must handle that until the classifier lands. `role_features` is
-  populated whenever the parser could extract anything, even if
-  status is `NEEDS_LLM`.
+* LLM classification is a manual per-set encoding pass (Claude
+  hand-encodes each NEEDS_LLM card to `LLM_ENCODED`, following
+  `CARD_ENCODING_GUIDE.md`), not an automated classifier. Cards still
+  sitting at `NEEDS_LLM` (e.g. a set mid-encode) have empty or
+  partially-populated Modes / `mana_abilities` — downstream code must
+  handle that. `role_features` is populated whenever the parser could
+  extract anything, even if status is `NEEDS_LLM`.
 
 ## Encoding guide for LLM reviewers
 
