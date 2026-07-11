@@ -5,8 +5,11 @@ keep / mulligan recommendation live, by tailing Arena's `Player.log`.
 
 ## Status
 
-Foundation only at the moment: the log tailer + headless integration
-work today. The PyQt6 GUI pane comes in a follow-up commit.
+Shipped — this is the production surface. PyQt6 overlay window with
+Arena-follow behaviour, system tray icon, first-run wizard, data
+auto-update + EXE update notification, and the choice-model verdict
+via the shared `recommend` service. `packaging/` builds the public
+Windows installer. See `CLAUDE.md` for the full feature map.
 
 ## Running
 
@@ -16,10 +19,11 @@ work today. The PyQt6 GUI pane comes in a follow-up commit.
 # Then restart Arena so it actually starts writing the JSON payloads.
 
 uv sync
-uv run mulligan-coach-overlay-headless
+uv run mulligan-coach-overlay             # the GUI overlay
+uv run mulligan-coach-overlay-headless    # tail + print verdicts, no GUI
 ```
 
-The headless command tails `%LOCALAPPDATA%Low\Wizards Of The Coast\MTGA\Player.log`
+Both commands tail `%USERPROFILE%\AppData\LocalLow\Wizards Of The Coast\MTGA\Player.log`
 (override with `MULLIGAN_COACH_OVERLAY_LOG=...`) and prints a one-line
 recommendation each time Arena asks the player to keep or mulligan.
 
