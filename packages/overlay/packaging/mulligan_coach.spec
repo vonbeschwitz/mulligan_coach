@@ -82,6 +82,12 @@ RATINGS_DIR = _check_required(
     REPO_ROOT / "data" / "processed" / "seventeenlands" / "ratings",
     "17Lands ratings dir",
 )
+# The user-facing algorithm/limitations document behind the menus'
+# "How Mulligan Coach works…" entry. The main repo is private, so the
+# doc must ship inside the bundle (see overlay how_it_works.py).
+HOW_IT_WORKS_DOC = _check_required(
+    REPO_ROOT / "docs" / "how_it_works.md", "how_it_works.md doc"
+)
 
 # Workspace package source roots. Adding these to ``pathex`` lets
 # PyInstaller resolve imports of our local packages even when the
@@ -121,6 +127,7 @@ DATAS = [
     (str(CHOICE_MODEL_DIR), "models/choice_prod"),
     (str(PARSED_CARDS_DIR), "data/processed/parsed_cards"),
     (str(RATINGS_DIR), "data/processed/seventeenlands/ratings"),
+    (str(HOW_IT_WORKS_DOC), "docs"),
 ]
 # XGBoost ships its native ``xgboost.dll`` (and the version manifest
 # JSON next to it) inside the package's ``xgboost/lib/`` subdir, which
