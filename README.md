@@ -1,9 +1,8 @@
 # Mulligan Coach
 
-A real-time keep/mulligan helper for Magic: The Gathering Arena Limited.
-When Arena offers you a mulligan, a small overlay shows the estimated win
-probability of keeping versus mulliganing — computed from your actual hand
-and decklist — and recommends a decision.
+A real-time mulligan helper for Magic: The Gathering Arena Limited.
+When Arena offers you a mulligan, a small overlay shows the probability that a good player would mulligan the hand
+— computed from your actual hand and decklist — and recommends a decision.
 
 **[Download for Windows](https://github.com/vonbeschwitz/mulligan_coach_data/releases/tag/exe-latest)**
 — the installer, release notes, and SHA256 live on the public
