@@ -8,7 +8,7 @@ the caller a small result the GUI turns into a "new version available"
 notice with a button that opens the download page.
 
 Why notify-only (owner decision 2026-07-03, see
-``docs/going_public_plan.md`` decision #1): the EXE ships unsigned for
+``docs_archive/going_public_plan.md`` decision #1): the EXE ships unsigned for
 the open beta. An unsigned binary that silently rewrites its own
 executables is the single most antivirus-suspicious pattern there is.
 Full swap-on-restart self-update is deferred to Phase 2, gated on code

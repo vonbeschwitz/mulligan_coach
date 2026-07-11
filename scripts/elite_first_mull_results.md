@@ -319,7 +319,7 @@ the cross-scored table.)
 - **Action item surfaced:** the split-reproducibility bug means cross-run
   held-out comparisons silently leak. Fix = materialisation-invariant split
   (hash `draft_id` -> bucket) + a retrain of both models under it. Related to
-  the invisible-consistency risk in `docs/design_review_2026-07-01.md`.
+  the invisible-consistency risk in `docs_archive/design_review_2026-07-01.md`.
 
 # choice_v9 (TLA + TMT + SOS, FEATURES-v3 caches) — runs 2026-07-05
 

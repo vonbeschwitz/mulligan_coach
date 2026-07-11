@@ -250,7 +250,7 @@ The legacy `recommend_asymmetric` path gets none of this (out of scope).
   coverage fields, logging.
 * `packages/overlay/CLAUDE.md` + `packages/website/CLAUDE.md` — degradation
   rendering; correct any "keyed by arena_id" claims.
-* `docs/ROADMAP.md` — mark Step 5 DONE with a summary + the owner action
+* `docs_archive/ROADMAP.md` — mark Step 5 DONE with a summary + the owner action
   (re-materialise + retrain + promote).
 
 ## Out of scope
