@@ -11,13 +11,15 @@ advice.
 When you see a recommendation, two things have just happened behind the
 scenes:
 
-1. **Your hand was "goldfished" up to a thousand times.** A Monte Carlo
+1. **Your hand was "goldfished" a couple hundred times.** A Monte Carlo
    simulator plays out the first four turns of the game over and over: it
    shuffles the rest of your deck, draws cards, makes land drops, casts mana
    creatures and ramp spells, cycles and draws where sensible — and records
-   how the hand develops. From those playouts it computes things like "89%
-   chance you make your third land drop on turn 3" or "62% chance you can
-   cast a creature on turn 2."
+   how the hand develops. The app runs 200 of these simulated playouts per
+   hand — the same number used when training the model, and enough that
+   re-running the same hand barely moves the result. From those playouts it
+   computes things like "89% chance you make your third land drop on turn 3"
+   or "62% chance you can cast a creature on turn 2."
 
 2. **A trained model turned that into a verdict.** A machine-learning model
    (XGBoost) takes the simulation results, plus statistics about your hand
