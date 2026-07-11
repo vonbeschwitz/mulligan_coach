@@ -56,6 +56,12 @@ models/
 *.duckdb.wal
 *.duckdb.tmp
 
+# Internal planning/strategy docs (roadmap, design reviews, compliance
+# notes). Kept local-only: they're point-in-time working documents, not
+# user-facing documentation. User-facing docs stay in docs/
+# (how_it_works.md ships inside the EXE; specs/ document the design).
+docs_archive/
+
 # Per-user Claude Code harness state (permissions allowlist, lock files
 # for scheduled tasks, etc.). Only the local variants are ignored;
 # project-shared `.claude/settings.json` (if it ever exists) IS committed.

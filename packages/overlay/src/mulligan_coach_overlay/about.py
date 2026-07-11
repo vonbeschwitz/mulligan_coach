@@ -3,7 +3,7 @@
 Why this exists
 ---------------
 
-``docs/compliance_position.md`` lists — as a launch prerequisite — that
+``docs_archive/compliance_position.md`` lists — as a launch prerequisite — that
 the Wizards **Fan Content Policy (FCP) disclaimer** and the **17Lands
 (CC BY 4.0) / Scryfall / MTGJSON attributions** must be shown *inside the
 app*, "clearly visible at the top level, not hidden in a footnote," with a
@@ -28,7 +28,7 @@ PROJECT_URL = "https://github.com/vonbeschwitz/mulligan_coach_data"
 
 CONTACT_EMAIL = "bastian.vonbeschwitz@gmail.com"
 
-# Verbatim per docs/compliance_position.md's pre-launch checklist. Do NOT
+# Verbatim per docs_archive/compliance_position.md's pre-launch checklist. Do NOT
 # paraphrase — the FCP requires this exact wording.
 FCP_DISCLAIMER = (
     "Mulligan Coach is unofficial Fan Content permitted under the Fan "

@@ -1,6 +1,6 @@
 # Spec — Step 2: set-vocabulary fix + cached one-hot patch
 
-Authored by Fable 5 (2026-07-02) per docs/ROADMAP.md Step 2. Implementer:
+Authored by Fable 5 (2026-07-02) per docs_archive/ROADMAP.md Step 2. Implementer:
 Opus agent. Reviewer before merge: Fable. Builds on Step 1 (PR #82): this
 change is the FIRST real `FEATURES_SEMANTICS_VERSION` bump, so it exercises
 the new stamping machinery end to end.
@@ -99,7 +99,7 @@ Per shard directory:
 * features CLAUDE.md: update vocabulary text; note the v2 bump.
 * model CLAUDE.md: short section on the patch script + the train-time
   vocabulary assert.
-* docs/ROADMAP.md: mark Step 2 done.
+* docs_archive/ROADMAP.md: mark Step 2 done.
 
 ### E. Explicit non-regression note (do NOT "fix" this)
 

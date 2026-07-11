@@ -1,6 +1,6 @@
 # Spec — Step 1: pipeline version stamping + hash-based split
 
-Authored by Fable 5 (2026-07-02) per docs/ROADMAP.md Step 1. Implementer:
+Authored by Fable 5 (2026-07-02) per docs_archive/ROADMAP.md Step 1. Implementer:
 Opus agent. Reviewer before merge: Fable.
 
 ## Problem
