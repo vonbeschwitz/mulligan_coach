@@ -2689,3 +2689,231 @@ def test_enters_or_leaves_compound_self_etb_token_credits() -> None:
     )
     parsed = parse_card(card)
     assert len(parsed.role_features.creates_creatures) == 1
+
+
+# ---------------------------------------------------------------------------
+# HOB (The Hobbit) mechanics: storied / recruit / amass.
+#
+# Owner rulings 2026-08-09 — see the block comment above
+# ``_apply_hob_mechanics`` in parser.py.
+# ---------------------------------------------------------------------------
+
+_RECRUIT_REMINDER = (
+    "(Draw a card, then discard a card. If you discarded a nonland card, "
+    "create a 1/1 white Human Soldier creature token.)"
+)
+
+
+def test_storied_keyword_line_is_ignored() -> None:
+    """The Storied line alone must not block auto-classification."""
+    card = _scryfall(
+        name="Ori, Keeper of Songs",
+        type_line="Legendary Creature — Dwarf Bard",
+        mana_cost="{2}{W}",
+        power="2",
+        toughness="2",
+        oracle_text=(
+            "Storied (If you control three or more artifacts, legendaries, "
+            "and/or Sagas, you have an enduring story for the rest of the game.)"
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.status is ParseStatus.AUTO
+
+
+def test_enduring_story_gated_ability_grants_nothing() -> None:
+    """We always assume the story is NOT assembled, so gated text is dropped."""
+    card = _scryfall(
+        name="Storied Drawer",
+        type_line="Creature — Dwarf",
+        mana_cost="{1}{W}",
+        power="1",
+        toughness="1",
+        oracle_text=(
+            "Storied\nWhen this creature enters, if you have an enduring story, draw two cards."
+        ),
+    )
+    parsed = parse_card(card)
+    # The draw is gated on the enduring story, so it must not be credited.
+    assert parsed.role_features.cards_drawn == 0
+    assert parsed.role_features.cards_manipulated == 0
+
+
+def test_recruit_on_self_etb_credits_loot_and_token() -> None:
+    card = _scryfall(
+        name="Esgaroth Garrison",
+        type_line="Creature — Human Soldier",
+        mana_cost="{4}{W}",
+        power="3",
+        toughness="3",
+        oracle_text=f"When this creature enters, recruit. {_RECRUIT_REMINDER}",
+    )
+    parsed = parse_card(card)
+    rf = parsed.role_features
+    # Draw one then discard one is net zero cards: manipulation, not draw.
+    assert rf.cards_manipulated == 1
+    assert rf.cards_drawn == 0
+    assert len(rf.creates_creatures) == 1
+    body = rf.creates_creatures[0]
+    assert (body.power, body.toughness) == ("1", "1")
+    assert body.colors == ["W"]
+    assert body.subtypes == ["Human", "Soldier"]
+
+
+def test_recruit_on_enters_or_attacks_still_credits() -> None:
+    """Compound triggers that include the permanent's own entry count (guide §4)."""
+    card = _scryfall(
+        name="Bard's Company",
+        type_line="Creature — Human Citizen",
+        mana_cost="{2}{W}{U}",
+        power="2",
+        toughness="2",
+        oracle_text=f"Whenever this creature enters or attacks, recruit. {_RECRUIT_REMINDER}",
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.cards_manipulated == 1
+    assert len(parsed.role_features.creates_creatures) == 1
+
+
+def test_recruit_on_non_etb_trigger_credits_nothing() -> None:
+    """An opponent-cast trigger is not a self-ETB, so it grants no signal."""
+    card = _scryfall(
+        name="The Queen of Dale",
+        type_line="Legendary Creature — Human Noble",
+        mana_cost="{1}{W}",
+        power="1",
+        toughness="3",
+        oracle_text=(
+            "Whenever an opponent casts their first noncreature spell each turn, "
+            f"you recruit. {_RECRUIT_REMINDER}"
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.cards_manipulated == 0
+    assert parsed.role_features.creates_creatures == []
+
+
+def test_amass_creates_n_by_n_black_army() -> None:
+    card = _scryfall(
+        name="Gathering of Darkness",
+        type_line="Sorcery",
+        mana_cost="{3}{B}",
+        power=None,
+        toughness=None,
+        oracle_text="Amass Goblins 3.",
+    )
+    parsed = parse_card(card)
+    bodies = parsed.role_features.creates_creatures
+    assert len(bodies) == 1
+    body = bodies[0]
+    assert (body.power, body.toughness) == ("3", "3")
+    assert body.colors == ["B"]
+    # Keyword spells the type plurally; the token itself is singular.
+    assert body.subtypes == ["Goblin", "Army"]
+
+
+def test_saga_chapter_one_recruit_is_encoded() -> None:
+    """Recruit as chapter I counts; later chapters are out of scope (guide §6)."""
+    card = _scryfall(
+        name="The Mountain-king's Return",
+        type_line="Enchantment — Saga",
+        mana_cost="{2}{W}",
+        power=None,
+        toughness=None,
+        oracle_text=(
+            "(As this Saga enters and after your draw step, add a lore counter. "
+            "Sacrifice after III.)\n"
+            f"I — Recruit. {_RECRUIT_REMINDER}\n"
+            "II — Return target creature card with mana value 3 or less from your "
+            "graveyard to the battlefield.\n"
+            "III — Put a +1/+1 counter on up to one target creature."
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.is_saga is True
+    assert parsed.role_features.cards_manipulated == 1
+    assert len(parsed.role_features.creates_creatures) == 1
+
+
+def test_amass_in_later_saga_chapter_is_not_credited() -> None:
+    """Only chapter I is encoded, so a chapter-II amass must not add a body."""
+    card = _scryfall(
+        name="Down, Down to Goblin-town",
+        type_line="Enchantment — Saga",
+        mana_cost="{2}{B}",
+        power=None,
+        toughness=None,
+        oracle_text=(
+            "(As this Saga enters and after your draw step, add a lore counter. "
+            "Sacrifice after IV.)\n"
+            "I — Target opponent reveals their hand.\n"
+            "II — Amass Goblins 1.\n"
+            "III, IV — Target opponent loses 1 life and you gain 1 life."
+        ),
+    )
+    parsed = parse_card(card)
+    assert parsed.role_features.creates_creatures == []
+
+
+def test_multiface_card_keeps_front_face_mana_cost() -> None:
+    """Adventure / MDFC cards bail on layout but must still carry a cost.
+
+    Scryfall gives them a joint "{3}{B} // {B}" string the mana parser can't
+    read. Leaving ``mana_cost=None`` makes features.categories.cmc() report 0
+    and makes feature_builder skip the card's colour pips, so the front face's
+    cost is used instead.
+    """
+    card = _scryfall(
+        name="Gollum, Silent Slinker // Meager Meal",
+        layout="adventure",
+        type_line="Legendary Creature — Halfling Horror // Sorcery — Adventure",
+        mana_cost="{3}{B} // {B}",
+        oracle_text="",
+        card_faces=[
+            {
+                "name": "Gollum, Silent Slinker",
+                "mana_cost": "{3}{B}",
+                "type_line": "Legendary Creature — Halfling Horror",
+                "oracle_text": "Menace",
+            },
+            {
+                "name": "Meager Meal",
+                "mana_cost": "{B}",
+                "type_line": "Sorcery — Adventure",
+                "oracle_text": "Target player gains 2 life.",
+            },
+        ],
+    )
+    parsed = parse_card(card)
+    # Still routed to review (the layout itself isn't auto-handled)...
+    assert parsed.status is ParseStatus.NEEDS_LLM
+    # ...but the printed cost survives for the curve / colour features.
+    assert parsed.mana_cost is not None
+    assert parsed.mana_cost.raw == "{3}{B}"
+    assert parsed.mana_cost.cmc == 4
+
+
+def test_recruit_rider_does_not_swallow_the_primary_effect() -> None:
+    """Recruit/amass are riders — they must not consume the chunk.
+
+    Regression: the HOB hook originally ran before the counterspell matcher
+    and returned early, so "Counter target spell. … recruit." silently lost
+    ``is_counterspell``. Caught by the blind second-pass diff (2026-08-09).
+    """
+    card = _scryfall(
+        name="Sound the Trumpets",
+        type_line="Instant",
+        mana_cost="{1}{U}{U}",
+        power=None,
+        toughness=None,
+        oracle_text=(
+            "Counter target spell. If that spell's mana value was 2 or less, "
+            f"recruit. {_RECRUIT_REMINDER}"
+        ),
+    )
+    parsed = parse_card(card)
+    rf = parsed.role_features
+    assert rf.is_counterspell is True, "primary effect must still be classified"
+    # ...and the rider still credits alongside it.
+    assert rf.cards_manipulated == 1
+    assert len(rf.creates_creatures) == 1

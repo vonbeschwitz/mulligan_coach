@@ -879,6 +879,13 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures, self_name: str = "")
         chunk, self_name
     ):
         return
+    # HOB Storied: we always assume the enduring story is NOT assembled, so
+    # drop every sentence gated on it BEFORE any signal extraction — a gated
+    # draw / scry / loot / token must credit nothing. Done after the trigger
+    # gates above so those still see the original trigger prefix.
+    chunk = _drop_enduring_story_text(chunk)
+    if not chunk:
+        return
     # Loot patterns take precedence over the plain draw matcher — both
     # orders ("discard then draw" and "draw then discard") count as
     # manipulated cards rather than as new draws.
@@ -926,6 +933,11 @@ def _extract_triggered_signal(chunk: str, rf: RoleFeatures, self_name: str = "")
             rf.cards_manipulated += n
     # Mana production breadcrumb only — no role_features field today.
     _ = _INNER_ADD_MANA_RE.search(chunk)
+    # HOB recruit / amass nested inside a creditable trigger. The self-ETB
+    # gate above already ran, so reaching here means the trigger is the
+    # permanent's own entry (guide §4) and the signal counts. ``chunk`` is
+    # already enduring-story-stripped at this point.
+    _apply_hob_mechanics(chunk, rf=rf)
     # Bending mechanics nested inside a triggered ability.
     if _AIRBEND_RE.search(chunk):
         rf.is_bounce = True
@@ -1080,6 +1092,95 @@ def _match_bending_effect(chunk: str, rf: RoleFeatures | None = None) -> list[Ef
             )
         effects.append(NoopEffect(role_tag="create_token"))
     return effects
+
+
+# ---------------------------------------------------------------------------
+# HOB (The Hobbit) mechanics.
+#
+# Per the project owner's design call (2026-08-09):
+# * storied    → "If you control three or more artifacts, legendaries, and/or
+#                 Sagas, you have an enduring story for the rest of the game."
+#                We ALWAYS assume the enduring story is not yet active, so both
+#                the keyword line (ignored via IGNORABLE_KEYWORD_LINES) and
+#                every ability gated on having one contribute nothing.
+# * recruit    → "Draw a card, then discard a card. If you discarded a nonland
+#                 card, create a 1/1 white Human Soldier creature token."
+#                Encode BOTH halves: the loot is net-0 cards so it lands in
+#                cards_manipulated (guide §2), plus the 1/1 body.
+# * amass <T> N → "Put N +1/+1 counters on an Army you control. If you don't
+#                 control an Army, create a 0/0 black <T> Army creature token
+#                 first." We assume no pre-existing Army, so it resolves to an
+#                 N/N black token — the same treatment earthbend gets.
+#
+# Crediting is still governed by the self-ETB rule (guide §4): recruit on an
+# attack or opponent-cast trigger contributes nothing, exactly like any other
+# non-ETB trigger. These helpers only describe WHAT the mechanic does; the
+# callers decide WHETHER it counts.
+# ---------------------------------------------------------------------------
+
+_RECRUIT_RE = re.compile(r"\brecruit\b", re.IGNORECASE)
+_AMASS_RE = re.compile(r"\bamass\s+(?P<kind>[A-Za-z]+)\s+(?P<n>\d+)\b", re.IGNORECASE)
+# Any sentence gated on the enduring story is dropped wholesale (see above).
+_ENDURING_STORY_RE = re.compile(r"[^.]*\benduring story\b[^.]*\.?", re.IGNORECASE)
+
+
+def _drop_enduring_story_text(chunk: str) -> str:
+    """Remove every sentence gated on having an enduring story.
+
+    We assume the story is never assembled, so those clauses grant nothing.
+    Applied before signal extraction so a gated draw / token / pump is not
+    credited to role_features.
+    """
+    return _ENDURING_STORY_RE.sub("", chunk).strip()
+
+
+def _recruit_body() -> CreatureBody:
+    """The 1/1 white Human Soldier token that recruit creates."""
+    return CreatureBody(
+        power="1", toughness="1", colors=["W"], subtypes=["Human", "Soldier"], keywords=[]
+    )
+
+
+def _amass_body(kind: str, n: int) -> CreatureBody:
+    """The N/N black ``<kind> Army`` token that ``amass <kind> N`` creates.
+
+    17Lands / Scryfall spell the creature type plurally in the keyword
+    ("Amass Goblins 2") but the token itself is singular ("a 0/0 black Goblin
+    Army creature token"), so de-pluralise before recording the subtype.
+    """
+    subtype = kind[:-1] if kind.lower().endswith("s") else kind
+    return CreatureBody(
+        power=str(n),
+        toughness=str(n),
+        colors=["B"],
+        subtypes=[subtype.capitalize(), "Army"],
+        keywords=[],
+    )
+
+
+def _apply_hob_mechanics(chunk: str, rf: RoleFeatures | None) -> list[Effect] | None:
+    """Recognise recruit / amass and reflect them into ``rf``.
+
+    Returns ``None`` when the chunk contains neither, so callers can fall
+    through to their other matchers — same contract as
+    :func:`_match_bending_effect`.
+    """
+    effects: list[Effect] = []
+    if _RECRUIT_RE.search(chunk):
+        if rf is not None:
+            # Draw 1 then discard 1 — net zero cards, so it's manipulation.
+            rf.cards_manipulated += 1
+            rf.creates_creatures.append(_recruit_body())
+        effects.append(NoopEffect(role_tag="loot"))
+        effects.append(NoopEffect(role_tag="create_token"))
+    for m in _AMASS_RE.finditer(chunk):
+        n = _to_int(m.group("n"))
+        if n is None:
+            continue
+        if rf is not None:
+            rf.creates_creatures.append(_amass_body(m.group("kind"), n))
+        effects.append(NoopEffect(role_tag="create_token"))
+    return effects or None
 
 
 def _try_build_waterbend_mode(chunk: str, rf: RoleFeatures | None) -> Mode | None:
@@ -1385,6 +1486,16 @@ def _match_spell_effect(
     produces no simulator-relevant effects (pure removal spells become
     [NoopEffect(role_tag="…")]).
     """
+    # HOB recruit / amass are RIDERS: they attach to a chunk that usually also
+    # carries a primary effect ("Counter target spell. … recruit."). So apply
+    # their role_features side effects up front WITHOUT consuming the chunk —
+    # the specific matchers below still get to classify the primary effect.
+    # Only if nothing else matches do we fall back to the rider's own effects
+    # (a bare saga chapter "Recruit." / "Amass Goblins 2."). Consuming the
+    # chunk here instead silently dropped is_counterspell on Sound the
+    # Trumpets — caught by the blind second-pass diff, 2026-08-09.
+    hob_effects = _apply_hob_mechanics(_drop_enduring_story_text(chunk), rf=rf)
+
     # Land-fetch — "Search your library for a basic land card, put it
     # onto the battlefield tapped, then shuffle." (Evolving Wilds-style).
     # Tried first so the activated-ability path on sac-fetch lands
@@ -1587,6 +1698,11 @@ def _match_spell_effect(
         return [NoopEffect(role_tag="life_gain")]
     if _LIFE_LOSS_RE.match(chunk):
         return [NoopEffect(role_tag="life_loss")]
+
+    # Nothing else claimed the chunk — if it was a bare recruit / amass line,
+    # its effects are the whole content (see the rider note at the top).
+    if hob_effects is not None:
+        return hob_effects
 
     return None
 
@@ -3029,6 +3145,12 @@ def _parse_other_permanent(
             if not _is_death_trigger(chunk):
                 _record_drop("static_tolerated", chunk)
             continue
+        # HOB recruit / amass as a DIRECT effect rather than a trigger — a bare
+        # saga chapter "Recruit." / "Amass Goblins 2.". Checked LAST so a chunk
+        # that also carries a primary effect is classified by that effect's own
+        # matcher first (see the rider note in _match_spell_effect).
+        if _apply_hob_mechanics(_drop_enduring_story_text(chunk), rf=role_features) is not None:
+            continue
         blockers.append(f"unrecognised line: {chunk!r}")
 
     modes.extend(extra_modes)
@@ -3581,14 +3703,21 @@ def parse_card(
 
     # Saga and Class share the enchantment branch but only encode their
     # always-on / first-chapter effect; let them through the layout gate.
-    if layout not in {"normal", "saga", "class"}:
-        return ParsedCard(
-            status=ParseStatus.NEEDS_LLM,
-            reasons=[f"non-normal layout {layout!r} — DFC/split/adventure not handled yet"],
-            **base,
-        )
-
+    # Resolve the printed cost BEFORE the layout gate below. Cards that bail
+    # to review (adventure / MDFC / split) still need a usable ``mana_cost``:
+    # it feeds curve + colour-pip features (`features.categories.cmc`,
+    # `feature_builder`) and the simulator's L1 land-drop tiebreak, all of
+    # which silently fall back to 0 / skip the card when it is None.
+    #
+    # Scryfall gives multi-face cards a JOINT cost string ("{3}{B} // {B}")
+    # that the mana parser can't read. The FRONT face's cost is the card's
+    # canonical cost for those purposes — an Adventure creature is a 4-drop
+    # that happens to have a cheap alternative mode, and the modes carry the
+    # alternative cost already.
     raw_cost = str(card.get("mana_cost") or "")
+    if " // " in raw_cost:
+        faces = card.get("card_faces") or []
+        raw_cost = str((faces[0].get("mana_cost") if faces else "") or "")
     if raw_cost:
         try:
             base["mana_cost"] = parse_mana_cost(raw_cost)
@@ -3598,6 +3727,13 @@ def parse_card(
                 reasons=[f"unparseable mana cost {raw_cost!r}: {exc}"],
                 **base,
             )
+
+    if layout not in {"normal", "saga", "class"}:
+        return ParsedCard(
+            status=ParseStatus.NEEDS_LLM,
+            reasons=[f"non-normal layout {layout!r} — DFC/split/adventure not handled yet"],
+            **base,
+        )
 
     # Build a RoleFeatures from the type system. The per-type parsers may
     # add to it (creates_creatures, removal flags, etc.).

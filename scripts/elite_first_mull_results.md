@@ -523,3 +523,80 @@ same split scheme, same rows, only the simulation semantics differ.
 
 **choice_v10 was promoted to `models/choice_prod` 2026-07-10** (old
 prod backed up to `models/choice_prod_pre_v10_backup/`).
+
+
+---
+
+# MSH out-of-sample skill-cohort agreement (run 2026-08-09)
+
+**First genuinely out-of-sample cohort test.** `choice_prod` (= choice_v10)
+trained on TLA + TMT + SOS only (6 shards; `set_code_MSH` exists as a feature
+column but has XGBoost split weight **0**, so MSH rows enter with an inert set
+one-hot). MSH replay data became available 2026-08-09; 344,630 Premier +
+48,308 Trad rows materialised at `n_sims_per_row=200` with zero sim/build
+failures. Run BEFORE any retrain that includes MSH — this experiment is
+unrepeatable afterwards.
+
+Logs: `logs/msh_oos/3_cohort_MSH_gate500.log`, `logs/msh_oos/4_cohort_gate100.log`,
+`models/choice_prod/transfer_choice_MSH.log`.
+
+## Headline: agreement rises monotonically with skill, and it holds out-of-sample
+
+PremierDraft, judged decisions only, agreement %:
+
+| cohort | MSH gate500 (OOS) | in-sample gate500 | MSH gate100 (OOS) | in-sample gate100 |
+|---|---|---|---|---|
+| mid_low  | 94.93 (n=4,004)  | 95.53 | 94.49 (n=42,566) | 94.91 |
+| mid      | 95.79 (n=4,269)  | 96.12 | 94.87 (n=51,782) | 95.39 |
+| mid_high | 96.56 (n=2,193)  | 96.08 | 95.24 (n=45,630) | 95.98 |
+| elite    | **96.72** (n=575) | **96.79** | **95.82** (n=13,816) | **96.54** |
+
+The monotonic ordering (mid_low < mid < mid_high < elite) holds in **all five**
+cohort runs — MSH gate500 Premier, MSH gate100 Premier/Trad, and both in-sample
+gate100 references. The in-sample gate500 baseline is the only run where it
+inverts slightly (mid 96.12 > mid_high 96.08).
+
+**Out-of-sample penalty is small**: −0.4 to −0.7 pp at gate 100 (the
+well-powered comparison). Far below the choice_v6→SOS precedent of ~2–3 pp.
+
+## Hard disagreement falls monotonically with skill
+
+"Hard" = a *clear_* verdict on the wrong side. PremierDraft:
+
+| cohort | MSH gate500 | MSH gate100 | in-sample gate100 |
+|---|---|---|---|
+| mid_low  | 2.09 | 2.55 | 1.94 |
+| mid      | 1.82 | 2.31 | 1.68 |
+| mid_high | 1.37 | 2.09 | 1.36 |
+| elite    | **0.55** | **1.60** | **1.11** |
+
+This is the cleanest signal in the study: the model's *confident* errors
+concentrate on weaker players, exactly as expected if it learned skilled play.
+
+## Calibration / log-loss on MSH
+
+`evaluate_choice_on_other_set.py --target-set MSH`: log_loss **0.1651** vs
+in-domain test 0.1735 (**−0.0084**), brier −0.0040. Decile calibration is tight
+(max gap +0.0087, mild over-prediction of keep in deciles 2–3).
+
+**Do not read the better log-loss as "the model is better on MSH."** MSH's
+keep rate is 0.9058 vs the training distribution's 0.8802 — there is simply less
+mulliganing to predict, so the base rate is easier. The honest statement is
+*no measurable degradation*, not improvement.
+
+## Caveats
+
+* **Elite gate500 cell is thin**: n=575 across only 94 drafts → 95% CI roughly
+  ±1.4–2.0 pp once clustering is accounted for. The −0.07 pp elite gap at
+  gate500 is noise; the gate100 elite figure (n=13,816, −0.72 pp) is the
+  trustworthy one.
+* **Format-difficulty is confounded with out-of-sample-ness** — a drop could be
+  MSH being a different format rather than the set being unseen. Unremovable
+  without an in-sample MSH reference, which cannot exist.
+* **MSH's elite population is drawn from a compressed WR tail**: only 5.96% of
+  its >=500-game players reach WR >= 0.62, vs 13.97–35.18% in TLA/TMT/SOS
+  (max WR bucket 0.66 vs 0.72–0.74). MSH's elite cohort is therefore not
+  sampled from quite the same slice as the baseline's.
+* Gate-100 and gate-500 runs are **not** comparable to each other (different
+  populations); compare only within a gate. See the `--min-n-games` note in
+  `scripts/cohort_first_mull_agreement.py`.

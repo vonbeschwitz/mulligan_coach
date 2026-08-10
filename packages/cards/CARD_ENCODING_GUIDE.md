@@ -1233,7 +1233,100 @@ Four more parser-vs-guide gaps found while reviewing MSH commons
   its reasons but left the parser-populated `cards_drawn=2` +
   DrawCardsEffect in place. Fields now match the ruling.
 
-## 20. When to update this guide
+## 20. HOB (The Hobbit) mechanics + the Adventure convention
+
+Owner rulings 2026-08-09, settled while encoding HOB. The first three
+are handled **deterministically** in `parser.py`
+(`_apply_hob_mechanics`, `_drop_enduring_story_text`) — a reviewer only
+sees these cards when something *else* on them needs judgment.
+
+### Storied — always assume you do NOT have an enduring story
+
+`Storied (If you control three or more artifacts, legendaries, and/or
+Sagas, you have an enduring story for the rest of the game.)`
+
+Assume the story is **never** assembled. The keyword line itself is in
+`IGNORABLE_KEYWORD_LINES`, and every sentence mentioning "enduring
+story" is stripped before signal extraction, so a gated draw / token /
+pump credits **nothing**. Same spirit as §9's "assume the resource
+isn't available". All 9 HOB Storied cards auto-classify as a result.
+
+### Recruit — encode BOTH halves
+
+`recruit` = "Draw a card, then discard a card. If you discarded a
+nonland card, create a 1/1 white Human Soldier creature token."
+
+* `cards_manipulated += 1` (draw-then-discard is net zero, per §2)
+* one 1/1 white Human Soldier in `creates_creatures`
+
+Crediting still obeys §4: recruit on a self-ETB or compound
+"enters or attacks" trigger counts (Esgaroth Garrison, Bard's
+Company); recruit on an opponent-cast trigger does not (The Queen of
+Dale); recruit as Saga **chapter I** counts (The Mountain-king's
+Return), as a later chapter it does not.
+
+### Amass \<Type\> N — an N/N black Army token
+
+`Amass Goblins 2` = "Put two +1/+1 counters on an Army you control. If
+you don't control an Army, create a 0/0 black Goblin Army creature
+token first." Assume **no pre-existing Army**, so it resolves to an
+N/N black `<singular Type> Army` body — the same treatment earthbend
+gets (§ TLA mechanics). Note the keyword spells the type plurally
+("Goblins") while the token is singular ("Goblin Army").
+
+### Adventure — two cast modes, unioned role_features
+
+**New layout for this project** — no set before HOB had one. Adventure
+is cast from **hand**, which puts it squarely in §14's hand-resident
+camp (unlike flashback / foretell, which are graveyard/exile-resident
+and must NOT get a second mode):
+
+* `Mode(kind="cast")` for the creature/permanent face at its full cost,
+  carrying `EntersBattlefieldEffect` for permanents.
+* `Mode(kind="cast")` for the Adventure face at the Adventure's own
+  cost, carrying the Adventure's effects. Give its noop effects an
+  `adventure:` `role_tag` prefix, matching the existing `kicker:` /
+  `prepared:` / `spree:` convention so the layout stays greppable.
+* `role_features` = the **union** of both faces: every boolean flag set
+  by either face is set; scalar fields take the MAX.
+
+The simulator iterates cast modes and picks the cheapest castable one,
+so a short-mana hand correctly plays the Adventure half. Accepted
+simplification: casting the Adventure consumes the card, so the sim
+can't later cast the creature from exile — immaterial for the
+mulligan-relevant turns 1–4.
+
+`mana_cost` stays `None` on Adventure cards (the parser can't parse
+`"{W} // {1}{W}"`), matching the MSH dual-cast MDFC precedent. Be aware
+`categories.cmc()` then reads 0 and colour-pip features skip the card.
+
+### Smaller rulings settled at the same time
+
+* **Threshold / Gift** — assume the favourable condition is NOT met (no
+  threshold, gift not promised), per §9 and the Storied ruling above.
+* **Self-bounce does NOT set `is_bounce`** (owner, 2026-08-09).
+  `is_bounce` lives under models.py's `# Soft removal` block and is
+  scoped to interacting with an *opponent's* permanents; returning your
+  own creature to hand is value, not removal. The Eagles Are Coming! is
+  the canonical case. Note `parser._BOUNCE_RE` still accepts "to your
+  hand", so auto-parsed cards can disagree — tighten it if this
+  recurs.
+* **Creature-type cycling** ("Halflingcycling {4}", HOB Hobbit Hole —
+  the first non-land typecycling in the repo) → a `kind="cycle"` Mode
+  with `discard_self` and a **NoopEffect**, `cards_drawn=0`. NOT
+  `DrawCardsEffect`: tutoring a specific nonland card isn't a draw
+  (§10/§17 tutor precedent), and a draw effect would let the simulator
+  satisfy *land* needs from an ability that can only find a Halfling.
+* **Sagas keep §6 strict even when a later chapter finds lands.**
+  Roads Go Ever, Ever On exiles two basic Plains at I and returns them
+  to hand at II/III; it encodes chapter I only, so the land-finding
+  contributes nothing. Consistent with the already-shipped TLA
+  precedent The Cave of Two Lovers, whose chapter II searches a
+  Mountain/Cave to hand and likewise contributes nothing.
+
+---
+
+## 21. When to update this guide
 
 Update when:
 
