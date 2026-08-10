@@ -460,7 +460,7 @@ Hand-crafted Scryfall-shaped dicts. No real data download required.
 After widening to handle Sagas (chapter I only), Classes (level-1 effect
 only), transform DFCs with uncastable back faces, and a few additional
 static-line tolerances (name-as-self-reference, "creature spells you cast
-have …"), across the five current Premier-Draft sets (TMT/ECL/TLA/SOS/MSH),
+have …"), across the current Premier-Draft sets (TMT/ECL/TLA/SOS/MSH/HOB),
 including each set's bonus sheet where one exists:
 
 | Set | auto | llm_encoded | needs_human | needs_llm |
@@ -470,6 +470,7 @@ including each set's bonus sheet where one exists:
 | TLA | 216 (63.2%) | 126 (36.8%) | 0 | 0 |
 | SOS | 186 (54.5%) | 155 (45.5%) | 0 | 0 |
 | MSH | 243 (72.8%) | 91 (27.2%) | 0 | 0 |
+| HOB | 134 (71.3%) | 54 (28.7%) | 0 | 0 |
 
 (Counts as of the 2026-07-06 detector rerun after the parser-hardening
 round — unknown-keyword tripwire, death-trigger skip, activated-ability

@@ -102,17 +102,24 @@ log = logging.getLogger("build_mulligan_decisions")
 # ---------------------------------------------------------------------------
 
 
-def download_if_missing(url: str, dest: Path, expected_min_bytes: int = 1000) -> None:
+def download_if_missing(
+    url: str, dest: Path, expected_min_bytes: int = 1000, *, force: bool = False
+) -> None:
     """Stream-download ``url`` to ``dest`` with a coarse progress line.
 
     Skips the download if ``dest`` already exists and is at least
     ``expected_min_bytes`` bytes — that's the cheap "we probably have
     it" check, good enough for ad-hoc rebuilds. To force a fresh
-    download, delete the file. Uses an atomic rename so a Ctrl-C
-    mid-download never leaves a corrupt file at the canonical path.
+    download, delete the file or pass ``force=True``. Uses an atomic
+    rename so a Ctrl-C mid-download never leaves a corrupt file at the
+    canonical path.
+
+    ``force`` exists for **cumulative** files that gain rows as new sets
+    release (cards.csv). Size-based caching is wrong for those: a stale
+    copy looks perfectly valid but silently lacks the new set's IDs.
     """
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists() and dest.stat().st_size >= expected_min_bytes:
+    if not force and dest.exists() and dest.stat().st_size >= expected_min_bytes:
         log.info("Already have %s (%.1f MB)", dest.name, dest.stat().st_size / 1e6)
         return
 
@@ -313,6 +320,24 @@ def build_decisions(
     df["hand"] = df["hand_arena_ids"].map(lambda s: resolve_hand(s, id_to_name))
     df["hand_size"] = df["hand"].map(lambda s: s.count("|") + 1).astype("int8")
 
+    # Guard: a stale cards.csv resolves none of a new set's Arena IDs, leaving
+    # every hand full of "?<id>" placeholders. Downstream that shows up only as
+    # `skipped_unknown_card` deep inside the materialiser, hours later — so fail
+    # here instead of writing a parquet that cannot be simulated.
+    unresolved = df["hand"].str.contains("?", regex=False)
+    unresolved_pct = 100.0 * unresolved.mean() if len(df) else 0.0
+    if unresolved_pct > 1.0:
+        example = df.loc[unresolved, "hand"].iloc[0] if unresolved.any() else "—"
+        raise RuntimeError(
+            f"{set_code}: {unresolved_pct:.1f}% of hands contain unresolved Arena IDs "
+            f"(example: {example!r}). cards.csv is almost certainly missing this set — "
+            f"delete data/raw/seventeenlands/cards.csv and re-run."
+        )
+    if unresolved_pct:
+        log.warning(
+            "  %s: %.2f%% of hands contain an unresolved Arena ID", set_code, unresolved_pct
+        )
+
     # Sanity: every candidate hand should be 7 cards under London mulligan.
     bad = df[df["hand_size"] != 7]
     if not bad.empty:
@@ -411,7 +436,12 @@ def main(argv: list[str] | None = None) -> int:
 
     # Download cards.csv (once) — used to resolve Arena IDs in hands.
     cards_csv = RAW_DIR / "cards.csv"
-    download_if_missing(CARDS_URL, cards_csv, expected_min_bytes=10_000)
+    # Always re-fetch: cards.csv is a small (~1.6 MB) cumulative index that
+    # gains rows with every new set. A cached copy from a previous set's run
+    # resolves none of the new set's Arena IDs, which silently produces a
+    # decisions parquet whose hands are all "?<id>" — see the unresolved-rate
+    # guard in build_decisions().
+    download_if_missing(CARDS_URL, cards_csv, expected_min_bytes=10_000, force=True)
     id_to_name = load_arena_id_to_name(cards_csv)
 
     written: list[Path] = []

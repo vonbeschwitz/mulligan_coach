@@ -104,6 +104,12 @@ IGNORABLE_KEYWORD_LINES: Final[frozenset[str]] = frozenset(
         # only "Sneak {N}" as their non-effect text auto-classify on the
         # rest of their oracle text.
         "sneak",
+        # HOB (The Hobbit) — "Storied" on its own line only tells you how to
+        # switch on an enduring story; it grants nothing by itself. Per the
+        # owner ruling (2026-08-09) we always assume the story is NOT yet
+        # assembled, so the line is pure noise and the abilities gated on it
+        # are stripped in parser.py (_drop_enduring_story_text).
+        "storied",
     }
 )
 
@@ -251,6 +257,9 @@ KNOWN_KEYWORDS_EXTRA: Final[frozenset[str]] = frozenset(
         "earthbend",
         "waterbend",
         "firebending",
+        # HOB — handled deterministically in parser.py (_apply_hob_mechanics),
+        # treated as creating an N/N black <type> Army token.
+        "amass",
         "power-up",
         "disappear",
         "double",
