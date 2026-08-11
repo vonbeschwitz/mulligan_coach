@@ -81,7 +81,7 @@ the wrong account when a contributor runs it from their fork."""
 _DEFAULT_TAG = "data-current"
 """Stable release tag the auto-updater's default URL points at."""
 
-_DEFAULT_SETS = ("TLA", "TMT", "ECL", "SOS")
+_DEFAULT_SETS = ("TLA", "TMT", "ECL", "SOS", "MSH", "HOB")
 """Currently-shipped Premier Draft formats. Update when a new set rotates in.
 
 Adding a set: rerun the publisher with ``--sets TLA TMT ECL SOS NEW``.

@@ -68,7 +68,13 @@ from .stats_join import fold_card_name, stats_for_card
 #     column set is unchanged, but the *values* of the ``avg_*_wr_*`` /
 #     ``max_*_wr_*`` / Z-bucket / castability ``*_high_oh_*`` features
 #     shift, so it is a value change and must bump.
-FEATURES_SEMANTICS_VERSION: int = 3
+#   3 -> 4 (HOB rotation, 2026-08): appended HOB to ``DEFAULT_KNOWN_SETS``.
+#     Adds one ``set_code_HOB`` column (all-zero in every existing cache —
+#     no 17Lands HOB data exists yet), so it is a column-set change and
+#     must bump. Existing v3 caches are upgraded in place by the
+#     ``set_onehots_v2`` migration in ``mulligan_coach_model.cache_patch``
+#     (no re-simulation needed).
+FEATURES_SEMANTICS_VERSION: int = 4
 
 __all__ = [
     "DEFAULT_KNOWN_EVENT_TYPES",

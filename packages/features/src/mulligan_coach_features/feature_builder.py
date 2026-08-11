@@ -91,7 +91,10 @@ DEFAULT_KNOWN_EVENT_TYPES: tuple[str, ...] = ("PremierDraft", "Sealed", "TradDra
 # in the FEATURES_SEMANTICS_VERSION 1 -> 2 bump (roadmap Step 2): before
 # that, SOS trained as the all-zero reference category and MSH (live on
 # Arena since 2026-06-26) was indistinguishable from it at inference.
-DEFAULT_KNOWN_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS", "MSH")
+# HOB was appended in the 3 -> 4 bump (2026-08, ahead of its 17Lands
+# data existing) so HOB decks encode distinctly at inference and the
+# first HOB-inclusive retrain needs no further vocabulary change.
+DEFAULT_KNOWN_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS", "MSH", "HOB")
 
 
 # ---------------------------------------------------------------------------

@@ -486,7 +486,7 @@ train on a cache older than the live code (the choice_v7 incident).
 `{"simulation": SIMULATION_SEMANTICS_VERSION, "features":
 FEATURES_SEMANTICS_VERSION}` — the two ints from the simulation and
 features packages. See each package's CLAUDE.md for the same-PR bump
-rules. Both are `1` today (version 1 == "current semantics").
+rules. Current values: simulation `2`, features `4`.
 
 ### `_meta.json` shard sidecar
 
@@ -580,9 +580,13 @@ atomic per chunk, validated before swap, idempotent), then bumps the
 shard's `_meta.json` features version via raw-JSON edit (preserving
 unknown keys, appending `patch_history`). CLI:
 `packages/model/scripts/patch_set_onehots.py` — scans both cache roots
-by default, `--dry-run` first, tee the output. The v1→v2 migration is
-pinned (`V2_KNOWN_SETS`, `set_onehots_v1`); a future vocabulary bump
-needs a NEW patch, not a reuse of this one (the module asserts this).
+by default, `--dry-run` first, tee the output. Each vocabulary bump is
+a pinned `Migration` record in `cache_patch.py` (`set_onehots_v1`:
++SOS/MSH, features 1→2; `set_onehots_v2`: +HOB, features 3→4, which
+also retired the meta-less legacy grace path — unstamped shards are now
+skipped, not guessed at); a future bump adds a NEW pinned migration and
+re-points `ACTIVE_MIGRATION` (the module asserts the active migration
+matches the live vocabulary).
 
 ## scripts/
 
