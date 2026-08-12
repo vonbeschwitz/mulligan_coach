@@ -470,7 +470,7 @@ including each set's bonus sheet where one exists:
 | TLA | 216 (63.2%) | 126 (36.8%) | 0 | 0 |
 | SOS | 186 (54.5%) | 155 (45.5%) | 0 | 0 |
 | MSH | 243 (72.8%) | 91 (27.2%) | 0 | 0 |
-| HOB | 134 (71.3%) | 54 (28.7%) | 0 | 0 |
+| HOB | 112 (59.6%) | 76 (40.4%) | 0 | 0 |
 
 (Counts as of the 2026-07-06 detector rerun after the parser-hardening
 round — unknown-keyword tripwire, death-trigger skip, activated-ability
@@ -478,7 +478,10 @@ cmc≤3 crediting gate, token-keyword capture, period-form modal text;
 see `CARD_ENCODING_GUIDE.md` §19. The auto rates are lower than the
 previous snapshot mostly because per-set audits keep converting `auto`
 cards to hand-checked `llm_encoded`, and totals now include each set's
-full bonus sheet.)
+full bonus sheet. HOB counts are from the 2026-08-11 rerun against the
+complete 188-card set — the full main set, blind-pass-verified; its
+bonus sheet, if one exists, can only be discovered once 17Lands
+publishes HOB ratings.)
 
 SOS has a lower auto rate because the Prepare layout (36 cards) always
 bails to NEEDS_LLM, the bonus-sheet reprints add 75 cards from older

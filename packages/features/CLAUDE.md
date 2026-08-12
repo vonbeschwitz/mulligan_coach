@@ -184,18 +184,20 @@ implements it.
 
 `build_feature_row(hand, deck, aggregate_stats, shrunk, zscores,
 on_the_play, mulligan_number, event_type, set_code)` returns a flat
-`dict[str, float]` of 202 columns (the three context one-hot families
+`dict[str, float]` of 203 columns (the three context one-hot families
 counted as one feature each):
 
-* **Context (3 / 9 columns)** — `on_the_play` + one-hot event_type
-  + one-hot set_code. Default vocabularies cover the five current
+* **Context (3 / 10 columns)** — `on_the_play` + one-hot event_type
+  + one-hot set_code. Default vocabularies cover the six current
   Premier Draft sets (`DEFAULT_KNOWN_SETS = ("TMT", "ECL", "TLA",
-  "SOS", "MSH")`) and three event types; new sets at inference time
-  produce all-zero columns rather than blowing up the row's shape.
+  "SOS", "MSH", "HOB")`) and three event types; new sets at inference
+  time produce all-zero columns rather than blowing up the row's shape.
   SOS + MSH were appended in the `FEATURES_SEMANTICS_VERSION` 1 -> 2
   bump (roadmap Step 2), which is why the row grew from 200 to 202
   columns; before it, SOS trained as the all-zero reference category
-  and MSH was indistinguishable from it at inference.
+  and MSH was indistinguishable from it at inference. HOB was appended
+  in the 3 -> 4 bump (202 -> 203 columns), ahead of any 17Lands HOB
+  data existing, so HOB decks encode distinctly at inference.
 * **Deck-level (16)** — curve percentages, removal %, color counts,
   avg WR of spells (shrunk).
 * **Hand-level (72)** — 13 basic counts + 42 role-by-MV grid
@@ -302,7 +304,7 @@ not something folding can recover). This change bumped
 ## Feature semantics version — when to bump `FEATURES_SEMANTICS_VERSION`
 
 `FEATURES_SEMANTICS_VERSION` (an `int` in
-`src/mulligan_coach_features/__init__.py`, currently `3`) identifies the
+`src/mulligan_coach_features/__init__.py`, currently `4`) identifies the
 *meaning* of a `build_feature_row` output. Like the simulator's version,
 it's stamped into feature-cache `_meta.json` sidecars and model
 `metadata.json` so stale caches and train/serve skew are caught rather
@@ -315,7 +317,10 @@ arena_id to folded card name — the column set is unchanged but the
 per-card WR / z-score / castability-`high_oh` *values* now populate
 for every card with a ratings row (they were zero under v2 whenever
 MTGJSON lacked the printing's arena_id), so it's a value change and
-must bump. Full history lives next to the constant in `__init__.py`.
+must bump. `3 → 4` (HOB rotation) appended HOB to `DEFAULT_KNOWN_SETS`
+(one new all-zero `set_code_HOB` column; existing caches upgraded in
+place by `cache_patch`'s `set_onehots_v2` migration). Full history
+lives next to the constant in `__init__.py`.
 
 **Bump it — in the SAME PR as the change — on any change to the values
 or the column set `build_feature_row` emits for fixed inputs.** That

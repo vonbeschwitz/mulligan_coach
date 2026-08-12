@@ -1,11 +1,12 @@
-"""Patch existing v1 feature caches to v2 set-code one-hot semantics.
+"""Patch existing feature caches after a set-vocabulary bump.
 
-Thin CLI over :mod:`mulligan_coach_model.cache_patch`. Roadmap Step 2
-appended ``SOS`` + ``MSH`` to the set-code one-hot vocabulary and bumped
-``FEATURES_SEMANTICS_VERSION`` 1 -> 2. Rather than re-simulating each
-format (~17 h/set), this rewrites only the ``set_code_*`` columns of the
-already-materialised chunks — purely from each chunk's stored
-``expansion`` column — and bumps each shard's ``_meta.json``.
+Thin CLI over :mod:`mulligan_coach_model.cache_patch`, applying its
+``ACTIVE_MIGRATION`` (currently ``set_onehots_v2``: HOB appended to the
+one-hot vocabulary, ``FEATURES_SEMANTICS_VERSION`` 3 -> 4). Rather than
+re-simulating each format (many hours/set), this rewrites only the
+``set_code_*`` columns of the already-materialised chunks — purely from
+each chunk's stored ``expansion`` column — and bumps each shard's
+``_meta.json``.
 
 By default it scans BOTH cache roots:
 

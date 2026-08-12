@@ -600,3 +600,70 @@ mulliganing to predict, so the base rate is easier. The honest statement is
 * Gate-100 and gate-500 runs are **not** comparable to each other (different
   populations); compare only within a gate. See the `--min-n-games` note in
   `scripts/cohort_first_mull_agreement.py`.
+
+---
+
+# choice_v11 (TLA+TMT+SOS+MSH, features-v4 vocabulary) — runs 2026-08-11
+
+`models/choice_v11` = the v10 sweep methodology re-run with **MSH added to
+training** (its choice caches were materialised 2026-08-09, same
+simulation-v2 semantics) and the **HOB set-vocabulary bump**
+(`FEATURES_SEMANTICS_VERSION` 3 → 4: all-zero `set_code_HOB` column added
+via the `set_onehots_v2` cache patch — no re-simulation). See
+`packages/model/scripts/tune_choice_v11.py`; sweep log
+`logs/tune_choice_v11.log`. Winning config identical to v10
+(`lr 0.02, min_child_weight 5, subsample 0.8`), best_iteration 5099.
+
+Prerequisite honoured: the MSH **out-of-sample** cohort eval (previous
+section) ran 2026-08-09, *before* this retrain — that experiment is now
+unrepeatable, since MSH is in-sample from v11 on.
+
+## Held-out A/B vs v10 on identical rows
+
+Same draft-hash split (seed 0) ⇒ the TLA+TMT+SOS test drafts are the same
+for both models (`logs/compare_choice_v10_v11_heldout.log`; v10's cell
+reproduces its training log exactly, confirming the comparison is honest):
+
+| Model | ALL log-loss | Premier | Trad | TLA | TMT | SOS |
+|-------|-------------|---------|------|-----|-----|-----|
+| choice_v10 | 0.1735 | 0.1731 | 0.1763 | 0.1637 | 0.1839 | 0.1796 |
+| choice_v11 | **0.1730** | 0.1725 | 0.1760 | 0.1629 | 0.1831 | 0.1794 |
+
+Adding MSH's 393k rows *helps* (slightly) on every incumbent slice — no
+crowding-out. v11's own test metrics (which now include MSH rows and are
+NOT comparable to the table above): ALL n=178,412 log-loss 0.1696,
+acc 0.9305; per-set MSH 0.1576 / TLA 0.1629 / TMT 0.1831 / SOS 0.1794.
+
+## Full elite sets — v11 (judged-only semantics)
+
+| Set | Event | n | judged | borderline % | v11 agree | actual mull % | pred mull % | not-complete-disagree |
+|-----|-------|---|--------|--------------|-----------|---------------|-------------|-----------------------|
+| TLA | Premier | 4,392 | 4,216 | 4.01% | **96.89%** | 9.15%  | 5.51%  | 98.84% |
+| TLA | Trad    | 979   | 944   | 3.58% | **96.50%** | 21.25% | 19.82% | 98.73% |
+| TMT | Premier | 296   | 286   | 3.38% | **95.80%** | 7.09%  | 5.74%  | 98.60% |
+| TMT | Trad    | 253   | 240   | 5.14% | **95.42%** | 24.51% | 19.37% | 98.33% |
+| SOS | Premier | 1,546 | 1,487 | 3.82% | **96.03%** | 10.74% | 7.24%  | 98.66% |
+| SOS | Trad    | 777   | 741   | 4.63% | **95.68%** | 15.83% | 16.22% | 98.38% |
+| MSH | Premier | 575   | 548   | 4.70% | **97.99%** | 5.74%  | 5.57%  | 100.00% |
+| MSH | Trad    | 567   | 536   | 5.47% | **97.20%** | 16.05% | 14.11% | 99.63% |
+
+Pooled TLA+TMT+SOS (the v10-comparable scope): **7,636 / 7,914 = 96.49%**
+vs v10's 96.40% — a slight edge on the same replay snapshot. Pooled all
+four sets: **8,694 / 8,998 = 96.62%**. MSH Premier has ZERO hard
+disagreements (no clear-verdict-vs-opposite-action cells at all).
+Logs: `logs/elite_v11_{TLA,TMT,SOS,MSH}.log`.
+
+Run note: the first MSH eval silently returned "no elite rows" because
+`combined.{PremierDraft,TradDraft}.parquet` were stale (built before the
+MSH per-set parquets existed) — the same silent-zero failure family the
+2026-08-09 cohort work flagged. Rebuilt 2026-08-11 by concatenating the
+four per-set parquets (Premier 1,490,025 → 1,905,357 rows; Trad
+184,952 → 234,804).
+
+## Verdict
+
+**choice_v11 promoted to `models/choice_prod` 2026-08-11** (old prod =
+v10 backed up to `models/choice_prod_pre_v11_backup/`). It carries MSH
+in-sample, the HOB one-hot (so HOB decks stop tripping the
+set-unknown-to-model degradation), and ties-or-beats v10 everywhere it
+can be honestly compared.

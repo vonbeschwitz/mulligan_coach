@@ -1,11 +1,10 @@
-"""In-place upgrade of v1 feature caches to v2 set-code one-hot semantics.
+"""In-place upgrade of feature caches after a set-vocabulary bump.
 
-Roadmap Step 2 appended ``SOS`` and ``MSH`` to
-``mulligan_coach_features.DEFAULT_KNOWN_SETS`` and bumped
-``FEATURES_SEMANTICS_VERSION`` 1 -> 2. A freshly-materialised cache would
-carry the two new ``set_code_*`` columns and the corrected SOS one-hot,
-but re-materialising a format costs ~17 h of simulation. This module
-upgrades an *existing* v1 cache to the v2 one-hot encoding **without any
+When a new set is appended to ``mulligan_coach_features.DEFAULT_KNOWN_SETS``
+(with the matching ``FEATURES_SEMANTICS_VERSION`` bump), a freshly-
+materialised cache would carry the new ``set_code_*`` column — but
+re-materialising a format costs many hours of simulation. This module
+upgrades an *existing* cache to the new one-hot vocabulary **without any
 re-simulation**: only the ``set_code_*`` columns are rewritten, purely
 from each chunk's already-stored ``expansion`` column. Every other
 column (the ~200 simulation/feature columns, the label, the context
@@ -17,26 +16,38 @@ caches under ``data/processed/choice_training/<SET>/<EVENT>/`` — both
 share the ``build_feature_row`` schema, so both carry the same
 ``set_code_*`` + ``expansion`` columns.
 
+Each vocabulary bump is a pinned :class:`Migration` record naming exactly
+which source pipeline versions it upgrades, which vocabulary it writes,
+and which features version it stamps. Migrations are deliberately NOT
+derived live from ``DEFAULT_KNOWN_SETS`` at call sites: a later
+vocabulary bump must add a NEW pinned migration rather than silently
+reusing an old one to stamp the wrong version (:func:`patch_roots`
+asserts the active migration still matches the live builder vocabulary).
+
 Design (see docs/specs/step2_set_vocabulary.md §C):
 
-* **Idempotent + self-correcting.** Every run rewrites ALL five
-  ``set_code_{S}`` columns from ``expansion`` — not just the two new
-  ones — so a partial or wrong prior state converges to correct. A row
-  whose ``expansion`` is outside the vocabulary gets all five columns
-  ``0.0`` (matching the feature builder's all-zero reference-category
-  behaviour for unknown sets); such rows are counted and reported, never
-  a failure.
+* **Idempotent + self-correcting.** Every run rewrites ALL ``set_code_{S}``
+  columns from ``expansion`` — not just the new ones — so a partial or
+  wrong prior state converges to correct. A row whose ``expansion`` is
+  outside the vocabulary gets all columns ``0.0`` (matching the feature
+  builder's all-zero reference-category behaviour for unknown sets); such
+  rows are counted and reported, never a failure.
 * **pyarrow table ops, no pandas round-trip.** A pandas round-trip can
   perturb dtypes / float precision on the untouched columns; we replace
-  only the five one-hot columns and leave the rest as their original
-  Arrow buffers.
+  only the one-hot columns and leave the rest as their original Arrow
+  buffers.
 * **Atomic per chunk.** Write a tmp sibling, validate, then
   ``os.replace`` — a crash never leaves a half-written chunk.
 * **Meta bump last, as raw JSON.** Only after every chunk in a shard dir
-  succeeds do we edit ``_meta.json`` (features 1 -> 2 + a ``patch_history``
+  succeeds do we edit ``_meta.json`` (features bump + a ``patch_history``
   entry). Editing the raw dict — not via :class:`ShardMeta` — preserves
   any unknown keys. A crash between chunk-patching and the meta bump is
   safe: the re-run re-patches idempotently, then bumps.
+* **Meta-less (legacy) shards are skipped, not guessed at.** The original
+  v1 migration patched them as a grace path (stamping didn't exist yet);
+  every shard we still train on carries a sidecar now, so a missing meta
+  means "unknown provenance" and the shard is left alone with a warning
+  (e.g. the retired ECL win cache).
 
 Stdlib + pyarrow only (both already workspace dependencies).
 """
@@ -61,29 +72,77 @@ log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Constants pinning the v1 -> v2 migration
+# Pinned migrations
 # ---------------------------------------------------------------------------
 
-# The one-hot vocabulary this patch writes, pinned as a literal. It is
-# deliberately NOT taken live from ``DEFAULT_KNOWN_SETS`` at call sites:
-# this tool is the *v1 -> v2* migration, and a LATER vocabulary bump (a 6th
-# set, features -> 3) must not silently reuse it to stamp ``features: 2``
-# while writing a v3 column set. :func:`patch_roots` asserts that the live
-# builder vocabulary still equals this literal; if a future bump changes
-# it, write a NEW patch (``set_onehots_v2``, target features 3), don't
-# reuse this one.
-V2_KNOWN_SETS: tuple[str, ...] = ("TMT", "ECL", "TLA", "SOS", "MSH")
 
-# The (whole) pipeline-version dict a shard must carry to be eligible for
-# this patch. Any other present combination is refused (unknown
-# provenance — we don't guess how it was built).
-SOURCE_PIPELINE_VERSIONS: dict[str, int] = {"simulation": 1, "features": 1}
+@dataclass(frozen=True)
+class Migration:
+    """One pinned vocabulary migration.
 
-SOURCE_FEATURES_VERSION: int = 1
-TARGET_FEATURES_VERSION: int = 2
+    Rewrites every ``set_code_*`` one-hot to :attr:`known_sets` and bumps
+    ``pipeline_versions.features`` to :attr:`target_features_version`,
+    for shards whose ``_meta.json`` carries exactly
+    :attr:`source_pipeline_versions`. Any other version combination is
+    refused — we don't guess how a shard was built.
+    """
 
-# Recorded in each patched shard's ``_meta.json`` ``patch_history``.
-PATCH_NAME: str = "set_onehots_v1"
+    name: str
+    """Recorded in each patched shard's ``_meta.json`` ``patch_history``."""
+
+    known_sets: tuple[str, ...]
+    """The one-hot vocabulary this migration writes, pinned as a literal."""
+
+    source_pipeline_versions: tuple[tuple[str, int], ...]
+    """The (whole) pipeline-version dict a shard must carry to be
+    eligible, as sorted ``(key, value)`` pairs (tuples keep the dataclass
+    hashable/frozen). Use :meth:`source_versions_dict` to compare."""
+
+    target_features_version: int
+    """The features version stamped after a successful patch."""
+
+    def source_versions_dict(self) -> dict[str, int]:
+        return dict(self.source_pipeline_versions)
+
+    @property
+    def source_features_version(self) -> int:
+        return self.source_versions_dict()["features"]
+
+
+SET_ONEHOTS_V1 = Migration(
+    name="set_onehots_v1",
+    known_sets=("TMT", "ECL", "TLA", "SOS", "MSH"),
+    source_pipeline_versions=(("features", 1), ("simulation", 1)),
+    target_features_version=2,
+)
+"""Roadmap Step 2 (2026-07): appended SOS + MSH, features 1 -> 2.
+
+Retired — kept as the historical record of what the v1 caches were
+patched with. Note the original tool also patched meta-less legacy dirs;
+that grace path no longer exists (see module docstring)."""
+
+SET_ONEHOTS_V2 = Migration(
+    name="set_onehots_v2",
+    known_sets=("TMT", "ECL", "TLA", "SOS", "MSH", "HOB"),
+    source_pipeline_versions=(("features", 3), ("simulation", 2)),
+    target_features_version=4,
+)
+"""HOB rotation (2026-08): appended HOB, features 3 -> 4.
+
+Every existing cache row's ``expansion`` is a pre-HOB set, so the new
+``set_code_HOB`` column is all-zero everywhere — the patch's value is
+that the *column exists*, matching what ``build_feature_row`` now emits,
+so v4 training and inference agree on the row shape."""
+
+ACTIVE_MIGRATION = SET_ONEHOTS_V2
+"""The migration the CLI applies. Re-point when the vocabulary bumps."""
+
+
+class CachePatchError(RuntimeError):
+    """Raised on a genuinely corrupt cache (missing ``expansion`` column,
+    post-patch validation failure) — as opposed to the *refused* path,
+    which is a recorded outcome, not an exception."""
+
 
 # Chunk-file glob shared with the materialiser (kept in sync manually —
 # the two modules are the only writers of this layout).
@@ -101,12 +160,13 @@ class Disposition(enum.Enum):
     """What was done (or would be done, in a dry run) with one shard dir."""
 
     PATCHED = "patched"
-    """Meta present at the v1 source version — chunks patched, meta bumped."""
-    LEGACY = "legacy"
-    """No ``_meta.json`` — chunks patched, meta intentionally left absent
-    (stays visibly legacy; training keeps warning on it)."""
-    SKIPPED_ALREADY_V2 = "skipped_already_v2"
-    """Meta already at features 2 — nothing to do (re-run no-op)."""
+    """Meta present at the migration's source versions — chunks patched,
+    meta bumped."""
+    SKIPPED_LEGACY = "skipped_legacy"
+    """No ``_meta.json`` — unknown provenance, left alone with a warning."""
+    SKIPPED_AT_TARGET = "skipped_at_target"
+    """Meta already at the target features version — nothing to do
+    (re-run no-op)."""
     REFUSED = "refused"
     """Meta present with an unrecognised version combination — not touched."""
 
@@ -160,6 +220,7 @@ class PatchReport:
 
     dir_results: list[DirResult]
     dry_run: bool
+    migration_name: str = ACTIVE_MIGRATION.name
 
     def by_disposition(self, disposition: Disposition) -> list[DirResult]:
         return [d for d in self.dir_results if d.disposition is disposition]
@@ -175,12 +236,6 @@ class PatchReport:
             for exp, n in d.expansion_counts.items():
                 totals[exp] = totals.get(exp, 0) + n
         return totals
-
-
-class CachePatchError(RuntimeError):
-    """Raised on a genuinely corrupt cache (missing ``expansion`` column,
-    post-patch validation failure) — as opposed to the *refused* path,
-    which is a recorded outcome, not an exception."""
 
 
 # ---------------------------------------------------------------------------
@@ -222,8 +277,8 @@ def _validate_patched_table(
     * every non-``set_code_*`` column NAME preserved, in order (their data
       is carried over by reference, but we still guard the schema);
     * one-hot correctness per row: ``set_code_{expansion} == 1.0`` and
-      exactly one 1.0 across the five columns when the expansion is in
-      vocabulary; all five 0.0 when it isn't.
+      exactly one 1.0 across the vocabulary's columns when the expansion
+      is in vocabulary; all columns 0.0 when it isn't.
     """
     if patched.num_rows != original.num_rows:
         raise CachePatchError(
@@ -273,7 +328,7 @@ def _build_patched_table(
     added: list[str] = []
     result = table
     # Replace existing one-hots in position first (keeps human-facing
-    # column order stable for TMT/ECL/TLA, which already exist in v1).
+    # column order stable for the sets that already exist in the source).
     for s in known_sets:
         name = f"{_SET_CODE_PREFIX}{s}"
         if name in present:
@@ -282,7 +337,7 @@ def _build_patched_table(
                 idx, pa.field(name, pa.float64()), _one_hot_array(expansions, s)
             )
             replaced.append(name)
-    # New columns (SOS/MSH) are appended so they land at the end.
+    # New columns are appended so they land at the end.
     for s in known_sets:
         name = f"{_SET_CODE_PREFIX}{s}"
         if name not in present:
@@ -298,7 +353,9 @@ def _chunk_tmp_path(chunk: Path) -> Path:
     return chunk.parent / f".{chunk.name}.tmp-{os.getpid()}"
 
 
-def analyze_chunk(chunk: Path, known_sets: tuple[str, ...] = V2_KNOWN_SETS) -> ChunkReport:
+def analyze_chunk(
+    chunk: Path, known_sets: tuple[str, ...] = ACTIVE_MIGRATION.known_sets
+) -> ChunkReport:
     """Read a chunk's ``expansion`` column and report what a patch *would*
     change — no write. Used by the dry-run path.
     """
@@ -328,10 +385,12 @@ def analyze_chunk(chunk: Path, known_sets: tuple[str, ...] = V2_KNOWN_SETS) -> C
     )
 
 
-def patch_chunk(chunk: Path, known_sets: tuple[str, ...] = V2_KNOWN_SETS) -> ChunkReport:
+def patch_chunk(
+    chunk: Path, known_sets: tuple[str, ...] = ACTIVE_MIGRATION.known_sets
+) -> ChunkReport:
     """Rewrite one chunk's ``set_code_*`` columns in place, atomically.
 
-    Reads the whole table, rebuilds the five one-hots from ``expansion``,
+    Reads the whole table, rebuilds the one-hots from ``expansion``,
     validates, then writes a tmp sibling and ``os.replace``s it over the
     original. Idempotent: running it on an already-patched chunk produces
     the identical result.
@@ -376,16 +435,17 @@ def patch_chunk(chunk: Path, known_sets: tuple[str, ...] = V2_KNOWN_SETS) -> Chu
 # ---------------------------------------------------------------------------
 
 
-def _classify_dir(shard_dir: Path) -> tuple[Disposition, str | None]:
+def _classify_dir(shard_dir: Path, migration: Migration) -> tuple[Disposition, str | None]:
     """Decide what to do with a shard dir from its ``_meta.json``.
 
-    Order matters: an already-v2 shard is a no-op (so re-runs are safe)
-    *before* we consider the strict source match, and any other present
-    combination is refused rather than guessed at.
+    Order matters: an already-at-target shard is a no-op (so re-runs are
+    safe) *before* we consider the strict source match, and any other
+    present combination is refused rather than guessed at. A missing
+    sidecar is skipped with a warning, not patched (see module docstring).
     """
     meta_path = shard_dir / SHARD_META_FILENAME
     if not meta_path.exists():
-        return Disposition.LEGACY, None
+        return Disposition.SKIPPED_LEGACY, None
 
     data = json.loads(meta_path.read_text())
     versions = data.get("pipeline_versions")
@@ -396,28 +456,30 @@ def _classify_dir(shard_dir: Path) -> tuple[Disposition, str | None]:
         )
     versions_int = {str(k): int(v) for k, v in versions.items()}
 
-    if versions_int.get("features") == TARGET_FEATURES_VERSION:
-        return Disposition.SKIPPED_ALREADY_V2, None
-    if versions_int == SOURCE_PIPELINE_VERSIONS:
+    if versions_int.get("features") == migration.target_features_version:
+        return Disposition.SKIPPED_AT_TARGET, None
+    if versions_int == migration.source_versions_dict():
         return Disposition.PATCHED, None
     return (
         Disposition.REFUSED,
-        f"unrecognised pipeline_versions {versions_int}; this patch only upgrades "
-        f"{SOURCE_PIPELINE_VERSIONS} (unknown provenance — refusing to guess).",
+        f"unrecognised pipeline_versions {versions_int}; migration {migration.name} "
+        f"only upgrades {migration.source_versions_dict()} (unknown provenance — "
+        "refusing to guess).",
     )
 
 
-def _bump_meta_features(shard_dir: Path) -> None:
-    """Raw-JSON bump of a shard's ``_meta.json`` from features 1 to 2.
+def _bump_meta_features(shard_dir: Path, migration: Migration) -> None:
+    """Raw-JSON bump of a shard's ``_meta.json`` to the migration's target.
 
     Preserves every existing key (including unknown ones a newer writer
     may have added): we read the dict, set ``pipeline_versions.features``
-    to 2, append a ``patch_history`` entry, and atomically write it back.
+    to the target, append a ``patch_history`` entry, and atomically write
+    it back.
     """
     meta_path = shard_dir / SHARD_META_FILENAME
     data = json.loads(meta_path.read_text())
     versions = data["pipeline_versions"]
-    versions["features"] = TARGET_FEATURES_VERSION
+    versions["features"] = migration.target_features_version
     history = data.setdefault("patch_history", [])
     if not isinstance(history, list):
         raise CachePatchError(
@@ -425,10 +487,10 @@ def _bump_meta_features(shard_dir: Path) -> None:
         )
     history.append(
         {
-            "patch": PATCH_NAME,
+            "patch": migration.name,
             "at": now_iso(),
-            "from_features": SOURCE_FEATURES_VERSION,
-            "to_features": TARGET_FEATURES_VERSION,
+            "from_features": migration.source_features_version,
+            "to_features": migration.target_features_version,
         }
     )
     tmp = shard_dir / f"{SHARD_META_FILENAME}.tmp-{os.getpid()}"
@@ -457,26 +519,32 @@ def patch_shard_dir(
     shard_dir: Path,
     *,
     dry_run: bool,
-    known_sets: tuple[str, ...] = V2_KNOWN_SETS,
+    migration: Migration = ACTIVE_MIGRATION,
 ) -> DirResult:
     """Patch one shard directory end to end (eligibility -> chunks -> meta).
 
     * SKIP / REFUSE dispositions do no chunk work.
-    * PATCH / LEGACY: every ``chunk_*.parquet`` is (dry-run: analysed;
-      real: rewritten). The meta bump happens only after all chunks
-      succeed, and only for the PATCH (meta-present) case — a LEGACY dir
-      keeps no sidecar so it stays visibly unverified.
+    * PATCHED: every ``chunk_*.parquet`` is (dry-run: analysed; real:
+      rewritten). The meta bump happens only after all chunks succeed.
     """
-    disposition, reason = _classify_dir(shard_dir)
+    disposition, reason = _classify_dir(shard_dir, migration)
 
     if disposition is Disposition.REFUSED:
         log.error("REFUSED %s: %s", shard_dir, reason)
         return DirResult(shard_dir=shard_dir, disposition=disposition, reason=reason)
-    if disposition is Disposition.SKIPPED_ALREADY_V2:
+    if disposition is Disposition.SKIPPED_LEGACY:
+        log.warning(
+            "SKIP %s: no %s sidecar (unknown provenance); not patched. "
+            "Stamp or re-materialise it if this shard is still wanted.",
+            shard_dir,
+            SHARD_META_FILENAME,
+        )
+        return DirResult(shard_dir=shard_dir, disposition=disposition)
+    if disposition is Disposition.SKIPPED_AT_TARGET:
         log.info(
             "SKIP %s: already at features %d (patched previously).",
             shard_dir,
-            TARGET_FEATURES_VERSION,
+            migration.target_features_version,
         )
         return DirResult(shard_dir=shard_dir, disposition=disposition)
 
@@ -485,16 +553,20 @@ def patch_shard_dir(
         # A meta-only dir with no chunks: nothing to patch; treat as a
         # no-op skip rather than inventing an outcome.
         log.warning("%s has a meta but no chunk files; nothing to patch.", shard_dir)
-        return DirResult(shard_dir=shard_dir, disposition=Disposition.SKIPPED_ALREADY_V2)
+        return DirResult(shard_dir=shard_dir, disposition=Disposition.SKIPPED_AT_TARGET)
 
     reports: list[ChunkReport] = []
     for chunk in chunks:
-        report = analyze_chunk(chunk, known_sets) if dry_run else patch_chunk(chunk, known_sets)
+        report = (
+            analyze_chunk(chunk, migration.known_sets)
+            if dry_run
+            else patch_chunk(chunk, migration.known_sets)
+        )
         reports.append(report)
 
     meta_bumped = False
-    if not dry_run and disposition is Disposition.PATCHED:
-        _bump_meta_features(shard_dir)
+    if not dry_run:
+        _bump_meta_features(shard_dir, migration)
         meta_bumped = True
 
     label = "DRY-RUN" if dry_run else disposition.value.upper()
@@ -504,7 +576,12 @@ def patch_shard_dir(
         shard_dir,
         len(reports),
         sum(r.n_rows for r in reports),
-        " (meta bumped 1->2)" if meta_bumped else "",
+        (
+            f" (meta bumped {migration.source_features_version}"
+            f"->{migration.target_features_version})"
+            if meta_bumped
+            else ""
+        ),
     )
     return DirResult(
         shard_dir=shard_dir,
@@ -518,20 +595,21 @@ def patch_roots(
     roots: list[Path],
     *,
     dry_run: bool,
-    known_sets: tuple[str, ...] = V2_KNOWN_SETS,
+    migration: Migration = ACTIVE_MIGRATION,
 ) -> PatchReport:
     """Patch every shard dir found under each root.
 
-    Asserts the live builder vocabulary still matches the pinned v2
-    vocabulary this patch writes — a mismatch means the vocabulary was
-    bumped again and this v1->v2 tool must not be reused blindly.
+    Asserts the live builder vocabulary still matches the migration's
+    pinned vocabulary — a mismatch means the vocabulary was bumped again
+    and this migration must not be reused blindly.
     """
-    if tuple(DEFAULT_KNOWN_SETS) != known_sets:
+    if tuple(DEFAULT_KNOWN_SETS) != migration.known_sets:
         raise CachePatchError(
             "live DEFAULT_KNOWN_SETS "
-            f"{tuple(DEFAULT_KNOWN_SETS)} != this patch's pinned vocabulary {known_sets}. "
-            "The feature vocabulary changed again; write a NEW patch (target the new "
-            "FEATURES_SEMANTICS_VERSION) rather than reusing the v1->v2 patch."
+            f"{tuple(DEFAULT_KNOWN_SETS)} != migration {migration.name}'s pinned "
+            f"vocabulary {migration.known_sets}. The feature vocabulary changed "
+            "again; add a NEW pinned Migration (targeting the new "
+            "FEATURES_SEMANTICS_VERSION) rather than reusing an old one."
         )
 
     dir_results: list[DirResult] = []
@@ -542,8 +620,8 @@ def patch_roots(
             continue
         log.info("Scanning %d shard dir(s) under %s", len(shard_dirs), root)
         for shard_dir in shard_dirs:
-            dir_results.append(patch_shard_dir(shard_dir, dry_run=dry_run, known_sets=known_sets))
-    return PatchReport(dir_results=dir_results, dry_run=dry_run)
+            dir_results.append(patch_shard_dir(shard_dir, dry_run=dry_run, migration=migration))
+    return PatchReport(dir_results=dir_results, dry_run=dry_run, migration_name=migration.name)
 
 
 # ---------------------------------------------------------------------------
@@ -559,7 +637,7 @@ def format_report(report: PatchReport) -> str:
     """
     lines: list[str] = []
     mode = "DRY RUN (no writes)" if report.dry_run else "APPLIED"
-    lines.append(f"=== set-code one-hot patch ({PATCH_NAME}) — {mode} ===")
+    lines.append(f"=== set-code one-hot patch ({report.migration_name}) — {mode} ===")
 
     for d in report.dir_results:
         lines.append("")
@@ -567,9 +645,9 @@ def format_report(report: PatchReport) -> str:
         if d.disposition is Disposition.REFUSED:
             lines.append(f"    reason: {d.reason}")
             continue
-        if d.disposition is Disposition.SKIPPED_ALREADY_V2:
+        if d.disposition in (Disposition.SKIPPED_AT_TARGET, Disposition.SKIPPED_LEGACY):
             continue
-        # PATCHED / LEGACY: show chunk + per-expansion detail.
+        # PATCHED: show chunk + per-expansion detail.
         counts = d.expansion_counts
         exp_detail = ", ".join(f"{exp}={n}" for exp, n in sorted(counts.items()))
         lines.append(f"    chunks: {d.n_chunks}    rows: {sum(counts.values())}")
@@ -583,7 +661,7 @@ def format_report(report: PatchReport) -> str:
         out_of_vocab = sum(cr.out_of_vocab_rows for cr in d.chunk_reports)
         if out_of_vocab:
             lines.append(f"    out-of-vocabulary rows (all-zero one-hot): {out_of_vocab}")
-        lines.append(f"    meta bumped 1->2: {d.meta_bumped}")
+        lines.append(f"    meta bumped: {d.meta_bumped}")
 
     # Summary table.
     lines.append("")
@@ -592,15 +670,13 @@ def format_report(report: PatchReport) -> str:
         dirs = report.by_disposition(disp)
         lines.append(f"  {disp.value:<20} dirs: {len(dirs)}")
     total_chunks = sum(
-        d.n_chunks
-        for d in report.dir_results
-        if d.disposition in (Disposition.PATCHED, Disposition.LEGACY)
+        d.n_chunks for d in report.dir_results if d.disposition is Disposition.PATCHED
     )
     verb = "chunks to write" if report.dry_run else "chunks written"
     lines.append(f"  {verb}: {total_chunks}")
     totals = report.total_expansion_counts
     if totals:
-        lines.append("  rows per expansion (all patched/legacy dirs):")
+        lines.append("  rows per expansion (all patched dirs):")
         for exp, n in sorted(totals.items()):
             lines.append(f"      {exp:<10} {n}")
     return "\n".join(lines)
